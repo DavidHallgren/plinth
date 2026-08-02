@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "id": "project_plinth_starter",
+  "slug": "plinth-starter",
+  "name": "Plinth starter studio",
+  "description": "Three starting frames for exploring Plinth's local-first composition model.",
+  "settings": {
+    "autosave": true,
+    "autosaveDelayMs": 800,
+    "defaultDocumentPreset": "browser",
+    "grid": {
+      "enabled": true,
+      "size": 8,
+      "snap": true
+    }
+  },
+  "background": {
+    "type": "solid",
+    "color": "#10131a"
+  },
+  "assets": [
+    {
+      "id": "asset_dashboard",
+      "kind": "image",
+      "fileName": "asset_dashboard.svg",
+      "mimeType": "image/svg+xml",
+      "width": 1600,
+      "height": 1000,
+      "byteSize": 1123
+    },
+    {
+      "id": "asset_phone",
+      "kind": "image",
+      "fileName": "asset_phone.svg",
+      "mimeType": "image/svg+xml",
+      "width": 900,
+      "height": 1400,
+      "byteSize": 1079
+    },
+    {
+      "id": "asset_social",
+      "kind": "image",
+      "fileName": "asset_social.svg",
+      "mimeType": "image/svg+xml",
+      "width": 1200,
+      "height": 1500,
+      "byteSize": 1044
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc_landing",
+      "slug": "landing-page",
+      "name": "Landing page",
+      "preset": "browser",
+      "width": 1440,
+      "height": 900,
+      "background": {
+        "type": "solid",
+        "color": "#10131a"
+      },
+      "elements": [
+        {
+          "id": "landing_device_1",
+          "x": 96,
+          "y": 96,
+          "width": 960,
+          "height": 620,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 0,
+          "locked": false,
+          "visible": true,
+          "name": "Browser frame",
+          "type": "device",
+          "deviceId": "browser-chrome",
+          "deviceName": "Chrome window",
+          "frame": "browser",
+          "frameColor": "#242934",
+          "screenColor": "#f6f7fb"
+        },
+        {
+          "id": "landing_text_2",
+          "x": 176,
+          "y": 184,
+          "width": 720,
+          "height": 112,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 2,
+          "locked": false,
+          "visible": true,
+          "name": "A clearer way to present the wor",
+          "type": "text",
+          "text": "A clearer way to present the work",
+          "style": {
+            "fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif",
+            "fontSize": 64,
+            "fontWeight": 700,
+            "lineHeight": 1.04,
+            "letterSpacing": -1.8,
+            "color": "#10131a",
+            "align": "left"
+          }
+        },
+        {
+          "id": "landing_shape_3",
+          "x": 176,
+          "y": 352,
+          "width": 260,
+          "height": 12,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 1,
+          "locked": false,
+          "visible": true,
+          "name": "Accent shape",
+          "type": "shape",
+          "shape": "rounded-rectangle",
+          "fill": "#8b7cff",
+          "stroke": "#8b7cff",
+          "strokeWidth": 0,
+          "radius": 8
+        },
+        {
+          "id": "image_asset_dashboard",
+          "x": 790,
+          "y": 440,
+          "width": 280,
+          "height": 170,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 1,
+          "locked": false,
+          "visible": true,
+          "name": "Dashboard placeholder",
+          "type": "image",
+          "assetId": "asset_dashboard",
+          "fit": "cover",
+          "alt": "Dashboard placeholder"
+        }
+      ],
+      "notes": "",
+      "createdAt": "2026-08-02T00:00:00.000Z",
+      "updatedAt": "2026-08-02T00:00:00.000Z"
+    },
+    {
+      "id": "doc_mobile",
+      "slug": "mobile-product-tour",
+      "name": "Mobile product tour",
+      "preset": "phone",
+      "width": 1170,
+      "height": 2532,
+      "background": {
+        "type": "solid",
+        "color": "#10131a"
+      },
+      "elements": [
+        {
+          "id": "mobile_device_1",
+          "x": 96,
+          "y": 96,
+          "width": 390,
+          "height": 844,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 0,
+          "locked": false,
+          "visible": true,
+          "name": "iPhone frame",
+          "type": "device",
+          "deviceId": "iphone-15-pro",
+          "deviceName": "iPhone 15 Pro",
+          "frame": "phone",
+          "frameColor": "#20242d",
+          "screenColor": "#f6f7fb"
+        },
+        {
+          "id": "mobile_text_2",
+          "x": 148,
+          "y": 230,
+          "width": 286,
+          "height": 112,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 2,
+          "locked": false,
+          "visible": true,
+          "name": "Pocket-sized clarity",
+          "type": "text",
+          "text": "Pocket-sized clarity",
+          "style": {
+            "fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif",
+            "fontSize": 42,
+            "fontWeight": 700,
+            "lineHeight": 1.04,
+            "letterSpacing": -1.8,
+            "color": "#10131a",
+            "align": "left"
+          }
+        },
+        {
+          "id": "mobile_shape_3",
+          "x": 148,
+          "y": 404,
+          "width": 170,
+          "height": 12,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 1,
+          "locked": false,
+          "visible": true,
+          "name": "Accent shape",
+          "type": "shape",
+          "shape": "rounded-rectangle",
+          "fill": "#8b7cff",
+          "stroke": "#8b7cff",
+          "strokeWidth": 0,
+          "radius": 8
+        },
+        {
+          "id": "image_asset_phone",
+          "x": 164,
+          "y": 680,
+          "width": 310,
+          "height": 220,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 1,
+          "locked": false,
+          "visible": true,
+          "name": "Phone placeholder",
+          "type": "image",
+          "assetId": "asset_phone",
+          "fit": "cover",
+          "alt": "Phone placeholder"
+        }
+      ],
+      "notes": "",
+      "createdAt": "2026-08-02T00:00:00.000Z",
+      "updatedAt": "2026-08-02T00:00:00.000Z"
+    },
+    {
+      "id": "doc_announcement",
+      "slug": "launch-announcement",
+      "name": "Launch announcement",
+      "preset": "social",
+      "width": 1200,
+      "height": 1500,
+      "background": {
+        "type": "gradient",
+        "from": "#27203d",
+        "to": "#8b7cff",
+        "angle": 135
+      },
+      "elements": [
+        {
+          "id": "announcement_shape_1",
+          "x": 120,
+          "y": 120,
+          "width": 960,
+          "height": 1040,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 0,
+          "locked": false,
+          "visible": true,
+          "name": "Accent shape",
+          "type": "shape",
+          "shape": "rounded-rectangle",
+          "fill": "#8b7cff",
+          "stroke": "#8b7cff",
+          "strokeWidth": 0,
+          "radius": 40
+        },
+        {
+          "id": "announcement_text_2",
+          "x": 208,
+          "y": 320,
+          "width": 790,
+          "height": 220,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 1,
+          "locked": false,
+          "visible": true,
+          "name": "Make the first frame count.",
+          "type": "text",
+          "text": "Make the first frame count.",
+          "style": {
+            "fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif",
+            "fontSize": 84,
+            "fontWeight": 700,
+            "lineHeight": 1.02,
+            "letterSpacing": -2.4,
+            "color": "#ffffff",
+            "align": "left"
+          }
+        },
+        {
+          "id": "image_asset_social",
+          "x": 760,
+          "y": 740,
+          "width": 260,
+          "height": 330,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 1,
+          "locked": false,
+          "visible": true,
+          "name": "Social frame placeholder",
+          "type": "image",
+          "assetId": "asset_social",
+          "fit": "cover",
+          "alt": "Social frame placeholder"
+        }
+      ],
+      "notes": "",
+      "createdAt": "2026-08-02T00:00:00.000Z",
+      "updatedAt": "2026-08-02T00:00:00.000Z"
+    }
+  ],
+  "createdAt": "2026-08-02T00:00:00.000Z",
+  "updatedAt": "2026-08-02T00:00:00.000Z"
+}
