@@ -287,6 +287,15 @@ async function parseExportMultipart(request: Request): Promise<{ metadata: z.inf
   if (!parsed.success) {
     throw new PlinthError("INVALID_REQUEST", 400, "Export metadata failed validation.", { issues: parsed.error.issues });
   }
+  const uploadedFileName = typeof (file as { name?: unknown }).name === "string"
+    ? (file as { name: string }).name
+    : "";
+  if (uploadedFileName && uploadedFileName !== parsed.data.fileName) {
+    throw new PlinthError("EXPORT_FILE_INVALID", 400, "The uploaded file name must match the export metadata fileName.", {
+      uploadedFileName,
+      fileName: parsed.data.fileName,
+    });
+  }
   return { metadata: parsed.data, file };
 }
 

@@ -123,6 +123,13 @@ describe("export API and storage", () => {
     expect(invalidNameResponse.status).toBe(400);
     expect(await invalidNameResponse.json()).toMatchObject({ error: { code: "EXPORT_FILE_INVALID" } });
 
+    const mismatchedUpload = new FormData();
+    mismatchedUpload.append("metadata", JSON.stringify({ documentId: "doc_home", fileName: "01-home.png", width: 640, height: 480 }));
+    mismatchedUpload.append("file", fixtureFile(pngFixture(640, 480), "renamed.png"), "renamed.png");
+    const mismatchedUploadResponse = await apiAction(() => handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: mismatchedUpload }), storage));
+    expect(mismatchedUploadResponse.status).toBe(400);
+    expect(await mismatchedUploadResponse.json()).toMatchObject({ error: { code: "EXPORT_FILE_INVALID" } });
+
     const wrongDimensions = new FormData();
     wrongDimensions.append("metadata", JSON.stringify({ documentId: "doc_home", fileName: "01-home.png", width: 640, height: 480 }));
     wrongDimensions.append("file", fixtureFile(pngFixture(320, 240), "01-home.png"), "01-home.png");
