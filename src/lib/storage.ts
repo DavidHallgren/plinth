@@ -5,6 +5,7 @@ import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject } from "./migrations";
 import type { Document, Project, ProjectInput, SceneElement } from "./schema";
+import { addDocument as addSceneDocument, type AddDocumentOptions } from "../scene/operations";
 
 export type ProjectMetadata = {
   slug: string;
@@ -300,23 +301,10 @@ export class ProjectStorage {
     }
   }
 
-  async addDocument(slug: string, preset: Parameters<typeof createDocumentPreset>[0], name?: string): Promise<Project> {
+  async addDocument(slug: string, preset: Parameters<typeof createDocumentPreset>[0], name?: string, options: Pick<AddDocumentOptions, "width" | "height"> = {}): Promise<Project> {
     const project = await this.loadProject(slug);
     const documentName = name?.trim() || `${preset[0]?.toUpperCase() ?? "D"}${preset.slice(1)} composition`;
-    const document = createDocumentPreset(preset, { name: documentName });
-    const existingSlugs = new Set(project.documents.map((item) => item.slug));
-    let documentSlug = document.slug;
-    let suffix = 2;
-    while (existingSlugs.has(documentSlug)) {
-      documentSlug = `${document.slug}-${suffix}`;
-      suffix += 1;
-    }
-    const nextDocument = { ...document, slug: documentSlug };
-    return this.saveProject({
-      ...project,
-      documents: [...project.documents, nextDocument],
-      updatedAt: nowIso(),
-    });
+    return this.saveProject(addSceneDocument(project, preset, { ...options, name: documentName }));
   }
 
   private async createProjectFromValue(project: Project): Promise<Project> {

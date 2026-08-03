@@ -18,9 +18,11 @@
     "prebuild": "bun scripts/generate-styles.ts --minify"
   },
   "dependencies": {
+    "konva": "^10.3.0",
     "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-konva": "^19.2.4",
     "zod": "^3.25.76"
   },
   "devDependencies": {

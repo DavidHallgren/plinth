@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PlinthError, toPlinthError } from "./errors";
 import { parseProject } from "./migrations";
+import { CURRENT_SCHEMA_VERSION, DocumentPresetSchema } from "./schema";
 import { ProjectStorage } from "./storage";
 
 const CreateProjectRequestSchema = z
@@ -27,8 +28,10 @@ const DuplicateProjectRequestSchema = z
 
 const AddDocumentRequestSchema = z
   .object({
-    preset: z.enum(["blank", "browser", "phone", "social"]),
+    preset: DocumentPresetSchema,
     name: z.string().trim().min(1).max(120).optional(),
+    width: z.number().int().positive().max(100_000).optional(),
+    height: z.number().int().positive().max(100_000).optional(),
   })
   .strict();
 
@@ -93,7 +96,7 @@ function pathSegment(request: Request, index: number): string {
 }
 
 export function handleHealth(): Response {
-  return success({ service: "plinth", status: "ok", schemaVersion: 1 });
+  return success({ service: "plinth", status: "ok", schemaVersion: CURRENT_SCHEMA_VERSION });
 }
 
 export function handleListProjects(storage: ProjectStorage): Promise<Response> {
@@ -149,7 +152,7 @@ export async function handleDuplicateProject(request: Request, storage: ProjectS
 export async function handleAddDocument(request: Request, storage: ProjectStorage): Promise<Response> {
   const slug = pathSegment(request, 3);
   const body = parseBody(AddDocumentRequestSchema, await jsonBody(request));
-  const project = await storage.addDocument(slug, body.preset, body.name);
+  const project = await storage.addDocument(slug, body.preset, body.name, { width: body.width, height: body.height });
   return success({ project });
 }
 

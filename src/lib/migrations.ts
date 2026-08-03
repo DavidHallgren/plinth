@@ -1,36 +1,228 @@
-import { createDefaultProject } from "./defaults";
+import { createDefaultProject, DEFAULT_BACKGROUND } from "./defaults";
 import { PlinthError } from "./errors";
-import { slugify } from "./ids";
+import { createId, slugify } from "./ids";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
-import type { Project } from "./schema";
+import type { Background, Document, Project, SceneElement, Shadow } from "./schema";
+import { isAppStorePreset } from "../scene/presets";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function legacyDocument(value: unknown, index: number, now: string): Project["documents"][number] {
-  const source = isRecord(value) ? value : {};
-  const name = typeof source.name === "string" ? source.name : typeof source.title === "string" ? source.title : `Composition ${index + 1}`;
-  const template = createDefaultProject("Migration seed", { now, documentCount: 1 }).documents[0];
+function asString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
 
-  if (!template) {
-    throw new PlinthError("SCHEMA_INVALID", 422, "Migration could not create a document template.");
-  }
+function asFiniteNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
 
+function asPositiveNumber(value: unknown, fallback: number): number {
+  const candidate = asFiniteNumber(value, fallback);
+  return candidate > 0 ? candidate : fallback;
+}
+
+function asBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeShadow(value: unknown): Shadow | null {
+  if (!isRecord(value)) return null;
   return {
-    ...template,
-    id: typeof source.id === "string" ? source.id : template.id,
-    name,
-    slug: typeof source.slug === "string" ? slugify(source.slug) : slugify(name),
-    elements: Array.isArray(source.elements) ? source.elements : [],
-    createdAt: typeof source.createdAt === "string" ? source.createdAt : now,
-    updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : now,
+    color: asString(value.color, "#05060a"),
+    blur: Math.max(0, asFiniteNumber(value.blur, 0)),
+    offsetX: asFiniteNumber(value.offsetX, 0),
+    offsetY: asFiniteNumber(value.offsetY, 0),
+    opacity: Math.min(1, Math.max(0, asFiniteNumber(value.opacity, 0.2))),
   };
 }
 
-function migrateVersionZero(source: Record<string, unknown>): Record<string, unknown> {
+function normalizeStops(value: unknown, from: string, to: string) {
+  if (!Array.isArray(value)) {
+    return [{ offset: 0, color: from }, { offset: 1, color: to }];
+  }
+  const stops = value
+    .filter(isRecord)
+    .map((stop) => ({
+      offset: Math.min(1, Math.max(0, asFiniteNumber(stop.offset, 0))),
+      color: asString(stop.color, from),
+    }))
+    .sort((left, right) => left.offset - right.offset);
+  return stops.length >= 2 ? stops : [{ offset: 0, color: from }, { offset: 1, color: to }];
+}
+
+function migrateBackground(value: unknown): Background {
+  if (!isRecord(value)) return DEFAULT_BACKGROUND;
+  if (value.type === "solid") {
+    return { type: "solid", color: asString(value.color, DEFAULT_BACKGROUND.type === "solid" ? DEFAULT_BACKGROUND.color : "#10131a") };
+  }
+  if (value.type === "transparent") return { type: "transparent" };
+  if (value.type === "linear-gradient") {
+    const start = isRecord(value.start) ? value.start : {};
+    const end = isRecord(value.end) ? value.end : {};
+    return {
+      type: "linear-gradient",
+      stops: normalizeStops(value.stops, "#10131a", "#8b7cff"),
+      start: { x: asFiniteNumber(start.x, 0), y: asFiniteNumber(start.y, 0) },
+      end: { x: asFiniteNumber(end.x, 1), y: asFiniteNumber(end.y, 1) },
+    };
+  }
+  if (value.type === "radial-gradient") {
+    const center = isRecord(value.center) ? value.center : {};
+    return {
+      type: "radial-gradient",
+      stops: normalizeStops(value.stops, "#10131a", "#8b7cff"),
+      center: { x: asFiniteNumber(center.x, 0.5), y: asFiniteNumber(center.y, 0.5) },
+      radius: Math.max(0.01, asFiniteNumber(value.radius, 0.75)),
+    };
+  }
+  if (value.type === "gradient") {
+    const angle = asFiniteNumber(value.angle, 135) * (Math.PI / 180);
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    return {
+      type: "linear-gradient",
+      stops: normalizeStops(undefined, asString(value.from, "#10131a"), asString(value.to, "#8b7cff")),
+      start: { x: 0.5 - dx * 0.5, y: 0.5 - dy * 0.5 },
+      end: { x: 0.5 + dx * 0.5, y: 0.5 + dy * 0.5 },
+    };
+  }
+  return DEFAULT_BACKGROUND;
+}
+
+function migratePreset(value: unknown): Document["preset"] {
+  if (typeof value === "string" && isAppStorePreset(value)) return value;
+  return "custom";
+}
+
+function migrateElement(value: unknown, index: number): SceneElement | null {
+  if (!isRecord(value) || typeof value.type !== "string") return null;
+  const type = value.type;
+  const base = {
+    id: asString(value.id, createId(type)),
+    x: asFiniteNumber(value.x, 0),
+    y: asFiniteNumber(value.y, 0),
+    width: asPositiveNumber(value.width, 120),
+    height: asPositiveNumber(value.height, 80),
+    rotation: asFiniteNumber(value.rotation, 0),
+    opacity: Math.min(1, Math.max(0, asFiniteNumber(value.opacity, 1))),
+    zIndex: Number.isInteger(value.zIndex) && Number(value.zIndex) >= 0 ? Number(value.zIndex) : index,
+    locked: asBoolean(value.locked, false),
+    visible: asBoolean(value.visible, true),
+    name: asString(value.name, `${type[0]?.toUpperCase() ?? "E"}${type.slice(1)} ${index + 1}`),
+    shadow: normalizeShadow(value.shadow),
+  };
+
+  if (type === "device") {
+    const frame = value.frame === "browser" || value.frame === "tablet" ? value.frame : "phone";
+    return {
+      ...base,
+      type: "device",
+      deviceId: asString(value.deviceId, `${frame}-placeholder`),
+      deviceName: asString(value.deviceName, `${frame[0]?.toUpperCase() ?? "D"}${frame.slice(1)} placeholder`),
+      frame,
+      frameColor: asString(value.frameColor, "#20242d"),
+      screenColor: asString(value.screenColor, "#f6f7fb"),
+    };
+  }
+
+  if (type === "text") {
+    const style = isRecord(value.style) ? value.style : {};
+    return {
+      ...base,
+      type: "text",
+      text: typeof value.text === "string" ? value.text : "Text",
+      style: {
+        fontFamily: asString(style.fontFamily, "Inter, ui-sans-serif, system-ui, sans-serif"),
+        fontSize: asPositiveNumber(style.fontSize, 32),
+        fontWeight: Math.min(900, Math.max(100, Math.round(asFiniteNumber(style.fontWeight, 400)))),
+        italic: asBoolean(style.italic, false),
+        underline: asBoolean(style.underline, false),
+        lineHeight: asPositiveNumber(style.lineHeight, 1.2),
+        letterSpacing: asFiniteNumber(style.letterSpacing, 0),
+        color: asString(style.color, "#ffffff"),
+        align: style.align === "center" || style.align === "right" ? style.align : "left",
+        backgroundColor: typeof style.backgroundColor === "string" ? style.backgroundColor : null,
+        padding: Math.max(0, asFiniteNumber(style.padding, 0)),
+        backgroundRadius: Math.max(0, asFiniteNumber(style.backgroundRadius, 0)),
+        shadow: normalizeShadow(style.shadow),
+        autoHeight: asBoolean(style.autoHeight, true),
+      },
+    };
+  }
+
+  if (type === "image") {
+    return {
+      ...base,
+      type: "image",
+      assetId: asString(value.assetId, "asset-placeholder"),
+      fit: value.fit === "contain" || value.fit === "fill" ? value.fit : "cover",
+      alt: typeof value.alt === "string" ? value.alt : "Asset placeholder",
+    };
+  }
+
+  if (type === "shape") {
+    const shape = value.shape === "rounded-rectangle" || value.shape === "ellipse" || value.shape === "line" ? value.shape : "rectangle";
+    return {
+      ...base,
+      type: "shape",
+      shape,
+      fill: asString(value.fill, "#8b7cff"),
+      stroke: asString(value.stroke, "#8b7cff"),
+      strokeWidth: Math.max(0, asFiniteNumber(value.strokeWidth, 0)),
+      radius: Math.max(0, asFiniteNumber(value.radius, 0)),
+    };
+  }
+
+  return null;
+}
+
+function legacyDocument(value: unknown, index: number, now: string): Document {
+  const source = isRecord(value) ? value : {};
+  const name = asString(source.name, asString(source.title, `Composition ${index + 1}`));
+  const width = Math.round(asPositiveNumber(source.width, 1320));
+  const height = Math.round(asPositiveNumber(source.height, 2868));
+  const rawElements = Array.isArray(source.elements) ? source.elements : [];
+  const elements = rawElements
+    .map((element, elementIndex) => migrateElement(element, elementIndex))
+    .filter((element): element is SceneElement => element !== null)
+    .map((element, elementIndex) => ({ ...element, zIndex: elementIndex }));
+
+  return {
+    id: asString(source.id, createId("doc")),
+    name,
+    slug: slugify(asString(source.slug, name), "composition"),
+    preset: migratePreset(source.preset),
+    width,
+    height,
+    background: migrateBackground(source.background),
+    elements,
+    notes: typeof source.notes === "string" ? source.notes : "",
+    createdAt: asString(source.createdAt, now),
+    updatedAt: asString(source.updatedAt, now),
+  };
+}
+
+function normalizeSettings(value: unknown, starter: Project["settings"]): Project["settings"] {
+  if (!isRecord(value)) return starter;
+  const grid = isRecord(value.grid) ? value.grid : {};
+  const presetCandidate = typeof value.defaultDocumentPreset === "string" ? value.defaultDocumentPreset : "";
+  const defaultDocumentPreset = isAppStorePreset(presetCandidate) ? presetCandidate : "iphone-6-9";
+  return {
+    autosave: asBoolean(value.autosave, starter.autosave),
+    autosaveDelayMs: Math.min(60_000, Math.max(100, Math.round(asFiniteNumber(value.autosaveDelayMs, starter.autosaveDelayMs)))),
+    defaultDocumentPreset,
+    grid: {
+      enabled: asBoolean(grid.enabled, starter.grid.enabled),
+      size: Math.max(1, asFiniteNumber(grid.size, starter.grid.size)),
+      snap: asBoolean(grid.snap, starter.grid.snap),
+    },
+  };
+}
+
+function migrateVersionOne(source: Record<string, unknown>): Record<string, unknown> {
   const now = new Date().toISOString();
-  const name = typeof source.name === "string" && source.name.trim() ? source.name : "Migrated project";
+  const name = asString(source.name, "Migrated project");
   const starter = createDefaultProject(name, {
     now,
     id: typeof source.id === "string" ? source.id : undefined,
@@ -43,12 +235,20 @@ function migrateVersionZero(source: Record<string, unknown>): Record<string, unk
     ...starter,
     schemaVersion: CURRENT_SCHEMA_VERSION,
     description: typeof source.description === "string" ? source.description : starter.description,
-    settings: isRecord(source.settings) ? { ...starter.settings, ...source.settings } : starter.settings,
-    background: isRecord(source.background) ? source.background : starter.background,
+    settings: normalizeSettings(source.settings, starter.settings),
+    background: migrateBackground(source.background),
     assets: Array.isArray(source.assets) ? source.assets : starter.assets,
     documents: rawDocuments.length > 0 ? rawDocuments.map((document, index) => legacyDocument(document, index, now)) : starter.documents,
-    updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : now,
+    updatedAt: asString(source.updatedAt, now),
   };
+}
+
+function migrateVersionZero(source: Record<string, unknown>): Record<string, unknown> {
+  return migrateVersionOne({
+    ...source,
+    schemaVersion: 1,
+    documents: Array.isArray(source.documents) ? source.documents : [],
+  });
 }
 
 export function migrateProject(input: unknown): unknown {
@@ -70,10 +270,8 @@ export function migrateProject(input: unknown): unknown {
     );
   }
 
-  if (versionValue === 0) {
-    return migrateVersionZero(input);
-  }
-
+  if (versionValue === 0) return migrateVersionZero(input);
+  if (versionValue === 1) return migrateVersionOne(input);
   return input;
 }
 

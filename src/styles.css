@@ -30,10 +30,7 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-    background:
-      radial-gradient(circle at 15% 0%, rgba(126, 104, 242, 0.14), transparent 31rem),
-      radial-gradient(circle at 100% 18%, rgba(62, 120, 173, 0.1), transparent 26rem),
-      #0c0d10;
+    background: #0c0d10;
     color: var(--color-ink);
   }
 

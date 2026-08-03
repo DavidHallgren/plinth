@@ -15,7 +15,7 @@ Commands:
   duplicate <slug> <new-slug>           Copy a project (never overwrites)
   rename <slug> <name> [--slug <slug>]  Rename a project and optionally its slug
   delete <slug> --yes                   Delete a project directory
-  add-document <slug> <preset> [name]   Add a blank/browser/phone/social document
+  add-document <slug> <preset> [name]   Add an App Store or custom document
   export <slug>                         Reserved; browser rendering is required
   help                                  Show this help
 
@@ -23,6 +23,8 @@ Options:
   --json                                Emit machine-readable output
   --yes                                 Confirm destructive operations
   --slug <slug>                         Set a project slug
+  --width <pixels>                      Set a custom document width
+  --height <pixels>                     Set a custom document height
 `;
 
 type ParsedArgs = {
@@ -77,6 +79,15 @@ function required(value: string | undefined, label: string): string {
     throw new PlinthError("INVALID_REQUEST", 400, `Missing ${label}.`);
   }
   return value.trim();
+}
+
+function optionalDimension(value: string | undefined, label: string): number | undefined {
+  if (value === undefined) return undefined;
+  const dimension = Number(value);
+  if (!Number.isInteger(dimension) || dimension <= 0 || dimension > 100_000) {
+    throw new PlinthError("INVALID_REQUEST", 400, `${label} must be an integer between 1 and 100000.`);
+  }
+  return dimension;
 }
 
 function printResult(value: unknown, json: boolean): void {
@@ -162,7 +173,10 @@ async function run(parsed: ParsedArgs, storage: ProjectStorage): Promise<{ value
           allowed: DocumentPresetSchema.options,
         });
       }
-      const project = await storage.addDocument(slug, presetResult.data, parsed.positionals[2] ?? parsed.options.get("name"));
+      const project = await storage.addDocument(slug, presetResult.data, parsed.positionals[2] ?? parsed.options.get("name"), {
+        width: optionalDimension(parsed.options.get("width"), "Document width"),
+        height: optionalDimension(parsed.options.get("height"), "Document height"),
+      });
       return { value: { project } };
     }
 

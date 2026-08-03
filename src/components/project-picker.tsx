@@ -45,7 +45,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate }: Pr
             </div>
             <div>
               <p className="text-sm font-semibold tracking-[0.22em] text-ink">PLINTH</p>
-              <p className="text-[11px] text-muted">Local-first composition</p>
+            <p className="text-[11px] text-muted">Screenshot composition studio</p>
             </div>
           </div>
           <Badge tone="green">
@@ -56,7 +56,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate }: Pr
 
         <main className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1fr_1.15fr] lg:py-20">
           <section className="max-w-xl">
-            <Badge tone="violet">Foundation / 01</Badge>
+            <Badge tone="violet">Local workspace</Badge>
             <h1 className="mt-5 max-w-lg text-4xl font-semibold leading-[1.05] tracking-[-0.045em] text-ink sm:text-6xl">
               A calmer way to frame the work.
             </h1>
@@ -135,7 +135,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate }: Pr
               </div>
               <div className="flex items-center justify-between px-2.5 pt-3 text-[11px] text-muted">
                 <span className="inline-flex items-center gap-1.5"><Clock3 size={12} /> Autosave architecture ready</span>
-                <span>Phase 1</span>
+                <span>Schema v2</span>
               </div>
             </div>
           </section>
@@ -143,7 +143,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate }: Pr
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] py-5 text-[11px] text-muted">
           <span>Projects stay in your local workspace.</span>
-          <span>Plinth foundation · schema v1</span>
+          <span>Plinth studio · schema v2</span>
         </footer>
       </div>
     </div>
