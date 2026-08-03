@@ -80,7 +80,7 @@ export function DocumentNavigator({
   const [layersOpen, setLayersOpen] = useState(true);
 
   return (
-    <aside className="flex min-h-0 w-[248px] shrink-0 flex-col border-r border-white/[0.08] bg-[#171717]">
+    <aside className="flex min-h-0 w-[256px] shrink-0 flex-col border-r border-white/[0.08] bg-[#171717]">
       <section className="border-b border-white/[0.08] p-3">
         <div className="flex items-center justify-between gap-2">
           <button className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted hover:text-ink" onClick={() => setDocumentsOpen((open) => !open)} type="button">

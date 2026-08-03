@@ -569,7 +569,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
             {dropActive ? <div className="pointer-events-none absolute inset-4 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-accent bg-accent/[0.12] text-sm font-semibold text-accent-soft">Drop images to upload and place them</div> : null}
           </div>
         </main>
-        {!previewMode ? <aside className="flex min-h-0 w-[312px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
+        {!previewMode ? <aside className="flex min-h-0 w-[256px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
           <Inspector document={activeDocument} onUpdateDocument={(patch) => queueInspectorChange("Edit document", () => store.updateCurrentDocument(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
         </aside> : null}
       </div>
