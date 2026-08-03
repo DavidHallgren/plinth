@@ -52,7 +52,7 @@ export function Dialog({ open, title, description, onOpenChange, children, foote
               </p>
             ) : null}
           </div>
-          <Button aria-label="Close dialog" onClick={() => onOpenChange(false)} size="icon" variant="ghost">
+          <Button aria-label="Close dialog" onClick={() => onOpenChange(false)} size="icon" tooltip="Close dialog" variant="ghost">
             <X size={16} />
           </Button>
         </div>

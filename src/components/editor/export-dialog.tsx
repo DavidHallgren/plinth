@@ -10,6 +10,7 @@ import { SceneRenderer } from "../../canvas/scene-renderer";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 type ExportDialogProps = {
   open: boolean;
@@ -279,7 +280,14 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
                       <p className="mt-0.5 truncate text-[10px] text-muted">{fileName} · {document.width} × {document.height}</p>
                     </div>
                     <span className={`shrink-0 text-[10px] ${row?.status === "error" ? "text-red-200" : row?.status === "done" ? "text-emerald-200" : "text-muted"}`}>{statusText(row?.status ?? "pending")}</span>
-                    {row?.status === "done" && destination === "download" ? <a aria-label={`Download ${fileName}`} className="text-accent-soft hover:text-ink" download={fileName} href={`/api/projects/${encodeURIComponent(project.slug)}/exports/${encodeURIComponent(fileName)}`}><Download size={14} /></a> : null}
+                    {row?.status === "done" && destination === "download" ? (
+                      <Tooltip>
+                        <TooltipTrigger render={<a aria-label={`Download ${fileName}`} className="text-accent-soft hover:text-ink" download={fileName} href={`/api/projects/${encodeURIComponent(project.slug)}/exports/${encodeURIComponent(fileName)}`} />}>
+                          <Download size={14} />
+                        </TooltipTrigger>
+                        <TooltipContent>Download {fileName}</TooltipContent>
+                      </Tooltip>
+                    ) : null}
                   </div>
                   {row?.path ? <p className="mt-1 truncate text-[10px] text-emerald-200/75" title={row.path}>{row.downloaded ? "Download started" : `Saved to ${row.path}`}</p> : null}
                   {row?.error ? <p className="mt-1 text-[10px] leading-4 text-red-200" role="alert">{row.error}</p> : null}

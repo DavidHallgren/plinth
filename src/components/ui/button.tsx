@@ -1,5 +1,7 @@
-import type { ButtonHTMLAttributes } from "react";
+import { forwardRef } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../../lib/cn";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg" | "icon";
@@ -7,6 +9,7 @@ type ButtonSize = "sm" | "md" | "lg" | "icon";
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  tooltip?: ReactNode;
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -23,8 +26,11 @@ const sizeClasses: Record<ButtonSize, string> = {
   icon: "h-9 w-9 rounded-lg p-0",
 };
 
-export function Button({ className, variant = "secondary", size = "md", type = "button", ...props }: ButtonProps) {
-  return (
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { children, className, disabled, tooltip, variant = "secondary", size = "md", type = "button", ...props },
+  ref,
+) {
+  const button = (
     <button
       className={cn(
         "plinth-focus-ring inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors disabled:pointer-events-none disabled:opacity-45",
@@ -32,8 +38,27 @@ export function Button({ className, variant = "secondary", size = "md", type = "
         sizeClasses[size],
         className,
       )}
+      disabled={disabled}
+      ref={ref}
       type={type}
       {...props}
-    />
+    >
+      {children}
+    </button>
   );
-}
+
+  if (!tooltip) return button;
+
+  return (
+    <Tooltip>
+      {disabled ? (
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          {button}
+        </TooltipTrigger>
+      ) : (
+        <TooltipTrigger render={button} />
+      )}
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+});

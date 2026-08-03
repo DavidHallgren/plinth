@@ -67,8 +67,8 @@ export function ProjectPreview({ assets, documents, projectSlug, onOpenDocument,
                 <GripVertical className="cursor-grab text-muted/40" size={14} />
                 <span className="min-w-0 flex-1 truncate font-medium text-ink/85">{document.name}</span>
                 <div className="flex items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                  <Button aria-label={`Move ${document.name} left`} disabled={index === 0} onClick={() => onMoveDocument(document.id, -1)} size="icon" variant="ghost"><ArrowLeft size={13} /></Button>
-                  <Button aria-label={`Move ${document.name} right`} disabled={index === documents.length - 1} onClick={() => onMoveDocument(document.id, 1)} size="icon" variant="ghost"><ArrowRight size={13} /></Button>
+                  <Button aria-label={`Move ${document.name} left`} disabled={index === 0} onClick={() => onMoveDocument(document.id, -1)} size="icon" tooltip={`Move ${document.name} left`} variant="ghost"><ArrowLeft size={13} /></Button>
+                  <Button aria-label={`Move ${document.name} right`} disabled={index === documents.length - 1} onClick={() => onMoveDocument(document.id, 1)} size="icon" tooltip={`Move ${document.name} right`} variant="ghost"><ArrowRight size={13} /></Button>
                 </div>
               </div>
               <button

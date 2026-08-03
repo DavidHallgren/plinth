@@ -286,7 +286,7 @@ function ColorField({ value, onChange, allowNone = false }: { value: string; onC
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const colorValue = /^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff";
-  return <div className="flex items-center gap-1.5"><input aria-label="Color swatch" className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line bg-transparent p-0.5" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value); }} type="color" value={colorValue} /><Input className="h-8 min-w-0 rounded-lg px-2 text-xs" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value || (allowNone ? null : "#ffffff")); }} value={draft} />{allowNone ? <Button aria-label="Clear color" onClick={() => { setDraft(""); onChange(null); }} size="icon" variant="ghost"><Trash2 size={12} /></Button> : null}</div>;
+  return <div className="flex items-center gap-1.5"><input aria-label="Color swatch" className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line bg-transparent p-0.5" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value); }} type="color" value={colorValue} /><Input className="h-8 min-w-0 rounded-lg px-2 text-xs" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value || (allowNone ? null : "#ffffff")); }} value={draft} />{allowNone ? <Button aria-label="Clear color" onClick={() => { setDraft(""); onChange(null); }} size="icon" tooltip="Clear color" variant="ghost"><Trash2 size={12} /></Button> : null}</div>;
 }
 
 function ToggleButton({ active, label, icon, onClick }: { active: boolean; label: string; icon?: React.ReactNode; onClick: () => void }) {

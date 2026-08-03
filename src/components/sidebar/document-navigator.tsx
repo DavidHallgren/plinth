@@ -26,6 +26,7 @@ import { selectSortedLayers } from "../../scene/selectors";
 import { DocumentThumbnail } from "../editor/document-thumbnail";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 type DocumentNavigatorProps = {
   documents: Document[];
@@ -87,8 +88,8 @@ export function DocumentNavigator({
             {documentsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Documents
           </button>
           <div className="flex items-center gap-0.5">
-            <Button aria-label="Preview all documents" onClick={onOpenPreview} size="icon" variant={previewMode ? "secondary" : "ghost"}><Columns3 size={15} /></Button>
-            <Button aria-label="Add document" onClick={onAddDocument} size="icon" variant="ghost"><FilePlus2 size={15} /></Button>
+            <Button aria-label="Preview all documents" onClick={onOpenPreview} size="icon" tooltip="Preview all documents" variant={previewMode ? "secondary" : "ghost"}><Columns3 size={15} /></Button>
+            <Button aria-label="Add document" onClick={onAddDocument} size="icon" tooltip="Add document" variant="ghost"><FilePlus2 size={15} /></Button>
           </div>
         </div>
         {documentsOpen ? (
@@ -250,10 +251,13 @@ function DocumentRow({ document: documentItem, selected, index, allDocuments, as
           ref={actionsRef}
           style={actionsPosition}
         >
-          <Button aria-label={`Move ${documentItem.name} up`} disabled={index === 0} onClick={() => onMove(documentItem.id, -1)} size="icon" variant="ghost"><ArrowUp size={11} /></Button>
-          <Button aria-label={`Move ${documentItem.name} down`} disabled={index === allDocuments.length - 1} onClick={() => onMove(documentItem.id, 1)} size="icon" variant="ghost"><ArrowDown size={11} /></Button>
+          <Button aria-label={`Move ${documentItem.name} up`} disabled={index === 0} onClick={() => onMove(documentItem.id, -1)} size="icon" tooltip="Move up" variant="ghost"><ArrowUp size={11} /></Button>
+          <Button aria-label={`Move ${documentItem.name} down`} disabled={index === allDocuments.length - 1} onClick={() => onMove(documentItem.id, 1)} size="icon" tooltip="Move down" variant="ghost"><ArrowDown size={11} /></Button>
           <details className="relative">
-            <summary aria-label={`More actions for ${documentItem.name}`} className="plinth-focus-ring grid h-7 w-7 cursor-pointer list-none place-items-center rounded-lg text-muted hover:bg-white/[0.06] hover:text-ink"><MoreHorizontal size={13} /></summary>
+            <Tooltip>
+              <TooltipTrigger render={<summary aria-label={`More actions for ${documentItem.name}`} className="plinth-focus-ring grid h-7 w-7 cursor-pointer list-none place-items-center rounded-lg text-muted hover:bg-white/[0.06] hover:text-ink"><MoreHorizontal size={13} /></summary>} />
+              <TooltipContent>More actions</TooltipContent>
+            </Tooltip>
             <div className="absolute right-0 top-8 z-20 w-32 rounded-lg border border-white/10 bg-[#212121] p-1 shadow-xl shadow-black/40">
               <MenuAction icon={<Copy size={12} />} label="Duplicate" onClick={() => onDuplicate(documentItem.id)} />
               <MenuAction danger icon={<Trash2 size={12} />} label="Delete" onClick={() => onDelete(documentItem.id)} />
@@ -379,12 +383,15 @@ function LayerRow({ element, selected, index, allLayers, onSelect, onRename, onT
           ref={actionsRef}
           style={actionsPosition}
         >
-          <Button aria-label={`Move ${element.name} up`} disabled={index === 0} onClick={() => onMove(element.id, 1)} size="icon" variant="ghost"><ArrowUp size={11} /></Button>
-          <Button aria-label={`Move ${element.name} down`} disabled={index === allLayers.length - 1} onClick={() => onMove(element.id, -1)} size="icon" variant="ghost"><ArrowDown size={11} /></Button>
-          <Button aria-label={element.visible ? `Hide ${element.name}` : `Show ${element.name}`} onClick={() => onToggleVisible(element)} size="icon" variant="ghost">{element.visible ? <Eye size={12} /> : <EyeOff size={12} />}</Button>
-          <Button aria-label={element.locked ? `Unlock ${element.name}` : `Lock ${element.name}`} onClick={() => onToggleLocked(element)} size="icon" variant="ghost">{element.locked ? <Lock size={12} /> : <Unlock size={12} />}</Button>
+          <Button aria-label={`Move ${element.name} up`} disabled={index === 0} onClick={() => onMove(element.id, 1)} size="icon" tooltip="Move up" variant="ghost"><ArrowUp size={11} /></Button>
+          <Button aria-label={`Move ${element.name} down`} disabled={index === allLayers.length - 1} onClick={() => onMove(element.id, -1)} size="icon" tooltip="Move down" variant="ghost"><ArrowDown size={11} /></Button>
+          <Button aria-label={element.visible ? `Hide ${element.name}` : `Show ${element.name}`} onClick={() => onToggleVisible(element)} size="icon" tooltip={element.visible ? "Hide" : "Show"} variant="ghost">{element.visible ? <Eye size={12} /> : <EyeOff size={12} />}</Button>
+          <Button aria-label={element.locked ? `Unlock ${element.name}` : `Lock ${element.name}`} onClick={() => onToggleLocked(element)} size="icon" tooltip={element.locked ? "Unlock" : "Lock"} variant="ghost">{element.locked ? <Lock size={12} /> : <Unlock size={12} />}</Button>
           <details className="relative">
-            <summary className="plinth-focus-ring grid h-7 w-7 cursor-pointer list-none place-items-center rounded-lg text-muted hover:bg-white/[0.06] hover:text-ink"><MoreHorizontal size={13} /></summary>
+            <Tooltip>
+              <TooltipTrigger render={<summary aria-label={`More actions for ${element.name}`} className="plinth-focus-ring grid h-7 w-7 cursor-pointer list-none place-items-center rounded-lg text-muted hover:bg-white/[0.06] hover:text-ink"><MoreHorizontal size={13} /></summary>} />
+              <TooltipContent>More actions</TooltipContent>
+            </Tooltip>
             <div className="absolute right-0 top-8 z-20 w-32 rounded-lg border border-white/10 bg-[#212121] p-1 shadow-xl shadow-black/40">
               <MenuAction icon={<Pencil size={12} />} label="Rename" onClick={() => { setDraftName(element.name); setEditing(true); }} />
               <MenuAction icon={<Copy size={12} />} label="Duplicate" onClick={() => onDuplicate(element.id)} />
