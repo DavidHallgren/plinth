@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autosave: true,
   autosaveDelayMs: 800,
   defaultDocumentPreset: "iphone-6-9",
+  exportDirectory: null,
   grid: {
     enabled: true,
     size: 8,
@@ -80,7 +81,8 @@ function deviceElement(
   const isPhone = frameKind === "phone";
   const isTablet = frameKind === "tablet";
   const preset = frameKind === "browser" ? "browser-window" : isTablet ? "generic-modern-ipad" : "iphone-17-pro-max";
-  const deviceName = frameKind === "browser" ? "Browser window" : isTablet ? "Generic modern iPad" : "iPhone 17 Pro Max";
+  const definition = getDevicePreset(preset);
+  const deviceName = definition?.label ?? (frameKind === "browser" ? "Browser window" : isTablet ? "Generic modern iPad" : "iPhone 17 Pro Max");
   return {
     ...frame(id, deviceName, values),
     type: "device",
@@ -88,8 +90,8 @@ function deviceElement(
     deviceId: isPhone ? "iphone-17-pro-max" : isTablet ? "generic-modern-ipad" : "browser-window",
     deviceName,
     frame: frameKind,
-    frameColor: isPhone ? "#1d2029" : isTablet ? "#242833" : "#242934",
-    screenColor: isPhone ? "#f8f9fc" : "#f6f7fb",
+    frameColor: definition?.defaultFrameColor ?? (isPhone ? "#1d2029" : isTablet ? "#242833" : "#242934"),
+    screenColor: definition?.defaultScreenColor ?? (isPhone ? "#f8f9fc" : "#f6f7fb"),
     screenshotPath: null,
     screenshotFit: "cover",
     screenshotPosition: { x: 0.5, y: 0.5 },

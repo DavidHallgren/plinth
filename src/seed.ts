@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createDocumentPreset, DEFAULT_BACKGROUND, DEFAULT_SETTINGS } from "./lib/defaults";
 import { writePrettyJsonAtomic } from "./lib/storage";
-import { ProjectSchema } from "./lib/schema";
+import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./lib/schema";
 import type { AssetMetadata, DeviceElement, Document, Project } from "./lib/schema";
 
 const seedRoot = join(process.cwd(), "data", "projects");
@@ -72,7 +72,7 @@ export function createStarterProject(): { project: Project; assets: Record<strin
   }), "ipad"), "assets/asset_social.svg", "generic-modern-ipad", "Generic modern iPad", "#242833");
 
   const project: Project = {
-    schemaVersion: 4,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id: "project_plinth_starter",
     slug: seedSlug,
     name: "Plinth starter studio",

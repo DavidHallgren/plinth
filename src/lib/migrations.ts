@@ -292,6 +292,9 @@ function normalizeSettings(value: unknown, starter: Project["settings"]): Projec
     autosave: asBoolean(value.autosave, starter.autosave),
     autosaveDelayMs: Math.min(60_000, Math.max(100, Math.round(asFiniteNumber(value.autosaveDelayMs, starter.autosaveDelayMs)))),
     defaultDocumentPreset,
+    exportDirectory: typeof value.exportDirectory === "string" && value.exportDirectory.trim()
+      ? value.exportDirectory.trim()
+      : null,
     grid: {
       enabled: asBoolean(grid.enabled, starter.grid.enabled),
       size: Math.max(1, asFiniteNumber(grid.size, starter.grid.size)),
@@ -350,7 +353,21 @@ function migrateVersionThree(source: Record<string, unknown>): Record<string, un
       exportSlug: slugify(asString(value.exportSlug, asString(value.exportFileName, asString(value.slug, name))), "composition"),
     };
   });
-  return { ...source, schemaVersion: CURRENT_SCHEMA_VERSION, documents };
+  return migrateVersionFour({ ...source, schemaVersion: 4, documents });
+}
+
+function migrateVersionFour(source: Record<string, unknown>): Record<string, unknown> {
+  const settings = isRecord(source.settings) ? source.settings : {};
+  return {
+    ...source,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    settings: {
+      ...settings,
+      exportDirectory: typeof settings.exportDirectory === "string" && settings.exportDirectory.trim()
+        ? settings.exportDirectory.trim()
+        : null,
+    },
+  };
 }
 
 export function migrateProject(input: unknown): unknown {
@@ -376,6 +393,7 @@ export function migrateProject(input: unknown): unknown {
   if (versionValue === 1) return migrateVersionOne(input);
   if (versionValue === 2) return migrateVersionTwo(input);
   if (versionValue === 3) return migrateVersionThree(input);
+  if (versionValue === 4) return migrateVersionFour(input);
   return input;
 }
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 4 as const;
+export const CURRENT_SCHEMA_VERSION = 5 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
@@ -124,7 +124,7 @@ export const ElementFrameSchema = z
 
 export const DeviceElementSchema = ElementFrameSchema.extend({
   type: z.literal("device"),
-  preset: z.enum(["iphone-17-pro-max", "iphone-17-pro", "generic-modern-iphone", "generic-modern-ipad", "browser-window"] as const),
+  preset: z.enum(["iphone-17-pro-max", "iphone-17-pro", "iphone-17", "iphone-air", "generic-modern-iphone", "generic-modern-ipad", "browser-window"] as const),
   deviceId: z.string().min(1).max(96),
   deviceName: z.string().min(1).max(120),
   frame: z.enum(["browser", "phone", "tablet"]),
@@ -221,6 +221,7 @@ export const SettingsSchema = z
     autosave: z.boolean(),
     autosaveDelayMs: z.number().int().min(100).max(60_000),
     defaultDocumentPreset: DocumentPresetSchema,
+    exportDirectory: z.string().trim().max(4096).nullable(),
     grid: z
       .object({
         enabled: z.boolean(),

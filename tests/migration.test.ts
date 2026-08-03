@@ -160,6 +160,39 @@ describe("project migrations", () => {
     });
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.documents[0]?.exportSlug).toBe("display-slug");
+    expect(migrated.settings.exportDirectory).toBeNull();
+  });
+
+  test("adds the optional configured export directory when loading a schema v4 project", () => {
+    const current = parseProject({
+      schemaVersion: 4,
+      id: "v4-export-directory-project",
+      name: "V4 export directory project",
+      slug: "v4-export-directory-project",
+      description: "Migration fixture",
+      assets: [],
+      documents: [{
+        id: "v4-document",
+        slug: "v4-document",
+        exportSlug: "v4-document",
+        name: "V4 document",
+        preset: "custom",
+        width: 320,
+        height: 240,
+        background: { type: "solid", color: "#111111" },
+        elements: [],
+        notes: "",
+        createdAt: "2026-08-02T00:00:00.000Z",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      }],
+      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
+      background: { type: "solid", color: "#10131a" },
+      createdAt: "2026-08-02T00:00:00.000Z",
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    });
+
+    expect(current.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(current.settings.exportDirectory).toBeNull();
   });
 
   test("canonicalizes persisted layer order and z-index gaps", () => {
@@ -187,7 +220,7 @@ describe("project migrations", () => {
         createdAt: "2026-08-02T00:00:00.000Z",
         updatedAt: "2026-08-02T00:00:00.000Z",
       }],
-      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
+      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", exportDirectory: null, grid: { enabled: true, size: 8, snap: true } },
       background: { type: "solid", color: "#10131a" },
       createdAt: "2026-08-02T00:00:00.000Z",
       updatedAt: "2026-08-02T00:00:00.000Z",
