@@ -1,6 +1,7 @@
-import { ArrowUpRight, Layers3, MoreHorizontal, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowUpRight, Layers3, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ProjectMetadata } from "../lib/storage";
+import { PlinthMark } from "./icons/plinth-mark";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -54,9 +55,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDe
       <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-5 py-6 sm:px-8">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-lg border border-accent/30 bg-accent/[0.12] text-accent-soft">
-              <Sparkles size={17} />
-            </div>
+            <PlinthMark className="h-9 w-9" />
             <p className="text-sm font-semibold tracking-[0.22em] text-ink">PLINTH</p>
           </div>
         </header>
