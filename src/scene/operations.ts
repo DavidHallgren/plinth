@@ -84,6 +84,11 @@ function finite(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function roundToTenth(value: number): number {
+  const rounded = Math.round(value * 10) / 10;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
 function documentFor(project: Project, documentId: string): Document {
   const document = project.documents.find((candidate) => candidate.id === documentId);
   if (!document) throw new SceneOperationError("DOCUMENT_NOT_FOUND", `Document "${documentId}" was not found.`);
@@ -128,10 +133,11 @@ function clampElementToDocument(document: Document, element: SceneElement): Scen
   const height = clamp(Math.round(requestedHeight), MIN_DIMENSION, document.height);
   return {
     ...element,
-    x: clamp(finite(element.x, 0), MIN_DIMENSION - width, document.width - MIN_DIMENSION),
-    y: clamp(finite(element.y, 0), MIN_DIMENSION - height, document.height - MIN_DIMENSION),
+    x: clamp(Math.round(finite(element.x, 0)), MIN_DIMENSION - width, document.width - MIN_DIMENSION),
+    y: clamp(Math.round(finite(element.y, 0)), MIN_DIMENSION - height, document.height - MIN_DIMENSION),
     width,
     height,
+    rotation: roundToTenth(finite(element.rotation, 0)),
     opacity: clamp(finite(element.opacity, 1), 0, 1),
   } as SceneElement;
 }

@@ -100,18 +100,19 @@ describe("scene operations", () => {
     expect(() => addElement(resized, "doc_operations", shape("resize_me"))).toThrow(/already in use/);
   });
 
-  test("rounds fractional canvas transform dimensions before schema validation", () => {
+  test("normalizes committed geometry while preserving fractional visual properties", () => {
     const project = addElement(fixture(), "doc_operations", shape("resize_me", 40, 40));
     const transformed = updateElements(project, "doc_operations", [{
       id: "resize_me",
-      patch: { x: 50.25, y: 40.75, width: 299.6, height: 199.4, rotation: 2.5 },
+      patch: { x: 50.25, y: 40.75, width: 299.6, height: 199.4, rotation: 4.092700945, opacity: 0.437 },
     }]);
     const element = transformed.documents[0]?.elements.find((candidate) => candidate.id === "resize_me");
     expect(element?.width).toBe(300);
     expect(element?.height).toBe(199);
-    expect(element?.x).toBe(50.25);
-    expect(element?.y).toBe(40.75);
-    expect(element?.rotation).toBe(2.5);
+    expect(element?.x).toBe(50);
+    expect(element?.y).toBe(41);
+    expect(element?.rotation).toBe(4.1);
+    expect(element?.opacity).toBe(0.437);
   });
 
   test("preserves partially off-canvas layer positions while keeping a recovery edge", () => {
