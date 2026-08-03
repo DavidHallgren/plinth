@@ -10,7 +10,7 @@ describe("project schema", () => {
 
     expect(project.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(document).toBeDefined();
-    expect(document?.elements.map((element) => element.type)).toEqual(["device", "text", "text", "shape"]);
+    expect(document?.elements.map((element) => element.type)).toEqual(["shape", "device", "text", "text"]);
     expect(JSON.parse(JSON.stringify(project))).toEqual(project);
 
     for (const element of document?.elements ?? []) {

@@ -17,7 +17,7 @@ describe("document presets", () => {
 
   test("browser preset contains the normalized foundation elements", () => {
     const document = createDocumentPreset("browser");
-    expect(document.elements.map((element) => element.type)).toEqual(["device", "text", "shape"]);
+    expect(document.elements.map((element) => element.type)).toEqual(["device", "shape", "text"]);
   });
 
   test("centralizes the requested App Store sizes and creates editable gradient scenes", () => {

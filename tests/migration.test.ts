@@ -161,4 +161,44 @@ describe("project migrations", () => {
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.documents[0]?.exportSlug).toBe("display-slug");
   });
+
+  test("canonicalizes persisted layer order and z-index gaps", () => {
+    const migrated = parseProject({
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      id: "layer-order-project",
+      name: "Layer order project",
+      slug: "layer-order-project",
+      description: "Layer order fixture",
+      assets: [],
+      documents: [{
+        id: "layer-order-document",
+        slug: "layer-order-document",
+        exportSlug: "layer-order-document",
+        name: "Layer order document",
+        preset: "custom",
+        width: 320,
+        height: 240,
+        background: { type: "solid", color: "#111111" },
+        elements: [
+          { id: "top", type: "shape", name: "Top", x: 0, y: 0, width: 40, height: 40, rotation: 0, opacity: 1, zIndex: 9, locked: false, visible: true, shadow: null, shape: "rectangle", fill: "#ffffff", stroke: "#ffffff", strokeWidth: 0, radius: 0 },
+          { id: "bottom", type: "shape", name: "Bottom", x: 0, y: 0, width: 40, height: 40, rotation: 0, opacity: 1, zIndex: 2, locked: false, visible: true, shadow: null, shape: "rectangle", fill: "#ffffff", stroke: "#ffffff", strokeWidth: 0, radius: 0 },
+        ],
+        notes: "",
+        createdAt: "2026-08-02T00:00:00.000Z",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      }],
+      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
+      background: { type: "solid", color: "#10131a" },
+      createdAt: "2026-08-02T00:00:00.000Z",
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    });
+
+    expect(migrated.documents[0]?.elements.map((element) => [element.id, element.zIndex])).toEqual([[
+      "bottom",
+      0,
+    ], [
+      "top",
+      1,
+    ]]);
+  });
 });

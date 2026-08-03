@@ -14,6 +14,8 @@ import type {
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
 import { getPresetDefinition, isAppStorePreset } from "../scene/presets";
 import { getDevicePreset } from "../devices/presets";
+import { normalizeTextElementGeometry } from "../scene/text-geometry";
+import { normalizeLayerOrder } from "../scene/selectors";
 
 export const DEFAULT_BACKGROUND: Background = {
   type: "solid",
@@ -365,6 +367,7 @@ export function createDocumentPreset(
   const elements = isAppStorePreset(preset)
     ? createAppStoreElements(preset, width, height)
     : createLegacyElements(isLegacy ? preset : "blank");
+  const normalizedElements = elements.map((element) => element.type === "text" ? normalizeTextElementGeometry(element, width, height) : element);
   const document: Document = {
     id,
     slug: options.slug ?? slugify(name, "composition"),
@@ -379,7 +382,7 @@ export function createDocumentPreset(
       start: { x: 0, y: 1 },
       end: { x: 1, y: 0 },
     } : DEFAULT_BACKGROUND,
-    elements,
+    elements: normalizeLayerOrder(normalizedElements),
     notes: "",
     createdAt: now,
     updatedAt: now,

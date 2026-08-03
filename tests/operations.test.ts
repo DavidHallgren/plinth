@@ -12,6 +12,7 @@ import {
   reorderDocuments,
   reorderElements,
   resizeElement,
+  updateDocument,
   updateElement,
 } from "../src/scene/operations";
 import { ProjectHistory } from "../src/scene/history";
@@ -96,6 +97,34 @@ describe("scene operations", () => {
     expect(element?.y).toBe(0);
     expect(element?.rotation).toBe(32);
     expect(() => addElement(resized, "doc_operations", shape("resize_me"))).toThrow(/already in use/);
+  });
+
+  test("preserves existing z-order when updating element or document properties", () => {
+    const project = createDefaultProject("Layer order fixture", { now: "2026-08-02T00:00:00.000Z" });
+    const document = project.documents[0];
+    if (!document) throw new Error("Missing document");
+    const expectedOrder = [...document.elements].sort((left, right) => left.zIndex - right.zIndex).map((element) => element.id);
+
+    const updatedElement = updateElement(project, document.id, document.elements[0]?.id ?? "", { locked: true });
+    const afterElementUpdate = updatedElement.documents[0]?.elements.slice().sort((left, right) => left.zIndex - right.zIndex).map((element) => element.id);
+    expect(afterElementUpdate).toEqual(expectedOrder);
+
+    const updatedDocument = updateDocument(updatedElement, document.id, { background: { type: "transparent" } });
+    const afterDocumentUpdate = updatedDocument.documents[0]?.elements.slice().sort((left, right) => left.zIndex - right.zIndex).map((element) => element.id);
+    expect(afterDocumentUpdate).toEqual(expectedOrder);
+  });
+
+  test("does not move, resize, or transform locked elements", () => {
+    const project = updateElement(addElement(fixture(), "doc_operations", shape("locked_shape", 40, 50)), "doc_operations", "locked_shape", { locked: true });
+    const moved = moveElements(project, "doc_operations", ["locked_shape"], { x: 100, y: 100 });
+    const resized = resizeElement(project, "doc_operations", "locked_shape", { x: 12, y: 14, width: 220, height: 180, rotation: 30 });
+    const patched = updateElement(project, "doc_operations", "locked_shape", { x: 12, y: 14, width: 220, height: 180, rotation: 30, name: "Still locked" });
+    const original = project.documents[0]?.elements[0];
+    expect(moved).toBe(project);
+    expect(resized).toBe(project);
+    expect(moved.documents[0]?.elements[0]).toEqual(original);
+    expect(resized.documents[0]?.elements[0]).toEqual(original);
+    expect(patched.documents[0]?.elements[0]).toMatchObject({ x: 40, y: 50, width: 100, height: 80, rotation: 0, name: "Still locked", locked: true });
   });
 
   test("adds, duplicates, reorders, and protects the final document", () => {

@@ -61,8 +61,8 @@ describe("safe project storage", () => {
     const reloaded = await storage.loadProject(updated.slug);
     const kinds = reloaded.documents[0]?.elements.map((element) => element.type);
 
-    expect(kinds).toEqual(["device", "text", "shape"]);
-    expect(reloaded.documents[0]?.elements).toEqual(document.elements);
+    expect(kinds).toEqual(["device", "shape", "text"]);
+    expect(reloaded.documents[0]?.elements).toEqual(updated.documents[0]?.elements);
     expect(JSON.parse(await readFile(storage.projectFile("round-trip"), "utf8"))).toEqual(reloaded);
   });
 

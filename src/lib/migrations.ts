@@ -6,6 +6,8 @@ import type { AssetMetadata, Background, Document, Project, SceneElement, Shadow
 import { isAppStorePreset } from "../scene/presets";
 import { isDevicePreset, getDevicePreset } from "../devices/presets";
 import { sanitizeAssetStem } from "./asset-validation";
+import { normalizeTextElementGeometry } from "../scene/text-geometry";
+import { normalizeLayerOrder } from "../scene/selectors";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -391,5 +393,13 @@ export function parseProject(input: unknown): Project {
     });
   }
 
-  return result.data;
+  return {
+    ...result.data,
+    documents: result.data.documents.map((document) => ({
+      ...document,
+      elements: normalizeLayerOrder(document.elements.map((element) => element.type === "text"
+        ? normalizeTextElementGeometry(element, document.width, document.height)
+        : element)),
+    })),
+  };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultProject, createDocumentPreset } from "../src/lib/defaults";
+import { parseProject } from "../src/lib/migrations";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { addElement, updateElement } from "../src/scene/operations";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
@@ -60,5 +61,21 @@ describe("text auto-height geometry", () => {
     const fixed = updateElement(wrapped, document.id, text.id, { style: { autoHeight: false }, height: 40 });
     const changed = updateElement(fixed, document.id, text.id, { text: `${text.text} more words` });
     expect(changed.documents[0]?.elements[0]?.height).toBe(40);
+  });
+
+  test("keeps stored auto-height geometry aligned with renderer and migrated JSON", () => {
+    const project = createDefaultProject("Auto-height fixture", { now: "2026-08-02T00:00:00.000Z" });
+    const document = project.documents[0];
+    const text = document?.elements.find((element): element is TextElement => element.type === "text");
+    if (!document || !text) throw new Error("Missing starter text element");
+    const expectedHeight = calculateTextAutoHeight(text.text, text.width, text.style);
+    expect(text.height).toBe(expectedHeight);
+
+    const legacyHeight = 500;
+    const parsed = parseProject({
+      ...project,
+      documents: [{ ...document, elements: document.elements.map((element) => element.id === text.id ? { ...element, height: legacyHeight } : element) }],
+    });
+    expect(parsed.documents[0]?.elements.find((element) => element.id === text.id)?.height).toBe(expectedHeight);
   });
 });

@@ -4,6 +4,7 @@ import { DocumentSchema, SceneElementSchema } from "../lib/schema";
 import type { Document, DocumentPreset, ImageFit, Point, Project, SceneElement, Shadow, TextStyle } from "../lib/schema";
 import type { ShapeElement } from "../lib/schema";
 import { calculateTextAutoHeight } from "./text-geometry";
+import { normalizeLayerOrder, sortLayerElements } from "./selectors";
 
 export const MIN_DIMENSION = 1;
 
@@ -112,10 +113,7 @@ function withDocument(project: Project, documentId: string, update: (document: D
 }
 
 function sortedByLayer(elements: SceneElement[]): SceneElement[] {
-  return elements
-    .map((element, index) => ({ element, index }))
-    .sort((left, right) => left.element.zIndex - right.element.zIndex || left.index - right.index)
-    .map(({ element }) => element);
+  return sortLayerElements(elements);
 }
 
 export function normalizeElementOrder(elements: SceneElement[]): SceneElement[] {
@@ -140,7 +138,7 @@ function clampElementToDocument(document: Document, element: SceneElement): Scen
 
 function updateDocumentElements(document: Document, elements: SceneElement[]): Document {
   const bounded = elements.map((element) => clampElementToDocument(document, element));
-  return touchDocument(document, { elements: normalizeElementOrder(bounded) });
+  return touchDocument(document, { elements: normalizeElementOrder(sortedByLayer(bounded)) });
 }
 
 function assertNoProjectIdentityCollision(project: Project, document: Document): void {
@@ -202,10 +200,13 @@ function patchElement(document: Document, element: SceneElement, patch: ElementP
   if (patch.type && patch.type !== element.type) {
     throw new SceneOperationError("INVALID_OPERATION", "Element types cannot be changed by an update.");
   }
+  const effectivePatch = element.locked
+    ? Object.fromEntries(Object.entries(patch).filter(([key]) => !["x", "y", "width", "height", "rotation"].includes(key))) as ElementPatch
+    : patch;
   const next = {
     ...element,
-    ...patch,
-    ...(element.type === "text" && patch.style ? { style: { ...element.style, ...patch.style } } : {}),
+    ...effectivePatch,
+    ...(element.type === "text" && effectivePatch.style ? { style: { ...element.style, ...effectivePatch.style } } : {}),
     id: element.id,
     type: element.type,
   } as SceneElement;
@@ -259,11 +260,12 @@ export function updateElements(project: Project, documentId: string, updates: El
 export function moveElements(project: Project, documentId: string, elementIds: string[], delta: MoveDelta): Project {
   const document = documentFor(project, documentId);
   const ids = new Set(elementIds);
-  const selected = document.elements.filter((element) => ids.has(element.id));
-  if (selected.length !== ids.size) {
-    const missing = elementIds.find((id) => !selected.some((element) => element.id === id));
+  const requested = document.elements.filter((element) => ids.has(element.id));
+  if (requested.length !== ids.size) {
+    const missing = elementIds.find((id) => !requested.some((element) => element.id === id));
     if (missing) elementFor(document, missing);
   }
+  const selected = requested.filter((element) => !element.locked);
   if (selected.length === 0) return project;
   const requestedX = finite(delta.x, 0);
   const requestedY = finite(delta.y, 0);
@@ -276,13 +278,14 @@ export function moveElements(project: Project, documentId: string, elementIds: s
 
   return withDocument(project, documentId, (currentDocument) => updateDocumentElements(
     currentDocument,
-    currentDocument.elements.map((element) => ids.has(element.id) ? { ...element, x: element.x + dx, y: element.y + dy } : element),
+    currentDocument.elements.map((element) => ids.has(element.id) && !element.locked ? { ...element, x: element.x + dx, y: element.y + dy } : element),
   ));
 }
 
 export function resizeElement(project: Project, documentId: string, elementId: string, input: ResizeElementInput): Project {
   const document = documentFor(project, documentId);
   const element = elementFor(document, elementId);
+  if (element.locked) return project;
   const widthValue = finite(input.width, element.width);
   const heightValue = finite(input.height, element.height);
   const xValue = finite(input.x, element.x) + (widthValue < 0 ? widthValue : 0);
@@ -311,7 +314,7 @@ export function reorderElements(project: Project, documentId: string, elementIds
   const remaining = ordered.filter((element) => !selectedIds.has(element.id));
   const insertionIndex = clamp(Math.round(targetIndex), 0, remaining.length);
   remaining.splice(insertionIndex, 0, ...selected);
-  return withDocument(project, documentId, (currentDocument) => updateDocumentElements(currentDocument, remaining));
+  return withDocument(project, documentId, (currentDocument) => updateDocumentElements(currentDocument, normalizeElementOrder(remaining)));
 }
 
 export const reorderElement = reorderElements;
@@ -353,6 +356,7 @@ export function addDocument(project: Project, presetOrDocument: DocumentPreset |
     id: document.id || createId("doc"),
     slug: uniqueDocumentSlug(project, options.slug ?? document.slug),
     exportSlug: uniqueDocumentExportSlug(project, options.exportSlug ?? document.exportSlug, undefined),
+    elements: normalizeLayerOrder(document.elements),
   });
   assertNoProjectIdentityCollision(project, nextDocument);
   return touchProject(project, [...project.documents, nextDocument]);
@@ -368,7 +372,7 @@ export function duplicateDocument(project: Project, documentId: string, override
     name: overrides.name?.trim() || `${source.name} copy`,
     slug: uniqueDocumentSlug(project, overrides.slug ?? `${source.slug}-copy`),
     exportSlug: uniqueDocumentExportSlug(project, `${source.exportSlug}-copy`),
-    elements: source.elements.map((element) => ({ ...element, id: uniqueId(element.type, usedIds) })),
+    elements: normalizeLayerOrder(source.elements.map((element) => ({ ...element, id: uniqueId(element.type, usedIds) }))),
     createdAt: now,
     updatedAt: now,
   };
@@ -401,7 +405,7 @@ export function updateDocument(project: Project, documentId: string, patch: Docu
     height: nextHeight,
   });
   const boundedElements = candidate.elements.map((element) => clampElementToDocument(candidate, element));
-  const nextDocument = DocumentSchema.parse({ ...candidate, elements: normalizeElementOrder(boundedElements) });
+  const nextDocument = DocumentSchema.parse({ ...candidate, elements: normalizeElementOrder(sortedByLayer(boundedElements)) });
   return touchProject(project, project.documents.map((current) => current.id === documentId ? nextDocument : current));
 }
 

@@ -1,5 +1,12 @@
 import type { Document, Project, SceneElement } from "../lib/schema";
 
+export function sortLayerElements(elements: SceneElement[]): SceneElement[] {
+  return elements
+    .map((element, index) => ({ element, index }))
+    .sort((left, right) => left.element.zIndex - right.element.zIndex || left.index - right.index)
+    .map(({ element }) => element);
+}
+
 export function selectActiveDocument(project: Project, documentId: string | null | undefined): Document {
   return project.documents.find((document) => document.id === documentId) ?? project.documents[0] as Document;
 }
@@ -10,10 +17,11 @@ export function selectSelectedElements(document: Document, selectedIds: readonly
 }
 
 export function selectSortedLayers(document: Document): SceneElement[] {
-  return document.elements
-    .map((element, index) => ({ element, index }))
-    .sort((left, right) => left.element.zIndex - right.element.zIndex || left.index - right.index)
-    .map(({ element }) => element);
+  return sortLayerElements(document.elements);
+}
+
+export function normalizeLayerOrder(elements: SceneElement[]): SceneElement[] {
+  return sortLayerElements(elements).map((element, index) => ({ ...element, zIndex: index }));
 }
 
 export function selectAssetReferences(project: Project, documentId?: string): Map<string, number> {

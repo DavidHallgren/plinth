@@ -101,11 +101,11 @@ function ElementInspector({ element, onUpdate }: { element: SceneElement; onUpda
       <Section title="Transform">
         <Field label="Name"><Input onChange={(event) => update({ name: event.target.value })} value={element.name} /></Field>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="X"><NumberField onChange={(value) => update({ x: value })} value={element.x} /></Field>
-          <Field label="Y"><NumberField onChange={(value) => update({ y: value })} value={element.y} /></Field>
-          <Field label="Width"><NumberField min={1} onChange={(value) => update({ width: value })} value={element.width} /></Field>
-          <Field label="Height"><NumberField min={1} onChange={(value) => update({ height: value })} value={element.height} /></Field>
-          <Field label="Rotation"><NumberField max={360} min={-360} onChange={(value) => update({ rotation: value })} value={element.rotation} /></Field>
+          <Field label="X"><NumberField disabled={element.locked} onChange={(value) => update({ x: value })} value={element.x} /></Field>
+          <Field label="Y"><NumberField disabled={element.locked} onChange={(value) => update({ y: value })} value={element.y} /></Field>
+          <Field label="Width"><NumberField disabled={element.locked} min={1} onChange={(value) => update({ width: value })} value={element.width} /></Field>
+          <Field label="Height"><NumberField disabled={element.locked} min={1} onChange={(value) => update({ height: value })} value={element.height} /></Field>
+          <Field label="Rotation"><NumberField disabled={element.locked} max={360} min={-360} onChange={(value) => update({ rotation: value })} value={element.rotation} /></Field>
           <Field label="Opacity"><NumberField max={1} min={0} onChange={(value) => update({ opacity: value })} step={0.05} value={element.opacity} /></Field>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -250,7 +250,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="block space-y-1"><span className="block text-[10px] text-muted">{label}</span>{children}</label>;
 }
 
-function NumberField({ value, onChange, min, max, step = 1 }: { value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number }) {
+function NumberField({ value, onChange, min, max, step = 1, disabled = false }: { value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; disabled?: boolean }) {
   const [draft, setDraft] = useState(String(value));
   const [focused, setFocused] = useState(false);
   useEffect(() => {
@@ -264,7 +264,7 @@ function NumberField({ value, onChange, min, max, step = 1 }: { value: number; o
     setFocused(false);
   }
 
-  return <Input className="h-8 rounded-lg px-2 text-xs" max={max} min={min} onBlur={commit} onChange={(event) => setDraft(event.target.value)} onFocus={() => setFocused(true)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(String(value)); setFocused(false); } }} step={step} type="number" value={draft} />;
+  return <Input className="h-8 rounded-lg px-2 text-xs" disabled={disabled} max={max} min={min} onBlur={commit} onChange={(event) => setDraft(event.target.value)} onFocus={() => setFocused(true)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(String(value)); setFocused(false); } }} step={step} type="number" value={draft} />;
 }
 
 function ColorField({ value, onChange, allowNone = false }: { value: string; onChange: (value: string | null) => void; allowNone?: boolean }) {
