@@ -3,6 +3,7 @@ import { createId, nowIso, slugify } from "../lib/ids";
 import { DocumentSchema, SceneElementSchema } from "../lib/schema";
 import type { Document, DocumentPreset, ImageFit, Point, Project, SceneElement, Shadow, TextStyle } from "../lib/schema";
 import type { ShapeElement } from "../lib/schema";
+import { calculateTextAutoHeight } from "./text-geometry";
 
 export const MIN_DIMENSION = 1;
 
@@ -69,6 +70,7 @@ export type AddDocumentOptions = {
   id?: string;
   name?: string;
   slug?: string;
+  exportSlug?: string;
   width?: number;
   height?: number;
 };
@@ -122,7 +124,10 @@ export function normalizeElementOrder(elements: SceneElement[]): SceneElement[] 
 
 function clampElementToDocument(document: Document, element: SceneElement): SceneElement {
   const width = clamp(Math.abs(finite(element.width, MIN_DIMENSION)), MIN_DIMENSION, document.width);
-  const height = clamp(Math.abs(finite(element.height, MIN_DIMENSION)), MIN_DIMENSION, document.height);
+  const requestedHeight = element.type === "text" && element.style.autoHeight !== false
+    ? calculateTextAutoHeight(element.text, width, element.style)
+    : Math.abs(finite(element.height, MIN_DIMENSION));
+  const height = clamp(requestedHeight, MIN_DIMENSION, document.height);
   return {
     ...element,
     x: clamp(finite(element.x, 0), 0, document.width - width),
@@ -153,6 +158,18 @@ function assertNoProjectIdentityCollision(project: Project, document: Document):
 
 function uniqueDocumentSlug(project: Project, proposed: string, ignoredId?: string): string {
   const existing = new Set(project.documents.filter((document) => document.id !== ignoredId).map((document) => document.slug));
+  const base = slugify(proposed, "composition");
+  let candidate = base;
+  let suffix = 2;
+  while (existing.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function uniqueDocumentExportSlug(project: Project, proposed: string, ignoredId?: string): string {
+  const existing = new Set(project.documents.filter((document) => document.id !== ignoredId).map((document) => document.exportSlug));
   const base = slugify(proposed, "composition");
   let candidate = base;
   let suffix = 2;
@@ -329,12 +346,13 @@ export function addDocument(project: Project, presetOrDocument: DocumentPreset |
   const now = nowIso();
   const usedIds = projectIds(project);
   const document = typeof presetOrDocument === "string"
-    ? createDocumentPreset(presetOrDocument, { ...options, id: options.id ?? uniqueId("doc", usedIds), now, name: options.name, slug: options.slug })
+    ? createDocumentPreset(presetOrDocument, { ...options, id: options.id ?? uniqueId("doc", usedIds), now, name: options.name, slug: options.slug, exportSlug: options.exportSlug })
     : DocumentSchema.parse({ ...presetOrDocument, id: options.id ?? presetOrDocument.id, createdAt: now, updatedAt: now });
   const nextDocument = DocumentSchema.parse({
     ...document,
     id: document.id || createId("doc"),
     slug: uniqueDocumentSlug(project, options.slug ?? document.slug),
+    exportSlug: uniqueDocumentExportSlug(project, options.exportSlug ?? document.exportSlug, undefined),
   });
   assertNoProjectIdentityCollision(project, nextDocument);
   return touchProject(project, [...project.documents, nextDocument]);
@@ -349,6 +367,7 @@ export function duplicateDocument(project: Project, documentId: string, override
     id: uniqueId("doc", usedIds),
     name: overrides.name?.trim() || `${source.name} copy`,
     slug: uniqueDocumentSlug(project, overrides.slug ?? `${source.slug}-copy`),
+    exportSlug: uniqueDocumentExportSlug(project, `${source.exportSlug}-copy`),
     elements: source.elements.map((element) => ({ ...element, id: uniqueId(element.type, usedIds) })),
     createdAt: now,
     updatedAt: now,
@@ -365,17 +384,19 @@ export function removeDocument(project: Project, documentId: string): Project {
   return touchProject(project, project.documents.filter((document) => document.id !== documentId));
 }
 
-export type DocumentPatch = Partial<Pick<Document, "name" | "slug" | "preset" | "width" | "height" | "background" | "notes">>;
+export type DocumentPatch = Partial<Pick<Document, "name" | "slug" | "exportSlug" | "preset" | "width" | "height" | "background" | "notes">>;
 
 export function updateDocument(project: Project, documentId: string, patch: DocumentPatch): Project {
   const document = documentFor(project, documentId);
   const nextWidth = patch.width === undefined ? document.width : Math.max(MIN_DIMENSION, Math.round(finite(patch.width, document.width)));
   const nextHeight = patch.height === undefined ? document.height : Math.max(MIN_DIMENSION, Math.round(finite(patch.height, document.height)));
   const nextSlug = patch.slug === undefined ? document.slug : uniqueDocumentSlug(project, patch.slug, documentId);
+  const nextExportSlug = patch.exportSlug === undefined ? document.exportSlug : uniqueDocumentExportSlug(project, patch.exportSlug, documentId);
   const candidate = touchDocument(document, {
     ...patch,
     name: patch.name === undefined ? document.name : patch.name.trim() || document.name,
     slug: nextSlug,
+    exportSlug: nextExportSlug,
     width: nextWidth,
     height: nextHeight,
   });

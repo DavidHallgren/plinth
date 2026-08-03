@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 3 as const;
+export const CURRENT_SCHEMA_VERSION = 4 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
 const TimestampSchema = z.string().datetime({ offset: true });
 const DimensionSchema = z.number().int().positive().max(100_000);
+export const DocumentSlugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(96);
 export const AssetPathSchema = z.string().regex(/^assets\/[a-z0-9][a-z0-9._-]{0,254}$/);
 export type AssetPath = z.infer<typeof AssetPathSchema>;
 export const ImageFitSchema = z.enum(["contain", "cover", "stretch"]);
@@ -235,6 +236,7 @@ export const DocumentSchema = z
   .object({
     id: IdSchema,
     slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(96),
+    exportSlug: DocumentSlugSchema,
     name: z.string().trim().min(1).max(120),
     preset: DocumentPresetSchema,
     width: DimensionSchema,

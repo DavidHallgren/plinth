@@ -72,7 +72,7 @@ export function createStarterProject(): { project: Project; assets: Record<strin
   }), "ipad"), "assets/asset_social.svg", "generic-modern-ipad", "Generic modern iPad", "#242833");
 
   const project: Project = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: "project_plinth_starter",
     slug: seedSlug,
     name: "Plinth starter studio",

@@ -43,6 +43,7 @@ type CreateDocumentOptions = {
   id?: string;
   name?: string;
   slug?: string;
+  exportSlug?: string;
   now?: string;
   width?: number;
   height?: number;
@@ -367,6 +368,7 @@ export function createDocumentPreset(
   const document: Document = {
     id,
     slug: options.slug ?? slugify(name, "composition"),
+    exportSlug: options.exportSlug ?? slugify(name, "composition"),
     name,
     preset,
     width,

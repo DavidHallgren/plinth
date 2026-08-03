@@ -7,6 +7,7 @@ import { getDevicePreset } from "../devices/presets";
 import { calculateDeviceScreenGeometry } from "../devices/geometry";
 import { AssetImageLayer } from "./image-loading";
 import { konvaFontStyle } from "./text-style";
+import { calculateTextAutoHeight } from "../scene/text-geometry";
 
 export type SceneRendererProps = {
   document: Document;
@@ -28,7 +29,7 @@ function colorStops(stops: GradientStop[]): Array<number | string> {
 
 export function backgroundProps(document: Document): Record<string, unknown> {
   if (document.background.type === "solid") return { fill: document.background.color };
-  if (document.background.type === "transparent") return { fill: "#ffffff" };
+  if (document.background.type === "transparent") return { fill: "transparent" };
   if (document.background.type === "linear-gradient") {
     return {
       fillLinearGradientColorStops: colorStops(document.background.stops),
@@ -56,12 +57,15 @@ function shadowProps(shadow: SceneElement["shadow"]): Record<string, unknown> {
   };
 }
 
-function elementPosition(element: SceneElement) {
+function elementPosition(document: Document, element: SceneElement) {
+  const height = element.type === "text" && element.style.autoHeight !== false
+    ? Math.min(document.height, calculateTextAutoHeight(element.text, element.width, element.style))
+    : element.height;
   return {
     x: element.x,
     y: element.y,
     width: element.width,
-    height: element.height,
+    height,
     rotation: element.rotation,
     opacity: element.opacity,
   };
@@ -72,6 +76,7 @@ function assetFor(assets: readonly AssetMetadata[], path: string | null | undefi
 }
 
 type ElementNodeProps = {
+  document: Document;
   element: SceneElement;
   projectSlug: string;
   assets: readonly AssetMetadata[];
@@ -83,10 +88,10 @@ type ElementNodeProps = {
   onMoveEnd: (elementId: string, x: number, y: number) => void;
 };
 
-function ElementNode({ element, projectSlug, assets, selected, interactive, register, onSelect, onGestureStart, onMoveEnd }: ElementNodeProps) {
+function ElementNode({ document, element, projectSlug, assets, selected, interactive, register, onSelect, onGestureStart, onMoveEnd }: ElementNodeProps) {
   if (!element.visible) return null;
   const draggable = interactive && !element.locked;
-  const position = elementPosition(element);
+  const position = elementPosition(document, element);
   const handleSelect = (event: KonvaEventObject<MouseEvent>) => {
     if (!interactive) return;
     event.cancelBubble = true;
@@ -120,12 +125,13 @@ function ElementNode({ element, projectSlug, assets, selected, interactive, regi
 
   if (element.type === "text") {
     const textShadow = element.style.shadow ?? element.shadow;
+    const textHeight = position.height;
     return (
       <Group {...baseProps} name={`element-${element.id}`} ref={registerNode}>
         <Rect
           cornerRadius={element.style.backgroundRadius ?? 0}
           fill={element.style.backgroundColor ?? "transparent"}
-          height={element.height}
+          height={textHeight}
           listening={false}
           width={element.width}
         />
@@ -135,7 +141,7 @@ function ElementNode({ element, projectSlug, assets, selected, interactive, regi
           fontFamily={element.style.fontFamily}
           fontSize={element.style.fontSize}
           fontStyle={konvaFontStyle(element.style.fontWeight, element.style.italic ?? false)}
-          height={element.height}
+          height={textHeight}
           letterSpacing={element.style.letterSpacing}
           lineHeight={element.style.lineHeight}
           padding={element.style.padding ?? 0}
@@ -189,6 +195,7 @@ function ElementNode({ element, projectSlug, assets, selected, interactive, regi
   return (
     <DeviceNode
       assets={assets}
+      document={document}
       element={element}
       interactive={interactive}
       name={`element-${element.id}`}
@@ -204,6 +211,7 @@ function ElementNode({ element, projectSlug, assets, selected, interactive, regi
 }
 
 type DeviceNodeProps = {
+  document: Document;
   element: Extract<SceneElement, { type: "device" }>;
   projectSlug: string;
   assets: readonly AssetMetadata[];
@@ -217,7 +225,7 @@ type DeviceNodeProps = {
   onDragEnd: (event: KonvaEventObject<DragEvent>) => void;
 };
 
-function DeviceNode({ element, projectSlug, assets, interactive, selected, name, register, onSelect, onTap, onDragStart, onDragEnd }: DeviceNodeProps) {
+function DeviceNode({ document, element, projectSlug, assets, interactive, selected, name, register, onSelect, onTap, onDragStart, onDragEnd }: DeviceNodeProps) {
   const preset = getDevicePreset(element.preset) ?? getDevicePreset("generic-modern-iphone");
   if (!preset) return null;
   const geometry = calculateDeviceScreenGeometry(preset, element.width, element.height, element.cornerRadius, element.screenCornerRadius);
@@ -237,7 +245,7 @@ function DeviceNode({ element, projectSlug, assets, interactive, selected, name,
   const screenshotAsset = assetFor(assets, element.screenshotPath);
   const isBrowser = element.preset === "browser-window" || element.frame === "browser";
   return (
-    <Group {...elementPosition(element)} {...baseProps} name={name} ref={register}>
+    <Group {...elementPosition(document, element)} {...baseProps} name={name} ref={register}>
       <Rect {...frameFill} {...shadowProps(element.shadow)} cornerRadius={geometry.outer.radius} height={element.height} width={element.width} />
       <Rect cornerRadius={geometry.screen.radius} fill={element.screenColor} height={geometry.screen.height} listening={false} width={geometry.screen.width} x={geometry.screen.x} y={geometry.screen.y} />
       <Group listening={false} x={geometry.screen.x} y={geometry.screen.y}>
@@ -293,6 +301,7 @@ export function SceneRenderer({ document, projectSlug, assets, selectedElementId
       {orderedElements.map((element) => (
         <ElementNode
           assets={assets}
+          document={document}
           element={element}
           interactive={interactive}
           key={element.id}

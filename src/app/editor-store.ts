@@ -153,7 +153,9 @@ export class EditorStore {
 
   undo(): void {
     if (this.snapshot.isInTransaction) this.commitTransaction();
+    const before = this.history.project;
     const project = this.history.undo();
+    if (project === before) return;
     this.updateSnapshot({
       project,
       selectedElementIds: this.validSelection(project, this.snapshot.activeDocumentId, this.snapshot.selectedElementIds),
@@ -166,7 +168,9 @@ export class EditorStore {
 
   redo(): void {
     if (this.snapshot.isInTransaction) this.commitTransaction();
+    const before = this.history.project;
     const project = this.history.redo();
+    if (project === before) return;
     this.updateSnapshot({
       project,
       selectedElementIds: this.validSelection(project, this.snapshot.activeDocumentId, this.snapshot.selectedElementIds),
@@ -232,6 +236,16 @@ export class EditorStore {
     this.apply("Reorder layer", (project) => reorderElements(project, documentId, [elementId], index + direction));
   }
 
+  reorderElementToIndex(elementId: string, targetIndex: number): void {
+    const document = this.activeDocument();
+    if (!document) return;
+    const selectedIds = this.snapshot.selectedElementIds.includes(elementId)
+      ? this.snapshot.selectedElementIds
+      : [elementId];
+    const documentId = document.id;
+    this.apply("Reorder layer", (project) => reorderElements(project, documentId, selectedIds, targetIndex));
+  }
+
   bringForward(): void { this.reorderSelection(1, "Bring forward"); }
   sendBackward(): void { this.reorderSelection(-1, "Send backward"); }
   bringToFront(): void { this.reorderSelection(9999, "Bring to front"); }
@@ -293,6 +307,25 @@ export class EditorStore {
 
   reorderCurrentDocuments(documentIds: string[], targetIndex: number): void {
     this.apply("Reorder documents", (project) => reorderDocuments(project, documentIds, targetIndex));
+  }
+
+  reorderElementTo(elementId: string, targetElementId: string): void {
+    const document = this.activeDocument();
+    if (!document || elementId === targetElementId) return;
+    const ordered = [...document.elements].sort((left, right) => left.zIndex - right.zIndex);
+    const remaining = ordered.filter((element) => element.id !== elementId);
+    const targetIndex = remaining.findIndex((element) => element.id === targetElementId);
+    if (targetIndex < 0) return;
+    const documentId = document.id;
+    this.apply("Reorder layer", (project) => reorderElements(project, documentId, [elementId], targetIndex));
+  }
+
+  reorderDocumentTo(documentId: string, targetDocumentId: string): void {
+    if (documentId === targetDocumentId) return;
+    const remaining = this.history.project.documents.filter((document) => document.id !== documentId);
+    const targetIndex = remaining.findIndex((document) => document.id === targetDocumentId);
+    if (targetIndex < 0) return;
+    this.reorderCurrentDocuments([documentId], targetIndex);
   }
 
   private reorderSelection(direction: number, label: string): void {

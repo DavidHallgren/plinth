@@ -131,4 +131,34 @@ describe("project migrations", () => {
     expect(migrated.assets[0]?.path).toBe("assets/screen.svg");
     expect(migrated.documents[0]?.elements[0]).toMatchObject({ type: "device", preset: "iphone-17-pro-max", screenshotPath: "assets/screen.svg" });
   });
+
+  test("adds an explicit export filename stem when loading a schema v3 project", () => {
+    const migrated = parseProject({
+      schemaVersion: 3,
+      id: "v3-export-project",
+      name: "V3 export project",
+      slug: "v3-export-project",
+      description: "Migration fixture",
+      assets: [],
+      documents: [{
+        id: "v3-document",
+        slug: "display-slug",
+        name: "Display name with spaces",
+        preset: "custom",
+        width: 320,
+        height: 240,
+        background: { type: "solid", color: "#111111" },
+        elements: [],
+        notes: "",
+        createdAt: "2026-08-02T00:00:00.000Z",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      }],
+      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
+      background: { type: "solid", color: "#10131a" },
+      createdAt: "2026-08-02T00:00:00.000Z",
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    });
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrated.documents[0]?.exportSlug).toBe("display-slug");
+  });
 });

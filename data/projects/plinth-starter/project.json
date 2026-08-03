@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "id": "project_plinth_starter",
   "slug": "plinth-starter",
   "name": "Plinth starter studio",
@@ -57,6 +57,7 @@
     {
       "id": "doc_iphone_69",
       "slug": "iphone-6-9-launch",
+      "exportSlug": "iphone-6-9-launch",
       "name": "iPhone 6.9 launch",
       "preset": "iphone-6-9",
       "width": 1320,
@@ -223,6 +224,7 @@
     {
       "id": "doc_iphone_65",
       "slug": "iphone-6-5-fallback",
+      "exportSlug": "iphone-6-5-fallback",
       "name": "iPhone 6.5 fallback",
       "preset": "iphone-6-5",
       "width": 1284,
@@ -385,6 +387,7 @@
     {
       "id": "doc_ipad_13",
       "slug": "ipad-13-product-story",
+      "exportSlug": "ipad-13-product-story",
       "name": "iPad 13 product story",
       "preset": "ipad-13",
       "width": 2064,

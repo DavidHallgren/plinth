@@ -51,7 +51,7 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
       <InspectorHeading title="Document" detail={`${document.width} × ${document.height}`} />
       <Section title="Identity">
         <Field label="Name"><Input onChange={(event) => onUpdate({ name: event.target.value })} value={document.name} /></Field>
-        <Field label="Export-safe name"><Input onChange={(event) => onUpdate({ slug: event.target.value })} value={document.slug} /></Field>
+        <Field label="Export filename stem"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={document.exportSlug} /></Field>
         <Field label="Preset">
           <select className={selectClass} onChange={(event) => changePreset(event.target.value)} value={APP_STORE_PRESETS.some((preset) => preset.id === document.preset) ? document.preset : "custom"}>
             {APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
@@ -69,7 +69,7 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
       <Section title="Notes">
         <textarea className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#0f1218] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-violet/70" onChange={(event) => onUpdate({ notes: event.target.value })} placeholder="Optional production notes" value={document.notes} />
       </Section>
-      <p className="mt-4 text-[10px] leading-4 text-muted/70">Apple groups accepted screenshot sizes by device display. Presets keep the requested source dimensions editable; export validation arrives with the rendering phase.</p>
+      <p className="mt-4 text-[10px] leading-4 text-muted/70">Presets keep the requested source dimensions editable. The export filename stem is saved separately from the display name.</p>
     </div>
   );
 }
@@ -208,10 +208,12 @@ function BackgroundControls({ background, onChange }: { background: Background; 
         if (event.target.value === "solid") onChange({ type: "solid", color: "#10131a" });
         if (event.target.value === "linear-gradient") onChange({ type: "linear-gradient", stops: [{ offset: 0, color: "#14182a" }, { offset: 1, color: "#8b7cff" }], start: { x: 0, y: 0 }, end: { x: 1, y: 1 } });
         if (event.target.value === "radial-gradient") onChange({ type: "radial-gradient", stops: [{ offset: 0, color: "#f3c1da" }, { offset: 1, color: "#27203d" }], center: { x: 0.5, y: 0.5 }, radius: 0.85 });
+        if (event.target.value === "transparent") onChange({ type: "transparent" });
       }} value={background.type}>
         <option value="solid">Solid</option>
         <option value="linear-gradient">Linear gradient</option>
         <option value="radial-gradient">Radial gradient</option>
+        <option value="transparent">Transparent</option>
       </select>
       {background.type === "solid" ? <ColorField onChange={(color) => { if (color) onChange({ ...background, color }); }} value={background.color} /> : null}
       {background.type === "linear-gradient" ? <LinearGradientControls background={background} onChange={onChange} /> : null}
@@ -249,7 +251,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function NumberField({ value, onChange, min, max, step = 1 }: { value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number }) {
-  return <Input className="h-8 rounded-lg px-2 text-xs" max={max} min={min} onChange={(event) => { const next = Number(event.target.value); if (Number.isFinite(next)) onChange(next); }} step={step} type="number" value={String(value)} />;
+  const [draft, setDraft] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [focused, value]);
+
+  function commit() {
+    const parsed = Number(draft);
+    if (Number.isFinite(parsed)) onChange(Math.min(max ?? parsed, Math.max(min ?? parsed, parsed)));
+    else setDraft(String(value));
+    setFocused(false);
+  }
+
+  return <Input className="h-8 rounded-lg px-2 text-xs" max={max} min={min} onBlur={commit} onChange={(event) => setDraft(event.target.value)} onFocus={() => setFocused(true)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(String(value)); setFocused(false); } }} step={step} type="number" value={draft} />;
 }
 
 function ColorField({ value, onChange, allowNone = false }: { value: string; onChange: (value: string | null) => void; allowNone?: boolean }) {

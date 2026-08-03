@@ -31,6 +31,7 @@ type DocumentNavigatorProps = {
   onSelectDocument: (documentId: string) => void;
   onAddDocument: () => void;
   onMoveDocument: (documentId: string, direction: -1 | 1) => void;
+  onReorderDocument: (documentId: string, targetIndex: number) => void;
   onSelectElement: (elementId: string, additive: boolean) => void;
   onRenameElement: (elementId: string, name: string) => void;
   onToggleVisible: (element: SceneElement) => void;
@@ -38,6 +39,7 @@ type DocumentNavigatorProps = {
   onDuplicateElement: (elementId: string) => void;
   onDeleteElement: (elementId: string) => void;
   onMoveElement: (elementId: string, direction: -1 | 1) => void;
+  onReorderElement: (elementId: string, targetIndex: number) => void;
 };
 
 export function DocumentNavigator({
@@ -47,6 +49,7 @@ export function DocumentNavigator({
   onSelectDocument,
   onAddDocument,
   onMoveDocument,
+  onReorderDocument,
   onSelectElement,
   onRenameElement,
   onToggleVisible,
@@ -54,6 +57,7 @@ export function DocumentNavigator({
   onDuplicateElement,
   onDeleteElement,
   onMoveElement,
+  onReorderElement,
 }: DocumentNavigatorProps) {
   const activeDocument = documents.find((document) => document.id === activeDocumentId) ?? documents[0];
   const [documentsOpen, setDocumentsOpen] = useState(true);
@@ -71,7 +75,21 @@ export function DocumentNavigator({
         {documentsOpen ? (
           <div className="mt-2 space-y-1">
             {documents.map((document, index) => (
-              <div className={`group flex items-center gap-1 rounded-lg px-1 py-1 ${document.id === activeDocument?.id ? "bg-violet/[0.12]" : "hover:bg-white/[0.04]"}`} key={document.id}>
+              <div
+                className={`group flex items-center gap-1 rounded-lg px-1 py-1 ${document.id === activeDocument?.id ? "bg-violet/[0.12]" : "hover:bg-white/[0.04]"}`}
+                draggable
+                key={document.id}
+                onDragOver={(event) => event.preventDefault()}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("application/x-plinth-document", document.id);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const draggedId = event.dataTransfer.getData("application/x-plinth-document");
+                  if (draggedId && draggedId !== document.id) onReorderDocument(draggedId, index);
+                }}
+              >
                 <button className="min-w-0 flex-1 px-1.5 py-1 text-left" onClick={() => onSelectDocument(document.id)} type="button">
                   <p className={`truncate text-xs font-medium ${document.id === activeDocument?.id ? "text-violet-soft" : "text-ink/80"}`}>{document.name}</p>
                   <p className="mt-0.5 truncate text-[10px] text-muted">{document.width} × {document.height}</p>
@@ -102,6 +120,7 @@ export function DocumentNavigator({
                 onDelete={onDeleteElement}
                 onDuplicate={onDuplicateElement}
                 onMove={onMoveElement}
+                onReorder={onReorderElement}
                 onRename={onRenameElement}
                 onSelect={onSelectElement}
                 onToggleLocked={onToggleLocked}
@@ -130,9 +149,10 @@ type LayerRowProps = {
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
+  onReorder: (id: string, targetIndex: number) => void;
 };
 
-function LayerRow({ element, selected, index, allLayers, onSelect, onRename, onToggleVisible, onToggleLocked, onDuplicate, onDelete, onMove }: LayerRowProps) {
+function LayerRow({ element, selected, index, allLayers, onSelect, onRename, onToggleVisible, onToggleLocked, onDuplicate, onDelete, onMove, onReorder }: LayerRowProps) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(element.name);
 
@@ -143,7 +163,20 @@ function LayerRow({ element, selected, index, allLayers, onSelect, onRename, onT
   }
 
   return (
-    <div className={`group flex items-center gap-1 rounded-md border px-1 py-1 ${selected ? "border-violet/30 bg-violet/[0.12]" : "border-transparent hover:border-white/[0.07] hover:bg-white/[0.035]"}`}>
+    <div
+      className={`group flex items-center gap-1 rounded-md border px-1 py-1 ${selected ? "border-violet/30 bg-violet/[0.12]" : "border-transparent hover:border-white/[0.07] hover:bg-white/[0.035]"}`}
+      draggable
+      onDragOver={(event) => event.preventDefault()}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("application/x-plinth-layer", element.id);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const draggedId = event.dataTransfer.getData("application/x-plinth-layer");
+        if (draggedId && draggedId !== element.id) onReorder(draggedId, index);
+      }}
+    >
       <button aria-label={`Select ${element.name}`} className="flex min-w-0 flex-1 items-center gap-1.5 text-left" onClick={(event) => onSelect(element.id, event.shiftKey)} onDoubleClick={() => { setDraftName(element.name); setEditing(true); }} type="button">
         <GripVertical className="shrink-0 text-muted/40" size={13} />
         <ElementTypeIcon element={element} />

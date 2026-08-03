@@ -16,7 +16,7 @@ Commands:
   rename <slug> <name> [--slug <slug>]  Rename a project and optionally its slug
   delete <slug> --yes                   Delete a project directory
   add-document <slug> <preset> [name]   Add an App Store or custom document
-  export <slug>                         Reserved; browser rendering is required
+  export <slug>                         Explain the browser-required export workflow
   help                                  Show this help
 
 Options:
@@ -181,7 +181,11 @@ async function run(parsed: ParsedArgs, storage: ProjectStorage): Promise<{ value
     }
 
     case "export":
-      throw new PlinthError("NOT_IMPLEMENTED", 501, "Export requires browser rendering and is reserved for a later phase.");
+      throw new PlinthError("NOT_IMPLEMENTED", 501, "CLI export requires browser rendering. Open the local Plinth editor, choose Export, and use Current document or All documents; the browser writes exact PNGs to the project's exports/ directory. The CLI deliberately does not duplicate the shared Konva renderer.", {
+        browserRequired: true,
+        projectSlug: parsed.positionals[0],
+        workflow: "Open the editor -> Export -> choose documents -> render/download.",
+      });
 
     default:
       throw new PlinthError("INVALID_REQUEST", 400, `Unknown command "${parsed.command}". Use help for usage.`);

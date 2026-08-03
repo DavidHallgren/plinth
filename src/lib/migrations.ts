@@ -269,6 +269,7 @@ function legacyDocument(value: unknown, index: number, now: string, assets: Asse
     id: asString(source.id, createId("doc")),
     name,
     slug: slugify(asString(source.slug, name), "composition"),
+    exportSlug: slugify(asString(source.exportSlug, asString(source.exportFileName, asString(source.slug, name))), "composition"),
     preset: migratePreset(source.preset),
     width,
     height,
@@ -337,6 +338,19 @@ function migrateVersionTwo(source: Record<string, unknown>): Record<string, unkn
   });
 }
 
+function migrateVersionThree(source: Record<string, unknown>): Record<string, unknown> {
+  const rawDocuments = Array.isArray(source.documents) ? source.documents : [];
+  const documents = rawDocuments.map((value, index) => {
+    if (!isRecord(value)) return value;
+    const name = asString(value.name, `Composition ${index + 1}`);
+    return {
+      ...value,
+      exportSlug: slugify(asString(value.exportSlug, asString(value.exportFileName, asString(value.slug, name))), "composition"),
+    };
+  });
+  return { ...source, schemaVersion: CURRENT_SCHEMA_VERSION, documents };
+}
+
 export function migrateProject(input: unknown): unknown {
   if (!isRecord(input)) {
     throw new PlinthError("SCHEMA_INVALID", 422, "Project data must be a JSON object.");
@@ -359,6 +373,7 @@ export function migrateProject(input: unknown): unknown {
   if (versionValue === 0) return migrateVersionZero(input);
   if (versionValue === 1) return migrateVersionOne(input);
   if (versionValue === 2) return migrateVersionTwo(input);
+  if (versionValue === 3) return migrateVersionThree(input);
   return input;
 }
 

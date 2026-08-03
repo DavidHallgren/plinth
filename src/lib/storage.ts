@@ -5,6 +5,7 @@ import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject } from "./migrations";
 import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, deriveAssetFileName, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
+import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, MAX_EXPORT_BYTES } from "./export-validation";
 import type { AssetMetadata, Document, Project, ProjectInput, SceneElement } from "./schema";
 import { selectAssetReferences, selectAssetUsages, type AssetUsage } from "../scene/selectors";
 import { addDocument as addSceneDocument, type AddDocumentOptions } from "../scene/operations";
@@ -35,6 +36,27 @@ export type AssetMutation = {
   asset: AssetMetadata;
   duplicate: boolean;
 };
+
+export type ExportWriteInput = {
+  documentId: string;
+  fileName: string;
+  width: number;
+  height: number;
+  bytes: Uint8Array;
+};
+
+export type ExportWrite = {
+  documentId: string;
+  documentName: string;
+  fileName: string;
+  relativePath: string;
+  absolutePath: string;
+  width: number;
+  height: number;
+  byteSize: number;
+};
+
+export type ExportRead = ExportWrite & { bytes: Uint8Array };
 
 const PROJECT_FILE = "project.json";
 const PROJECT_SUBDIRECTORIES = ["assets", "exports"] as const;
@@ -145,6 +167,10 @@ export class ProjectStorage {
     return resolveWithin(this.projectSubdirectory(slug, "assets"), assetFileNameFromPath(safePath));
   }
 
+  exportFilePath(slug: string, fileName: string): string {
+    return resolveWithin(this.projectSubdirectory(slug, "exports"), assertExportFileName(fileName));
+  }
+
   async ensureProjectDirectories(slug: string): Promise<void> {
     const projectDirectory = this.projectDirectory(slug);
     await mkdir(projectDirectory, { recursive: true });
@@ -216,6 +242,9 @@ export class ProjectStorage {
 
   async saveProject(project: Project): Promise<Project> {
     const validated = parseProject(project);
+    if (!(await pathExists(this.projectDirectory(validated.slug)))) {
+      throw new PlinthError("PROJECT_NOT_FOUND", 404, `Project "${validated.slug}" was not found.`);
+    }
     await this.ensureProjectDirectories(validated.slug);
     await writePrettyJsonAtomic(this.projectFile(validated.slug), validated);
     return validated;
@@ -362,6 +391,98 @@ export class ProjectStorage {
       if (originalBytes) await this.writeAssetFileAtomic(slug, safePath, originalBytes).catch(() => undefined);
       throw error;
     }
+  }
+
+  async writeExport(slug: string, input: ExportWriteInput): Promise<ExportWrite> {
+    const project = await this.loadProject(slug);
+    const plan = buildExportPlan(project);
+    const planned = plan.find((item) => item.documentId === input.documentId);
+    if (!planned) {
+      throw new PlinthError("EXPORT_DOCUMENT_NOT_FOUND", 404, `Document "${input.documentId}" is not part of project "${slug}".`, {
+        documentId: input.documentId,
+        projectSlug: slug,
+      });
+    }
+
+    const fileName = assertExportFileName(input.fileName);
+    if (fileName !== planned.exportName) {
+      throw new PlinthError("EXPORT_FILE_INVALID", 400, `Export file name "${fileName}" does not match this document's planned output "${planned.exportName}".`, {
+        expectedFileName: planned.exportName,
+        fileName,
+        documentId: input.documentId,
+      });
+    }
+    if (!Number.isInteger(input.width) || !Number.isInteger(input.height)) {
+      throw new PlinthError("INVALID_REQUEST", 400, "Export metadata width and height must be integers.", { width: input.width, height: input.height });
+    }
+    assertExportDimensions({ width: input.width, height: input.height }, planned);
+    if (input.bytes.byteLength > MAX_EXPORT_BYTES) {
+      throw new PlinthError("EXPORT_TOO_LARGE", 413, `PNG exports must be ${Math.round(MAX_EXPORT_BYTES / 1024 / 1024)} MB or smaller.`, {
+        maxBytes: MAX_EXPORT_BYTES,
+        byteSize: input.bytes.byteLength,
+      });
+    }
+    const decoded = decodePngDimensions(input.bytes);
+    assertExportDimensions(decoded, planned);
+
+    const filePath = this.exportFilePath(slug, fileName);
+    try {
+      await this.ensureProjectDirectories(slug);
+      await this.writeBinaryFileAtomic(filePath, input.bytes);
+    } catch (error) {
+      throw new PlinthError("EXPORT_WRITE_FAILED", 500, `Could not write export "${fileName}".`, {
+        fileName,
+        path: `exports/${fileName}`,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return {
+      documentId: planned.documentId,
+      documentName: planned.documentName,
+      fileName,
+      relativePath: `exports/${fileName}`,
+      absolutePath: filePath,
+      width: decoded.width,
+      height: decoded.height,
+      byteSize: input.bytes.byteLength,
+    };
+  }
+
+  async readExport(slug: string, fileName: string): Promise<ExportRead> {
+    const project = await this.loadProject(slug);
+    const planned = buildExportPlan(project).find((item) => item.exportName === assertExportFileName(fileName));
+    if (!planned) {
+      throw new PlinthError("EXPORT_NOT_FOUND", 404, `Export "${fileName}" is not registered for project "${slug}".`, { fileName });
+    }
+    const filePath = this.exportFilePath(slug, fileName);
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(await readFile(filePath));
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") {
+        throw new PlinthError("EXPORT_NOT_FOUND", 404, `Export "${fileName}" has not been written yet.`, { fileName });
+      }
+      throw error;
+    }
+    const decoded = decodePngDimensions(bytes);
+    assertExportDimensions(decoded, planned);
+    return {
+      documentId: planned.documentId,
+      documentName: planned.documentName,
+      fileName,
+      relativePath: `exports/${fileName}`,
+      absolutePath: filePath,
+      width: decoded.width,
+      height: decoded.height,
+      byteSize: bytes.byteLength,
+      bytes,
+    };
+  }
+
+  async exportPlan(slug: string): Promise<ReturnType<typeof buildExportPlan>> {
+    const project = await this.loadProject(slug);
+    return buildExportPlan(project);
   }
 
   async listProjectMetadata(): Promise<ProjectMetadata[]> {
@@ -532,6 +653,14 @@ export class ProjectStorage {
     await this.ensureProjectDirectories(slug);
     const temporaryPath = resolveWithin(
       this.projectSubdirectory(slug, "assets"),
+      `.${basename(filePath)}.tmp-${process.pid}-${crypto.randomUUID().replaceAll("-", "")}`,
+    );
+    await this.writeBinaryFileAtomic(filePath, bytes, temporaryPath);
+  }
+
+  private async writeBinaryFileAtomic(filePath: string, bytes: Uint8Array, providedTemporaryPath?: string): Promise<void> {
+    const temporaryPath = providedTemporaryPath ?? join(
+      dirname(filePath),
       `.${basename(filePath)}.tmp-${process.pid}-${crypto.randomUUID().replaceAll("-", "")}`,
     );
     try {

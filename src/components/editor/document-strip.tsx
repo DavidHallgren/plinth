@@ -13,15 +13,36 @@ type DocumentStripProps = {
   onAdd: () => void;
   projectSlug: string;
   assets: readonly AssetMetadata[];
+  onReorder?: (documentId: string, targetIndex: number) => void;
 };
 
-export function DocumentStrip({ documents, activeDocumentId, onSelect, onAdd, projectSlug, assets }: DocumentStripProps) {
+export function DocumentStrip({ documents, activeDocumentId, onSelect, onAdd, projectSlug, assets, onReorder }: DocumentStripProps) {
   return (
     <footer className="flex h-[76px] shrink-0 items-center gap-2 border-t border-white/[0.08] bg-[#11141b] px-3">
       <div className="mr-1 hidden shrink-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-muted lg:flex"><span className="h-1.5 w-1.5 rounded-full bg-violet" />Frames</div>
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
         {documents.map((document, index) => (
-          <button className={`group flex h-12 min-w-[156px] max-w-[220px] items-center gap-2 rounded-lg border px-2.5 text-left ${document.id === activeDocumentId ? "border-violet/40 bg-violet/[0.11]" : "border-white/[0.08] bg-white/[0.025] hover:border-white/20"}`} key={document.id} onClick={() => onSelect(document.id)} type="button">
+          <button
+            className={`group flex h-12 min-w-[156px] max-w-[220px] items-center gap-2 rounded-lg border px-2.5 text-left ${document.id === activeDocumentId ? "border-violet/40 bg-violet/[0.11]" : "border-white/[0.08] bg-white/[0.025] hover:border-white/20"}`}
+            draggable={Boolean(onReorder)}
+            key={document.id}
+            onClick={() => onSelect(document.id)}
+            onDragOver={(event) => { if (onReorder) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+            onDragStart={(event) => {
+              if (!onReorder) return;
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("application/x-plinth-document", document.id);
+            }}
+            onDrop={(event) => {
+              if (!onReorder) return;
+              event.preventDefault();
+              const sourceId = event.dataTransfer.getData("application/x-plinth-document");
+              const sourceIndex = documents.findIndex((candidate) => candidate.id === sourceId);
+              const targetIndex = documents.findIndex((candidate) => candidate.id === document.id);
+              if (sourceIndex >= 0 && targetIndex >= 0 && sourceId !== document.id) onReorder(sourceId, targetIndex);
+            }}
+            type="button"
+          >
             <div className={`grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-md border ${document.id === activeDocumentId ? "border-violet/30 bg-violet/15 text-violet-soft" : "border-white/10 bg-black/15 text-muted"}`}><DocumentThumbnail assets={assets} document={document} projectSlug={projectSlug} /></div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-ink/90">{index + 1}. {document.name}</p>

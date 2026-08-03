@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PlinthError, toPlinthError } from "./errors";
+import { MAX_EXPORT_BYTES } from "./export-validation";
 import { parseProject } from "./migrations";
 import { CURRENT_SCHEMA_VERSION, DocumentPresetSchema } from "./schema";
 import { assetPathFromRequestName, ProjectStorage } from "./storage";
@@ -32,6 +33,15 @@ const AddDocumentRequestSchema = z
     name: z.string().trim().min(1).max(120).optional(),
     width: z.number().int().positive().max(100_000).optional(),
     height: z.number().int().positive().max(100_000).optional(),
+  })
+  .strict();
+
+const ExportMetadataSchema = z
+  .object({
+    documentId: z.string().min(1).max(96),
+    fileName: z.string().min(1).max(180),
+    width: z.number().int().positive().max(100_000),
+    height: z.number().int().positive().max(100_000),
   })
   .strict();
 
@@ -103,6 +113,20 @@ function assetPathSegment(request: Request): string {
     throw new PlinthError("INVALID_REQUEST", 400, "The asset file name is required.");
   }
   return assetPathFromRequestName(pathname.slice(markerIndex + marker.length));
+}
+
+function exportFileNameSegment(request: Request): string {
+  const pathname = new URL(request.url).pathname;
+  const marker = "/exports/";
+  const markerIndex = pathname.indexOf(marker);
+  if (markerIndex < 0) {
+    throw new PlinthError("INVALID_REQUEST", 400, "The export file name is required.");
+  }
+  try {
+    return decodeURIComponent(pathname.slice(markerIndex + marker.length));
+  } catch {
+    throw new PlinthError("INVALID_REQUEST", 400, "The export file name is not valid URL encoding.");
+  }
 }
 
 export function handleHealth(): Response {
@@ -209,14 +233,81 @@ export async function handleDeleteAsset(request: Request, storage: ProjectStorag
   return success({ deleted: result.deleted.path, project: result.project, usages: result.usages });
 }
 
-export function handleReservedExport(): Response {
-  return failure(
-    new PlinthError(
-      "NOT_IMPLEMENTED",
-      501,
-      "Export rendering and download are reserved for a later phase.",
-    ),
-  );
+export async function handleListExports(request: Request, storage: ProjectStorage): Promise<Response> {
+  return success({ exports: await storage.exportPlan(pathSegment(request, 3)) });
+}
+
+function parseNumberField(value: FormDataEntryValue | null, label: string): number {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new PlinthError("INVALID_REQUEST", 400, `Export metadata field "${label}" is required.`);
+  }
+  const number = Number(value);
+  if (!Number.isInteger(number)) {
+    throw new PlinthError("INVALID_REQUEST", 400, `Export metadata field "${label}" must be an integer.`, { label, value });
+  }
+  return number;
+}
+
+async function parseExportMultipart(request: Request): Promise<{ metadata: z.infer<typeof ExportMetadataSchema>; file: Blob }> {
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_EXPORT_BYTES + 2 * 1024 * 1024) {
+    throw new PlinthError("EXPORT_TOO_LARGE", 413, `PNG exports must be ${Math.round(MAX_EXPORT_BYTES / 1024 / 1024)} MB or smaller.`, { maxBytes: MAX_EXPORT_BYTES, contentLength });
+  }
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    throw new PlinthError("INVALID_REQUEST", 400, "The export must be a valid multipart form.", { cause: error instanceof Error ? error.message : String(error) });
+  }
+  const file = formData.get("file");
+  if (!(file instanceof Blob)) {
+    throw new PlinthError("INVALID_REQUEST", 400, "Export uploads must include a PNG file in the `file` field.");
+  }
+  if (file.size > MAX_EXPORT_BYTES) {
+    throw new PlinthError("EXPORT_TOO_LARGE", 413, `PNG exports must be ${Math.round(MAX_EXPORT_BYTES / 1024 / 1024)} MB or smaller.`, { maxBytes: MAX_EXPORT_BYTES, byteSize: file.size });
+  }
+
+  const metadataValue = formData.get("metadata");
+  let metadata: unknown;
+  if (typeof metadataValue === "string" && metadataValue.trim()) {
+    try {
+      metadata = JSON.parse(metadataValue) as unknown;
+    } catch (error) {
+      throw new PlinthError("INVALID_REQUEST", 400, "Export metadata is not valid JSON.", { cause: error instanceof Error ? error.message : String(error) });
+    }
+  } else {
+    metadata = {
+      documentId: formData.get("documentId"),
+      fileName: formData.get("fileName") ?? (typeof (file as { name?: unknown }).name === "string" ? (file as { name: string }).name : null),
+      width: parseNumberField(formData.get("width"), "width"),
+      height: parseNumberField(formData.get("height"), "height"),
+    };
+  }
+  const parsed = ExportMetadataSchema.safeParse(metadata);
+  if (!parsed.success) {
+    throw new PlinthError("INVALID_REQUEST", 400, "Export metadata failed validation.", { issues: parsed.error.issues });
+  }
+  return { metadata: parsed.data, file };
+}
+
+export async function handleCreateExport(request: Request, storage: ProjectStorage): Promise<Response> {
+  const { metadata, file } = await parseExportMultipart(request);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const result = await storage.writeExport(pathSegment(request, 3), { ...metadata, bytes });
+  return success({ export: result }, 201);
+}
+
+export async function handleGetExport(request: Request, storage: ProjectStorage): Promise<Response> {
+  const result = await storage.readExport(pathSegment(request, 3), exportFileNameSegment(request));
+  return new Response(result.bytes.buffer as ArrayBuffer, {
+    headers: {
+      "cache-control": "no-store",
+      "content-disposition": `attachment; filename="${result.fileName}"`,
+      "content-length": String(result.byteSize),
+      "content-type": "image/png",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 export function handleApiNotFound(): Response {

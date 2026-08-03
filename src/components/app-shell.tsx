@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "../lib/schema";
 import { apiFetch, ApiClientError, jsonRequest } from "../lib/client-api";
 import type { ProjectMetadata } from "../lib/storage";
@@ -12,6 +12,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const projectRef = useRef<Project | null>(null);
 
   const refreshProjects = useCallback(async () => {
     const result = await apiFetch<{ projects: ProjectMetadata[] }>("/api/projects");
@@ -29,6 +30,7 @@ export function App() {
     setError(null);
     try {
       const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(slug)}`);
+      projectRef.current = result.project;
       setProject(result.project);
       setDirty(false);
     } catch (reason) {
@@ -40,6 +42,7 @@ export function App() {
     setError(null);
     try {
       const result = await apiFetch<{ project: Project }>("/api/projects", jsonRequest({ name, slug }));
+      projectRef.current = result.project;
       setProject(result.project);
       setDirty(false);
       await refreshProjects();
@@ -58,8 +61,11 @@ export function App() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(nextProject),
       });
-      setProject(result.project);
-      setDirty(false);
+      if (projectRef.current === nextProject || projectRef.current?.id !== nextProject.id) {
+        projectRef.current = result.project;
+        setProject(result.project);
+        setDirty(false);
+      }
       await refreshProjects();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save the project.");
@@ -75,11 +81,13 @@ export function App() {
   });
 
   const changeProject = useCallback((nextProject: Project) => {
+    projectRef.current = nextProject;
     setProject(nextProject);
     setDirty(true);
   }, []);
 
   const syncProject = useCallback(async (nextProject: Project) => {
+    projectRef.current = nextProject;
     setProject(nextProject);
     setDirty(false);
     await refreshProjects();
@@ -89,7 +97,9 @@ export function App() {
     if (!project) return;
     setError(null);
     try {
+      if (dirty) await autosave.saveNow(project);
       const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(project.slug)}/rename`, jsonRequest({ name, slug }));
+      projectRef.current = result.project;
       setProject(result.project);
       setDirty(false);
       await refreshProjects();
@@ -97,13 +107,15 @@ export function App() {
       setError(reason instanceof Error ? reason.message : "Could not rename the project.");
       throw reason;
     }
-  }, [project, refreshProjects]);
+  }, [autosave, dirty, project, refreshProjects]);
 
   const deleteProject = useCallback(async () => {
     if (!project) return;
     setError(null);
     try {
+      if (dirty) await autosave.saveNow(project);
       await apiFetch<{ deleted: string }>(`/api/projects/${encodeURIComponent(project.slug)}`, { method: "DELETE" });
+      projectRef.current = null;
       setProject(null);
       setDirty(false);
       await refreshProjects();
@@ -111,7 +123,15 @@ export function App() {
       setError(reason instanceof Error ? reason.message : "Could not delete the project.");
       throw reason;
     }
-  }, [project, refreshProjects]);
+  }, [autosave, dirty, project, refreshProjects]);
+
+  const leaveProject = useCallback(async () => {
+    if (project && dirty) await autosave.saveNow(project);
+    projectRef.current = null;
+    setProject(null);
+    setDirty(false);
+    setError(null);
+  }, [autosave, dirty, project]);
 
   if (!project) {
     return <ProjectPicker error={error} loading={loading} onCreate={createProject} onOpen={openProject} projects={projects} />;
@@ -121,7 +141,7 @@ export function App() {
     <EditorWorkspace
       dirty={dirty}
       error={error}
-      onBack={() => { setProject(null); setDirty(false); setError(null); }}
+      onBack={leaveProject}
       onDeleteProject={deleteProject}
       onProjectChange={changeProject}
       onProjectSynced={(nextProject) => void syncProject(nextProject)}

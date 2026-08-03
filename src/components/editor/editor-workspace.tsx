@@ -12,6 +12,7 @@ import { EditorToolbar } from "../toolbar/editor-toolbar";
 import { DocumentStrip } from "./document-strip";
 import { Inspector } from "./inspector";
 import { AssetLibrary, type AssetUploadState } from "./asset-library";
+import { ExportDialog } from "./export-dialog";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
@@ -28,10 +29,18 @@ type EditorWorkspaceProps = {
   onProjectChange: (project: Project) => void;
   onProjectSynced: (project: Project) => void;
   onSaveNow: (project?: Project) => Promise<void>;
-  onBack: () => void;
+  onBack: () => Promise<void>;
   onRenameProject: (name: string, slug?: string) => Promise<void>;
   onDeleteProject: () => Promise<void>;
 };
+
+export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): boolean {
+  if (!target || typeof target !== "object") return false;
+  const candidate = target as HTMLElement & { isContentEditable?: boolean };
+  if (candidate.isContentEditable === true) return true;
+  if (typeof candidate.closest !== "function") return false;
+  return Boolean(candidate.closest("input, textarea, select, [contenteditable]"));
+}
 
 export function EditorWorkspace({ project, dirty, saveState, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject, onDeleteProject }: EditorWorkspaceProps) {
   const storeRef = useRef<EditorStore | null>(null);
@@ -53,9 +62,12 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportRendering, setExportRendering] = useState(false);
   const [uploadStates, setUploadStates] = useState<Map<string, AssetUploadState>>(new Map());
   const [dropActive, setDropActive] = useState(false);
   const assetMutationQueueRef = useRef(createAssetMutationQueue());
+  const inspectorCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     store.replaceProject(project);
@@ -71,6 +83,31 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   const reportError = useCallback((reason: unknown) => {
     setLocalError(reason instanceof Error ? reason.message : "The editor could not apply that change.");
   }, []);
+  const commitInspectorTransaction = useCallback(() => {
+    if (inspectorCommitTimerRef.current) {
+      clearTimeout(inspectorCommitTimerRef.current);
+      inspectorCommitTimerRef.current = null;
+    }
+    if (store.getSnapshot().isInTransaction) store.commitTransaction();
+  }, [store]);
+  useEffect(() => () => {
+    if (inspectorCommitTimerRef.current) clearTimeout(inspectorCommitTimerRef.current);
+  }, []);
+  function queueInspectorChange(label: string, action: () => void): void {
+    setLocalError(null);
+    try {
+      if (!store.getSnapshot().isInTransaction) store.beginTransaction(label);
+      action();
+      if (inspectorCommitTimerRef.current) clearTimeout(inspectorCommitTimerRef.current);
+      inspectorCommitTimerRef.current = setTimeout(() => {
+        inspectorCommitTimerRef.current = null;
+        if (store.getSnapshot().isInTransaction) store.commitTransaction();
+      }, 450);
+    } catch (reason) {
+      if (store.getSnapshot().isInTransaction) store.cancelTransaction();
+      reportError(reason);
+    }
+  }
   const run = useCallback((action: () => void) => {
     setLocalError(null);
     try {
@@ -84,8 +121,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (shouldIgnoreEditorShortcutTarget(event.target)) return;
       const command = event.metaKey || event.ctrlKey;
       if (command && event.key.toLowerCase() === "z") {
         event.preventDefault();
@@ -362,6 +398,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     setBusy(true);
     setLocalError(null);
     try {
+      await flushPendingSave();
       await onRenameProject(renameName.trim(), renameSlug.trim() || undefined);
       setRenameOpen(false);
     } catch (reason) {
@@ -372,9 +409,11 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   }
 
   async function deleteProject() {
+    commitInspectorTransaction();
     if (!window.confirm(`Delete “${project.name}”? This removes its local project directory.`)) return;
     setBusy(true);
     try {
+      await flushPendingSave();
       await onDeleteProject();
     } catch (reason) {
       reportError(reason);
@@ -392,6 +431,23 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     run(() => store.removeCurrentDocument());
   }
 
+  async function flushPendingSave(): Promise<void> {
+    commitInspectorTransaction();
+    await onSaveNow(store.getSnapshot().project);
+  }
+
+  async function leaveProject(): Promise<void> {
+    setBusy(true);
+    try {
+      await flushPendingSave();
+      await onBack();
+    } catch (reason) {
+      reportError(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const visibleError = localError ?? error;
 
   return (
@@ -404,14 +460,15 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         onAddShape={addShape}
         onAddText={addText}
         onOpenAssets={() => setAssetLibraryOpen(true)}
-        onBack={onBack}
+        onExport={() => setExportOpen(true)}
+        onBack={() => { commitInspectorTransaction(); void leaveProject(); }}
         onDeleteDocument={deleteDocument}
         onDeleteProject={() => void deleteProject()}
         onDuplicateDocument={() => run(() => store.duplicateCurrentDocument())}
         onFit={() => setFitRequest((value) => value + 1)}
         onRedo={() => run(() => store.redo())}
         onRenameProject={() => setRenameOpen(true)}
-        onSaveNow={() => void onSaveNow().catch(reportError)}
+        onSaveNow={() => { commitInspectorTransaction(); void onSaveNow(store.getSnapshot().project).catch(reportError); }}
         onUndo={() => run(() => store.undo())}
         onZoomChange={(zoom) => store.setZoom(zoom)}
         saveState={saveState}
@@ -430,7 +487,17 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
             const index = snapshot.project.documents.findIndex((document) => document.id === documentId);
             store.reorderCurrentDocuments([documentId], index + direction);
           })}
+          onReorderDocument={(documentId, targetIndex) => run(() => {
+            const sourceIndex = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
+            store.reorderCurrentDocuments([documentId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
+          })}
           onMoveElement={(elementId, direction) => run(() => store.reorderElementByDirection(elementId, direction))}
+          onReorderElement={(elementId, targetIndex) => run(() => {
+            const currentDocument = selectActiveDocument(store.getSnapshot().project, store.getSnapshot().activeDocumentId);
+            const ordered = [...currentDocument.elements].sort((left, right) => left.zIndex - right.zIndex);
+            const sourceIndex = ordered.findIndex((element) => element.id === elementId);
+            store.reorderElementToIndex(elementId, sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
+          })}
           onRenameElement={(elementId, name) => run(() => store.updateElement(elementId, { name }))}
           onSelectDocument={(documentId) => store.setActiveDocument(documentId)}
           onSelectElement={(elementId, additive) => store.toggleSelection(elementId, additive)}
@@ -446,19 +513,21 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
             onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
             onDrop={(event) => { event.preventDefault(); void handleDroppedFiles(event.dataTransfer.files); }}
           >
-            <EditorCanvas
+            {exportRendering ? <div className="grid min-h-0 flex-1 place-items-center text-xs text-muted">Rendering export…</div> : <EditorCanvas
               assets={snapshot.project.assets}
               document={activeDocument}
               fitRequest={fitRequest}
               onClearSelection={() => store.setSelection([])}
               onFitZoom={fitZoom}
-              onGestureStart={store.beginTransaction.bind(store)}
+              onGestureStart={(label) => { commitInspectorTransaction(); store.beginTransaction(label); }}
               onMoveEnd={(elementId, x, y) => run(() => {
-                const current = activeDocument.elements.find((element) => element.id === elementId);
+                const currentSnapshot = store.getSnapshot();
+                const currentDocument = selectActiveDocument(currentSnapshot.project, currentSnapshot.activeDocumentId);
+                const current = currentDocument.elements.find((element) => element.id === elementId);
                 if (!current) return;
                 const dx = x - current.x;
                 const dy = y - current.y;
-                if (!snapshot.selectedElementIds.includes(elementId)) store.setSelection([elementId]);
+                if (!currentSnapshot.selectedElementIds.includes(elementId)) store.setSelection([elementId]);
                 store.moveSelection({ x: dx, y: dy });
                 store.commitTransaction();
               })}
@@ -470,14 +539,25 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
               projectSlug={project.slug}
               selectedElementIds={snapshot.selectedElementIds}
               zoom={snapshot.zoom}
-            />
+            />}
             {dropActive ? <div className="pointer-events-none absolute inset-4 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-violet bg-violet/[0.12] text-sm font-semibold text-violet-soft">Drop images to upload and place them</div> : null}
           </div>
-          <DocumentStrip activeDocumentId={snapshot.activeDocumentId} assets={snapshot.project.assets} documents={snapshot.project.documents} onAdd={() => setAddOpen(true)} onSelect={(documentId) => store.setActiveDocument(documentId)} projectSlug={project.slug} />
+          <DocumentStrip
+            activeDocumentId={snapshot.activeDocumentId}
+            assets={snapshot.project.assets}
+            documents={snapshot.project.documents}
+            onAdd={() => setAddOpen(true)}
+            onReorder={(documentId, targetIndex) => run(() => {
+              const sourceIndex = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
+              store.reorderCurrentDocuments([documentId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
+            })}
+            onSelect={(documentId) => store.setActiveDocument(documentId)}
+            projectSlug={project.slug}
+          />
         </main>
         <aside className="hidden min-h-0 w-[312px] shrink-0 flex-col border-l border-white/[0.08] bg-[#12151c] xl:flex">
           <div className="flex h-11 shrink-0 items-center border-b border-white/[0.08] px-3"><p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">Inspector</p></div>
-          <Inspector document={activeDocument} onUpdateDocument={(patch) => run(() => store.updateCurrentDocument(patch))} onUpdateElement={(elementId, patch) => run(() => store.updateElement(elementId, patch))} onUpdateElements={(updates) => run(() => store.updateElements(updates))} selectedElements={selectedElements} />
+          <Inspector document={activeDocument} onUpdateDocument={(patch) => queueInspectorChange("Edit document", () => store.updateCurrentDocument(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
         </aside>
       </div>
 
@@ -511,6 +591,15 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         projectSlug={project.slug}
         uploadStates={uploadStates}
         usageCounts={selectAssetReferences(snapshot.project)}
+      />
+      <ExportDialog
+        activeDocumentId={snapshot.activeDocumentId}
+        onBeforeExport={flushPendingSave}
+        onError={setLocalError}
+        onOpenChange={setExportOpen}
+        onRenderingChange={setExportRendering}
+        open={exportOpen}
+        project={snapshot.project}
       />
     </div>
   );

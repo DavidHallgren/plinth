@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Circle,
   Copy,
+  FileOutput,
   Images,
   Minus,
   Plus,
@@ -52,6 +53,7 @@ type EditorToolbarProps = {
   onDeleteDocument: () => void;
   onZoomChange: (zoom: number) => void;
   onFit: () => void;
+  onExport: () => void;
 };
 
 export function EditorToolbar({
@@ -75,6 +77,7 @@ export function EditorToolbar({
   onDeleteDocument,
   onZoomChange,
   onFit,
+  onExport,
 }: EditorToolbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] bg-[#101218] px-3">
@@ -97,6 +100,7 @@ export function EditorToolbar({
         <Button aria-label="Redo" disabled={!canRedo} onClick={onRedo} size="icon" variant="ghost"><Redo2 size={15} /></Button>
         <span className="mx-2 h-5 w-px bg-white/10" />
         <Button onClick={onOpenAssets} size="sm" variant="secondary"><Images size={14} /> Assets</Button>
+        <Button onClick={onExport} size="sm" variant="secondary"><FileOutput size={14} /> Export</Button>
         <Button onClick={onAddText} size="sm" variant="secondary"><Type size={14} /> Text</Button>
         <div className="relative">
           <details className="group">

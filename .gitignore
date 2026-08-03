@@ -6,6 +6,7 @@ dist/
 !.env.example
 *.log
 data/.tmp/
+data/projects/*/exports/*.png
 src/styles.generated.css
 .bun/
 .idea/
