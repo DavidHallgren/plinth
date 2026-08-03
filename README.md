@@ -115,6 +115,10 @@ bun run tool export <slug> [--json]
 
 Uploads are limited to 25 MB. Exports are limited to 50 MB and must be PNGs whose decoded dimensions exactly match their document. SVG is intentionally conservative and rejects scripts, external references, linked images, unsafe styles, and event attributes. Fonts are local CSS/fallback families; arbitrary remote font fetching is not part of the local-first workflow.
 
+## License
+
+Plinth’s original source code and project content are licensed under the MIT License; see [LICENSE](LICENSE). The bundled Apple-branded device-frame assets are third-party materials sourced from [Apple Design Resources](https://developer.apple.com/design/resources/) and are documented separately in [`src/devices/frames/README.md`](src/devices/frames/README.md); the MIT license does not relicense those assets. Apple and iPhone are trademarks of Apple Inc., registered in the U.S. and other countries and regions.
+
 ## Required validation checklist
 
 Before completing a change:
