@@ -16,27 +16,31 @@ export type DevicePresetDefinition = {
   screenInsets: { left: number; top: number; right: number; bottom: number };
   camera: DeviceCameraDefinition;
   colors: readonly string[];
+  frameFinishes?: readonly { label: string; color: string }[];
   defaultFrameColor: string;
   defaultScreenColor: string;
   source: string;
 };
 
-// Apple publishes the 17 Pro/Pro Max physical dimensions, display resolutions,
-// rounded display note, Dynamic Island, and finishes in its current specs. The
-// exact pixel inset and camera silhouette below are normalized composition
-// geometry so Plinth can render a clean, editable vector frame without bundling
-// Apple artwork. See the official references in README.md.
+// The official Apple frame PNGs use transparent display apertures. Their exact
+// source and screen dimensions keep uploaded screenshots aligned beneath the
+// raster frame while the scene remains editable and uses one shared renderer.
 export const DEVICE_PRESETS = [
   {
     id: "iphone-17-pro-max",
     label: "iPhone 17 Pro Max",
     category: "iPhone",
-    aspectRatio: 78 / 163.4,
+    aspectRatio: 1470 / 3000,
     outerRadius: 0.14,
     screenRadius: 0.115,
-    screenInsets: { left: 0.025, top: 0.018, right: 0.025, bottom: 0.018 },
+    screenInsets: { left: 75 / 1470, top: 66 / 3000, right: 75 / 1470, bottom: 66 / 3000 },
     camera: { kind: "dynamic-island", x: 0.5, y: 0.047, width: 0.245, height: 0.031 },
     colors: ["#d9dce2", "#f17d39", "#182d55"],
+    frameFinishes: [
+      { label: "Deep Blue", color: "#182d55" },
+      { label: "Cosmic Orange", color: "#f17d39" },
+      { label: "Silver", color: "#d9dce2" },
+    ],
     defaultFrameColor: "#182d55",
     defaultScreenColor: "#f7f8fc",
     source: "Apple iPhone 17 Pro and iPhone 17 Pro Max technical specifications",
@@ -45,15 +49,61 @@ export const DEVICE_PRESETS = [
     id: "iphone-17-pro",
     label: "iPhone 17 Pro",
     category: "iPhone",
-    aspectRatio: 71.9 / 150,
+    aspectRatio: 1350 / 2760,
     outerRadius: 0.14,
     screenRadius: 0.115,
-    screenInsets: { left: 0.025, top: 0.018, right: 0.025, bottom: 0.018 },
+    screenInsets: { left: 72 / 1350, top: 69 / 2760, right: 72 / 1350, bottom: 69 / 2760 },
     camera: { kind: "dynamic-island", x: 0.5, y: 0.047, width: 0.245, height: 0.031 },
     colors: ["#d9dce2", "#f17d39", "#182d55"],
+    frameFinishes: [
+      { label: "Silver", color: "#d9dce2" },
+      { label: "Cosmic Orange", color: "#f17d39" },
+      { label: "Deep Blue", color: "#182d55" },
+    ],
     defaultFrameColor: "#d9dce2",
     defaultScreenColor: "#f7f8fc",
     source: "Apple iPhone 17 Pro and iPhone 17 Pro Max technical specifications",
+  },
+  {
+    id: "iphone-17",
+    label: "iPhone 17",
+    category: "iPhone",
+    aspectRatio: 1350 / 2760,
+    outerRadius: 0.14,
+    screenRadius: 0.115,
+    screenInsets: { left: 72 / 1350, top: 69 / 2760, right: 72 / 1350, bottom: 69 / 2760 },
+    camera: { kind: "dynamic-island", x: 0.5, y: 0.047, width: 0.245, height: 0.031 },
+    colors: ["#202124", "#d8d5e8", "#b9ccd7", "#b8c4aa", "#f1f1ef"],
+    frameFinishes: [
+      { label: "Black", color: "#202124" },
+      { label: "Lavender", color: "#d8d5e8" },
+      { label: "Mist Blue", color: "#b9ccd7" },
+      { label: "Sage", color: "#b8c4aa" },
+      { label: "White", color: "#f1f1ef" },
+    ],
+    defaultFrameColor: "#202124",
+    defaultScreenColor: "#f7f8fc",
+    source: "Official Apple iPhone 17 frame artwork",
+  },
+  {
+    id: "iphone-air",
+    label: "iPhone Air",
+    category: "iPhone",
+    aspectRatio: 1380 / 2880,
+    outerRadius: 0.14,
+    screenRadius: 0.115,
+    screenInsets: { left: 60 / 1380, top: 72 / 2880, right: 60 / 1380, bottom: 72 / 2880 },
+    camera: { kind: "dynamic-island", x: 0.5, y: 0.047, width: 0.245, height: 0.031 },
+    colors: ["#f1eee8", "#d8c7a8", "#b9cbd5", "#34343a"],
+    frameFinishes: [
+      { label: "Cloud White", color: "#f1eee8" },
+      { label: "Light Gold", color: "#d8c7a8" },
+      { label: "Sky Blue", color: "#b9cbd5" },
+      { label: "Space Black", color: "#34343a" },
+    ],
+    defaultFrameColor: "#34343a",
+    defaultScreenColor: "#f7f8fc",
+    source: "Official Apple iPhone Air frame artwork",
   },
   {
     id: "generic-modern-iphone",

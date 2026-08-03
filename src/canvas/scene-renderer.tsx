@@ -1,11 +1,12 @@
 import type Konva from "konva";
 import type { ReactNode } from "react";
-import { Ellipse, Group, Layer, Line, Rect, Text } from "react-konva";
+import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { AssetMetadata, Document, GradientStop, SceneElement } from "../lib/schema";
 import { getDevicePreset } from "../devices/presets";
+import { deviceFrameSource } from "../devices/frame-assets";
 import { calculateDeviceScreenGeometry } from "../devices/geometry";
-import { AssetImageLayer } from "./image-loading";
+import { AssetImageLayer, useLoadedImage } from "./image-loading";
 import { konvaFontStyle } from "./text-style";
 import { calculateTextAutoHeight } from "../scene/text-geometry";
 
@@ -184,6 +185,7 @@ function ElementNode({ document, element, projectSlug, assets, selected, interac
           fit={element.fit}
           height={element.height}
           label={`Missing ${element.assetPath}`}
+          listening={interactive}
           position={element.position}
           projectSlug={projectSlug}
           width={element.width}
@@ -244,9 +246,12 @@ function DeviceNode({ document, element, projectSlug, assets, interactive, selec
   };
   const screenshotAsset = assetFor(assets, element.screenshotPath);
   const isBrowser = element.preset === "browser-window" || element.frame === "browser";
+  const frameSource = element.showCamera ? deviceFrameSource(element.preset, element.frameColor) : null;
+  const frameResource = useLoadedImage(frameSource);
+  const officialFrame = frameResource.status === "ready" ? frameResource.image : null;
   return (
     <Group {...elementPosition(document, element)} {...baseProps} name={name} ref={register}>
-      <Rect {...frameFill} {...shadowProps(element.shadow)} cornerRadius={geometry.outer.radius} height={element.height} width={element.width} />
+      {!officialFrame ? <Rect {...frameFill} {...shadowProps(element.shadow)} cornerRadius={geometry.outer.radius} height={element.height} width={element.width} /> : null}
       <Rect cornerRadius={geometry.screen.radius} fill={element.screenColor} height={geometry.screen.height} listening={false} width={geometry.screen.width} x={geometry.screen.x} y={geometry.screen.y} />
       <Group listening={false} x={geometry.screen.x} y={geometry.screen.y}>
         <AssetImageLayer
@@ -265,8 +270,9 @@ function DeviceNode({ document, element, projectSlug, assets, interactive, selec
       </Group>
       {isBrowser ? <BrowserHeader element={element} /> : null}
       {element.showGlare ? <Rect cornerRadius={geometry.screen.radius} fillLinearGradientColorStops={[0, "#ffffff00", 0.48, "#ffffff26", 0.58, "#ffffff00"]} fillLinearGradientStartPoint={{ x: 0, y: 0 }} fillLinearGradientEndPoint={{ x: element.width, y: element.height }} height={geometry.screen.height} listening={false} opacity={0.7} width={geometry.screen.width} x={geometry.screen.x} y={geometry.screen.y} /> : null}
-      {element.showCamera && geometry.camera ? <CameraDefinition geometry={geometry} /> : null}
-      {selected && interactive ? <Rect cornerRadius={geometry.outer.radius} dash={[8, 6]} fill="transparent" height={element.height} listening={false} stroke="#c4baff" strokeWidth={2} width={element.width} /> : null}
+      {officialFrame ? <KonvaImage {...shadowProps(element.shadow)} height={element.height} image={officialFrame} listening={interactive} width={element.width} /> : null}
+      {!officialFrame && element.showCamera && geometry.camera ? <CameraDefinition geometry={geometry} /> : null}
+      {selected && interactive ? <Rect cornerRadius={geometry.outer.radius} dash={[8, 6]} fill="transparent" height={element.height} listening={false} stroke="#dedede" strokeWidth={2} width={element.width} /> : null}
     </Group>
   );
 }

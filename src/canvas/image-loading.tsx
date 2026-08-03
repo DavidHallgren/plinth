@@ -49,11 +49,12 @@ export type AssetImageLayerProps = {
   position: Point;
   cornerRadius: number;
   backgroundColor?: string;
+  listening?: boolean;
   compact?: boolean;
   label?: string;
 };
 
-export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, fit, position, cornerRadius, backgroundColor = "#111521", compact = false, label }: AssetImageLayerProps) {
+export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, fit, position, cornerRadius, backgroundColor, listening = false, compact = false, label }: AssetImageLayerProps) {
   const source = assetPath ? assetUrl(projectSlug, assetPath) : null;
   const resource = useLoadedImage(source);
   const geometry = useMemo(() => calculateImageFitGeometry(
@@ -67,20 +68,21 @@ export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, 
   const statusLabel = resource.status === "loading" ? "Loading asset…" : resource.error ?? label ?? "Missing asset";
   return (
     <Group clipFunc={(context) => roundedRectPath(context, width, height, cornerRadius)}>
-      <Rect fill={backgroundColor} height={height} listening={false} width={width} />
+      {listening ? <Rect fill="#000000" height={height} opacity={0.001} width={width} /> : null}
+      {backgroundColor ? <Rect fill={backgroundColor} height={height} listening={false} width={width} /> : null}
       {resource.status === "ready" && resource.image ? (
         <KonvaImage
           height={geometry.height}
           image={resource.image}
-          listening={false}
+          listening={listening}
           width={geometry.width}
           x={geometry.x}
           y={geometry.y}
         />
       ) : (
         <>
-          <Rect dash={compact ? [3, 3] : [10, 8]} fill="#161a24" height={height} listening={false} stroke="#777f99" strokeWidth={compact ? 1 : 2} width={width} />
-          {!compact ? <Text align="center" fill={resource.status === "loading" ? "#c4baff" : "#ffb6b6"} fontFamily="Inter, ui-sans-serif, system-ui, sans-serif" fontSize={Math.max(11, Math.min(18, width * 0.035))} listening={false} text={statusLabel} width={width - 24} x={12} y={height / 2 - 12} /> : null}
+          <Rect dash={compact ? [3, 3] : [10, 8]} fill="#1a1a1a" height={height} listening={listening} stroke="#828282" strokeWidth={compact ? 1 : 2} width={width} />
+          {!compact ? <Text align="center" fill={resource.status === "loading" ? "#dedede" : "#ffb6b6"} fontFamily="Inter, ui-sans-serif, system-ui, sans-serif" fontSize={Math.max(11, Math.min(18, width * 0.035))} listening={false} text={statusLabel} width={width - 24} x={12} y={height / 2 - 12} /> : null}
         </>
       )}
     </Group>

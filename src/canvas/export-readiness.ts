@@ -1,9 +1,11 @@
 import type { AssetMetadata, Document, Project } from "../lib/schema";
+import { deviceFrameSource } from "../devices/frame-assets";
 import { assetUrl } from "./image-loading";
 import { imageResourceState, loadImageResource } from "./image-cache";
 
 export type SceneReadiness = {
   assetPaths: string[];
+  builtInImageSources: string[];
   fontFamilies: string[];
   fontSpecs: string[];
 };
@@ -26,6 +28,16 @@ function referencedFontFamilies(sceneDocument: Document): string[] {
   return [...families];
 }
 
+function referencedBuiltInImageSources(sceneDocument: Document): string[] {
+  const sources = new Set<string>();
+  for (const element of sceneDocument.elements) {
+    if (element.type !== "device" || !element.showCamera) continue;
+    const source = deviceFrameSource(element.preset, element.frameColor);
+    if (source) sources.add(source);
+  }
+  return [...sources];
+}
+
 function referencedFontSpecs(sceneDocument: Document): string[] {
   const specs = new Set<string>(["400 16px Inter, ui-sans-serif, system-ui, sans-serif"]);
   for (const element of sceneDocument.elements) {
@@ -38,6 +50,7 @@ function referencedFontSpecs(sceneDocument: Document): string[] {
 export function sceneReadiness(sceneDocument: Document): SceneReadiness {
   return {
     assetPaths: referencedAssetPaths(sceneDocument),
+    builtInImageSources: referencedBuiltInImageSources(sceneDocument),
     fontFamilies: referencedFontFamilies(sceneDocument),
     fontSpecs: referencedFontSpecs(sceneDocument),
   };
@@ -50,23 +63,26 @@ export async function waitForSceneReady(project: Pick<Project, "slug">, sceneDoc
     throw new Error(`Export cannot start: missing project asset${missing.length === 1 ? "" : "s"} ${missing.join(", ")}. Re-upload or remove the missing asset reference.`);
   }
 
-  const imageResults = await Promise.all(readiness.assetPaths.map(async (path) => {
-    const source = assetUrl(project.slug, path);
+  const imageSources = [
+    ...readiness.assetPaths.map((path) => ({ label: path, source: assetUrl(project.slug, path) })),
+    ...readiness.builtInImageSources.map((source) => ({ label: "built-in device frame", source })),
+  ];
+  const imageResults = await Promise.all(imageSources.map(async ({ label, source }) => {
     try {
       await loadImageResource(source);
     } catch (error) {
-      return { path, error: error instanceof Error ? error.message : String(error) };
+      return { path: label, error: error instanceof Error ? error.message : String(error) };
     }
     const resource = imageResourceState(source);
     if (resource.status !== "ready" || !resource.image) {
-      return { path, error: resource.error ?? "The asset is still loading." };
+      return { path: label, error: resource.error ?? "The asset is still loading." };
     }
     try {
       await resource.image.decode?.();
     } catch (error) {
-      return { path, error: error instanceof Error ? error.message : "The asset could not be decoded." };
+      return { path: label, error: error instanceof Error ? error.message : "The asset could not be decoded." };
     }
-    return { path, error: null };
+    return { path: label, error: null };
   }));
   const failedImages = imageResults.filter((result): result is { path: string; error: string } => Boolean(result.error));
   if (failedImages.length > 0) {

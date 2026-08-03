@@ -64,8 +64,11 @@ describe("asset validation and geometry", () => {
     expect(calculateImageFitGeometry(100, 200, 300, 300, "stretch")).toMatchObject({ width: 300, height: 300, x: 0, y: 0 });
     const preset = getDevicePreset("iphone-17-pro-max");
     if (!preset) throw new Error("Missing device preset");
-    const geometry = calculateDeviceScreenGeometry(preset, 500, 1086);
-    expect(geometry.screen.width).toBeGreaterThan(geometry.outer.width * 0.9);
+    const geometry = calculateDeviceScreenGeometry(preset, 1470, 3000);
+    expect(geometry.screen.x).toBeCloseTo(75);
+    expect(geometry.screen.y).toBeCloseTo(66);
+    expect(geometry.screen.width).toBeCloseTo(1320);
+    expect(geometry.screen.height).toBeCloseTo(2868);
     expect(geometry.cameraKind).toBe("dynamic-island");
     expect(thumbnailSize(1320, 2868, 54, 54)).toEqual({ width: 25, height: 54, scale: expect.any(Number) });
   });

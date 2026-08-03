@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createDocumentPreset } from "../src/lib/defaults";
 import { getDevicePreset } from "../src/devices/presets";
+import { deviceFrameSource } from "../src/devices/frame-assets";
+import { sceneReadiness } from "../src/canvas/export-readiness";
 import { DocumentSchema } from "../src/lib/schema";
 import { APP_STORE_PRESETS } from "../src/scene/presets";
 
@@ -43,5 +45,17 @@ describe("document presets", () => {
     expect(device?.type).toBe("device");
     expect(preset).toBeDefined();
     expect((device?.width ?? 0) / (device?.height ?? 1)).toBeCloseTo(preset?.aspectRatio ?? 0, 2);
+  });
+
+  test("maps official iPhone presets and finishes to bundled frame artwork", () => {
+    for (const presetId of ["iphone-17-pro-max", "iphone-17-pro", "iphone-17", "iphone-air"] as const) {
+      const preset = getDevicePreset(presetId);
+      expect(preset?.frameFinishes?.length).toBeGreaterThan(0);
+      for (const finish of preset?.frameFinishes ?? []) {
+        expect(deviceFrameSource(presetId, finish.color)).toMatch(/\.png$/);
+      }
+    }
+    expect(deviceFrameSource("generic-modern-iphone", "#20242d")).toBeNull();
+    expect(sceneReadiness(createDocumentPreset("iphone-6-9")).builtInImageSources).toHaveLength(1);
   });
 });
