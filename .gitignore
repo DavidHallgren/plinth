@@ -17,6 +17,7 @@ dist/
 !/data/projects/example/assets/asset_dashboard.svg
 !/data/projects/example/assets/asset_phone.svg
 !/data/projects/example/assets/asset_social.svg
+!/data/projects/example/assets/beachball-*.png
 !/data/projects/example/exports/
 /data/projects/example/exports/*
 !/data/projects/example/exports/.gitkeep

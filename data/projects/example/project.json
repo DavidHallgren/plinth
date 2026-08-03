@@ -3,7 +3,7 @@
   "id": "project_example",
   "slug": "example",
   "name": "Example",
-  "description": "Three generic App Store screenshot examples with offline-safe assets and editable vector device frames.",
+  "description": "A polished generic app example with simple placeholder content and editable device frames.",
   "settings": {
     "autosave": true,
     "autosaveDelayMs": 800,
@@ -28,8 +28,8 @@
       "mimeType": "image/svg+xml",
       "width": 1600,
       "height": 1000,
-      "byteSize": 1084,
-      "contentHash": "7041fac9a7ab26b84895f338b9d35b180e9b43af00d873a5b775b1ecfedee787"
+      "byteSize": 3859,
+      "contentHash": "052b6d00ec833e486c65e81ad1596bed79fc33696793777ab75e0038404a38a2"
     },
     {
       "id": "asset_starter_phone",
@@ -38,9 +38,9 @@
       "fileName": "asset_phone.svg",
       "mimeType": "image/svg+xml",
       "width": 900,
-      "height": 1400,
-      "byteSize": 1039,
-      "contentHash": "b745206a9f7c5653610809bcded8090696c45794a78f1e7702dafa1c13b4597b"
+      "height": 1840,
+      "byteSize": 3227,
+      "contentHash": "74d55bd61f58c87ffe83c84f93767ddb0781e60c6c6590714d68855386fcdbb0"
     },
     {
       "id": "asset_starter_social",
@@ -49,17 +49,28 @@
       "fileName": "asset_social.svg",
       "mimeType": "image/svg+xml",
       "width": 1200,
-      "height": 1500,
-      "byteSize": 1010,
-      "contentHash": "1a767428059661904f9bde460b3e85b5e80b4dd851f5f23b9ce7ccbfb067b25e"
+      "height": 1600,
+      "byteSize": 3525,
+      "contentHash": "120681d10bc847dcc3255b8f1e69c04cdf54e54bfd09dfb433560599a7c1cd7d"
+    },
+    {
+      "id": "asset_2ca4d006ab51aee58351f150ead124776a54d895f9d80e9ad7f74eb1937e8805",
+      "kind": "image",
+      "path": "assets/beachball-2ca4d006ab51.png",
+      "fileName": "beachball-2ca4d006ab51.png",
+      "mimeType": "image/png",
+      "width": 1254,
+      "height": 1254,
+      "byteSize": 866135,
+      "contentHash": "2ca4d006ab51aee58351f150ead124776a54d895f9d80e9ad7f74eb1937e8805"
     }
   ],
   "documents": [
     {
       "id": "doc_iphone_69",
-      "slug": "iphone-6-9-launch",
-      "exportSlug": "iphone-6-9-launch",
-      "name": "iPhone 6.9 launch",
+      "slug": "example-home",
+      "exportSlug": "example-home",
+      "name": "Example home",
       "preset": "iphone-6-9",
       "width": 1320,
       "height": 2868,
@@ -68,15 +79,15 @@
         "stops": [
           {
             "offset": 0,
-            "color": "#13182a"
+            "color": "#102047"
           },
           {
-            "offset": 0.55,
-            "color": "#4d4c99"
+            "offset": 0.58,
+            "color": "#3158b9"
           },
           {
             "offset": 1,
-            "color": "#bc9aff"
+            "color": "#b9caff"
           }
         ],
         "start": {
@@ -167,7 +178,7 @@
           "name": "Headline",
           "shadow": null,
           "type": "text",
-          "text": "Project overview",
+          "text": "Example",
           "style": {
             "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 63,
@@ -190,7 +201,7 @@
           "x": 112,
           "y": 545,
           "width": 950,
-          "height": 29,
+          "height": 49,
           "rotation": 0,
           "opacity": 1,
           "zIndex": 3,
@@ -199,16 +210,16 @@
           "name": "Subheadline",
           "shadow": null,
           "type": "text",
-          "text": "Sample frame",
+          "text": "A simple place for your day.",
           "style": {
             "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 21,
+            "fontSize": 36,
             "fontWeight": 500,
             "italic": false,
             "underline": false,
             "lineHeight": 1.35,
             "letterSpacing": 0,
-            "color": "#e6e5f0",
+            "color": "#e7ecff",
             "align": "left",
             "backgroundColor": null,
             "padding": 0,
@@ -216,6 +227,61 @@
             "shadow": null,
             "autoHeight": true
           }
+        },
+        {
+          "id": "doc_iphone_69_cta",
+          "x": 112,
+          "y": 2409,
+          "width": 1096,
+          "height": 158,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 4,
+          "locked": false,
+          "visible": true,
+          "name": "Primary action",
+          "shadow": null,
+          "type": "text",
+          "text": "Open Example",
+          "style": {
+            "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+            "fontSize": 29,
+            "fontWeight": 700,
+            "italic": false,
+            "underline": false,
+            "lineHeight": 1,
+            "letterSpacing": -0.2,
+            "color": "#182039",
+            "align": "center",
+            "backgroundColor": null,
+            "padding": 0,
+            "backgroundRadius": 0,
+            "shadow": null,
+            "autoHeight": false
+          }
+        },
+        {
+          "id": "image_beachball",
+          "x": 860,
+          "y": 560,
+          "width": 360,
+          "height": 360,
+          "rotation": 12,
+          "opacity": 1,
+          "zIndex": 5,
+          "locked": false,
+          "visible": true,
+          "name": "Colorful placeholder decoration",
+          "shadow": null,
+          "type": "image",
+          "assetPath": "assets/beachball-2ca4d006ab51.png",
+          "fit": "contain",
+          "position": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "cornerRadius": 0,
+          "alt": "Colorful placeholder decoration"
         }
       ],
       "notes": "",
@@ -224,9 +290,9 @@
     },
     {
       "id": "doc_iphone_65",
-      "slug": "iphone-6-5-fallback",
-      "exportSlug": "iphone-6-5-fallback",
-      "name": "iPhone 6.5 fallback",
+      "slug": "example-overview",
+      "exportSlug": "example-overview",
+      "name": "Example overview",
       "preset": "iphone-6-5",
       "width": 1284,
       "height": 2778,
@@ -235,11 +301,15 @@
         "stops": [
           {
             "offset": 0,
-            "color": "#0f1420"
+            "color": "#17213b"
+          },
+          {
+            "offset": 0.55,
+            "color": "#397a91"
           },
           {
             "offset": 1,
-            "color": "#2d6070"
+            "color": "#bde5df"
           }
         ],
         "start": {
@@ -330,7 +400,7 @@
           "name": "Headline",
           "shadow": null,
           "type": "text",
-          "text": "Project overview",
+          "text": "Everything in view.",
           "style": {
             "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 62,
@@ -353,7 +423,7 @@
           "x": 109,
           "y": 528,
           "width": 924,
-          "height": 29,
+          "height": 48,
           "rotation": 0,
           "opacity": 1,
           "zIndex": 3,
@@ -362,22 +432,54 @@
           "name": "Subheadline",
           "shadow": null,
           "type": "text",
-          "text": "Sample frame",
+          "text": "Simple tools for notes, lists, and plans.",
           "style": {
             "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 21,
+            "fontSize": 35,
             "fontWeight": 500,
             "italic": false,
             "underline": false,
             "lineHeight": 1.35,
             "letterSpacing": 0,
-            "color": "#e6e5f0",
+            "color": "#e1f1ef",
             "align": "left",
             "backgroundColor": null,
             "padding": 0,
             "backgroundRadius": 0,
             "shadow": null,
             "autoHeight": true
+          }
+        },
+        {
+          "id": "doc_iphone_65_cta",
+          "x": 109,
+          "y": 2334,
+          "width": 1066,
+          "height": 153,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 4,
+          "locked": false,
+          "visible": true,
+          "name": "Primary action",
+          "shadow": null,
+          "type": "text",
+          "text": "Open Example",
+          "style": {
+            "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+            "fontSize": 28,
+            "fontWeight": 700,
+            "italic": false,
+            "underline": false,
+            "lineHeight": 1,
+            "letterSpacing": -0.2,
+            "color": "#182039",
+            "align": "center",
+            "backgroundColor": null,
+            "padding": 0,
+            "backgroundRadius": 0,
+            "shadow": null,
+            "autoHeight": false
           }
         }
       ],
@@ -387,9 +489,9 @@
     },
     {
       "id": "doc_ipad_13",
-      "slug": "ipad-13-product-story",
-      "exportSlug": "ipad-13-product-story",
-      "name": "iPad 13 product story",
+      "slug": "example-workspace",
+      "exportSlug": "example-workspace",
+      "name": "Example workspace",
       "preset": "ipad-13",
       "width": 2064,
       "height": 2752,
@@ -398,15 +500,15 @@
         "stops": [
           {
             "offset": 0,
-            "color": "#d2f0ef"
+            "color": "#3c6981"
           },
           {
             "offset": 0.55,
-            "color": "#6584aa"
+            "color": "#839cc6"
           },
           {
             "offset": 1,
-            "color": "#1a2434"
+            "color": "#18283f"
           }
         ],
         "center": {
@@ -417,40 +519,14 @@
       },
       "elements": [
         {
-          "id": "ipad_shape_1",
-          "x": 175,
-          "y": 2312,
-          "width": 1714,
-          "height": 151,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 0,
-          "locked": false,
-          "visible": true,
-          "name": "Decorative surface",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 18,
-            "offsetX": 0,
-            "offsetY": 8,
-            "opacity": 0.12
-          },
-          "type": "shape",
-          "shape": "rounded-rectangle",
-          "fill": "#ffffff",
-          "stroke": "#ffffff",
-          "strokeWidth": 1,
-          "radius": 41
-        },
-        {
           "id": "ipad_device_2",
-          "x": 289,
-          "y": 771,
+          "x": 296,
+          "y": 680,
           "width": 1486,
           "height": 1981,
           "rotation": 0,
           "opacity": 1,
-          "zIndex": 1,
+          "zIndex": 0,
           "locked": false,
           "visible": true,
           "name": "Generic modern iPad",
@@ -488,13 +564,13 @@
           "height": 74,
           "rotation": 0,
           "opacity": 1,
-          "zIndex": 2,
+          "zIndex": 1,
           "locked": false,
           "visible": true,
           "name": "Headline",
           "shadow": null,
           "type": "text",
-          "text": "Project overview",
+          "text": "Make room for ideas.",
           "style": {
             "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 72,
@@ -517,25 +593,25 @@
           "x": 175,
           "y": 523,
           "width": 1486,
-          "height": 33,
+          "height": 76,
           "rotation": 0,
           "opacity": 1,
-          "zIndex": 3,
+          "zIndex": 2,
           "locked": false,
           "visible": true,
           "name": "Subheadline",
           "shadow": null,
           "type": "text",
-          "text": "Sample frame",
+          "text": "A calm, flexible home for your workspace.",
           "style": {
             "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 24,
+            "fontSize": 56,
             "fontWeight": 500,
             "italic": false,
             "underline": false,
             "lineHeight": 1.35,
             "letterSpacing": 0,
-            "color": "#e6e5f0",
+            "color": "#e8f2f5",
             "align": "left",
             "backgroundColor": null,
             "padding": 0,
@@ -547,9 +623,9 @@
       ],
       "notes": "",
       "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-02T00:00:00.000Z"
+      "updatedAt": "2026-08-03T19:31:56.937Z"
     }
   ],
   "createdAt": "2026-08-02T00:00:00.000Z",
-  "updatedAt": "2026-08-02T00:00:00.000Z"
+  "updatedAt": "2026-08-03T19:31:56.937Z"
 }
