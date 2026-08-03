@@ -1,7 +1,7 @@
 import { createDocumentPreset } from "../lib/defaults";
 import { createId, nowIso, slugify } from "../lib/ids";
 import { DocumentSchema, SceneElementSchema } from "../lib/schema";
-import type { Document, DocumentPreset, ImageFit, Point, Project, SceneElement, Shadow, TextStyle } from "../lib/schema";
+import type { DeviceElement, Document, DocumentPreset, ImageFit, Point, Project, SceneElement, Shadow, TextStyle } from "../lib/schema";
 import type { ShapeElement } from "../lib/schema";
 import { calculateTextAutoHeight } from "./text-geometry";
 import { normalizeLayerOrder, sortLayerElements } from "./selectors";
@@ -42,7 +42,7 @@ export type ElementPatch = {
   deviceId?: string;
   deviceName?: string;
   frame?: "browser" | "phone" | "tablet";
-  preset?: "iphone-17-pro-max" | "iphone-17-pro" | "generic-modern-iphone" | "generic-modern-ipad" | "browser-window";
+  preset?: DeviceElement["preset"];
   frameColor?: string;
   screenColor?: string;
   screenshotPath?: string | null;
@@ -121,15 +121,15 @@ export function normalizeElementOrder(elements: SceneElement[]): SceneElement[] 
 }
 
 function clampElementToDocument(document: Document, element: SceneElement): SceneElement {
-  const width = clamp(Math.abs(finite(element.width, MIN_DIMENSION)), MIN_DIMENSION, document.width);
+  const width = clamp(Math.round(Math.abs(finite(element.width, MIN_DIMENSION))), MIN_DIMENSION, document.width);
   const requestedHeight = element.type === "text" && element.style.autoHeight !== false
     ? calculateTextAutoHeight(element.text, width, element.style)
     : Math.abs(finite(element.height, MIN_DIMENSION));
-  const height = clamp(requestedHeight, MIN_DIMENSION, document.height);
+  const height = clamp(Math.round(requestedHeight), MIN_DIMENSION, document.height);
   return {
     ...element,
-    x: clamp(finite(element.x, 0), 0, document.width - width),
-    y: clamp(finite(element.y, 0), 0, document.height - height),
+    x: clamp(finite(element.x, 0), MIN_DIMENSION - width, document.width - MIN_DIMENSION),
+    y: clamp(finite(element.y, 0), MIN_DIMENSION - height, document.height - MIN_DIMENSION),
     width,
     height,
     opacity: clamp(finite(element.opacity, 1), 0, 1),
@@ -210,7 +210,7 @@ function patchElement(document: Document, element: SceneElement, patch: ElementP
     id: element.id,
     type: element.type,
   } as SceneElement;
-  return clampElementToDocument(document, SceneElementSchema.parse(next));
+  return SceneElementSchema.parse(clampElementToDocument(document, next));
 }
 
 export function addElement(project: Project, documentId: string, element: SceneElement): Project {
@@ -273,8 +273,8 @@ export function moveElements(project: Project, documentId: string, elementIds: s
   const minY = Math.min(...selected.map((element) => element.y));
   const maxRight = Math.max(...selected.map((element) => element.x + element.width));
   const maxBottom = Math.max(...selected.map((element) => element.y + element.height));
-  const dx = clamp(requestedX, -minX, document.width - maxRight);
-  const dy = clamp(requestedY, -minY, document.height - maxBottom);
+  const dx = clamp(requestedX, MIN_DIMENSION - maxRight, document.width - MIN_DIMENSION - minX);
+  const dy = clamp(requestedY, MIN_DIMENSION - maxBottom, document.height - MIN_DIMENSION - minY);
 
   return withDocument(project, documentId, (currentDocument) => updateDocumentElements(
     currentDocument,

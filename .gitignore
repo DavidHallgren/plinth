@@ -11,3 +11,4 @@ src/styles.generated.css
 .bun/
 .idea/
 .vscode/
+tmp/

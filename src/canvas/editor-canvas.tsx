@@ -1,5 +1,5 @@
 import type Konva from "konva";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Stage, Transformer } from "react-konva";
 import type { AssetMetadata, Document } from "../lib/schema";
 import { SceneRenderer } from "./scene-renderer";
@@ -19,7 +19,7 @@ export type EditorCanvasProps = {
   assets: readonly AssetMetadata[];
   selectedElementIds: readonly string[];
   zoom: number;
-  fitRequest: number;
+  fitRequest: string;
   onFitZoom: (zoom: number) => void;
   onSelect: (elementId: string, additive: boolean) => void;
   onClearSelection: () => void;
@@ -45,8 +45,7 @@ export function EditorCanvas({ document, projectSlug, assets, selectedElementIds
     transformer.getLayer()?.batchDraw();
   }, [document.elements, selectedElementIds]);
 
-  useEffect(() => {
-    if (fitRequest === 0) return;
+  useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const availableWidth = Math.max(120, viewport.clientWidth - 64);
@@ -59,10 +58,10 @@ export function EditorCanvas({ document, projectSlug, assets, selectedElementIds
   const lockedElementIds = useMemo(() => new Set(document.elements.filter((element) => element.locked).map((element) => element.id)), [document.elements]);
 
   return (
-    <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[#0e1016]" ref={viewportRef}>
+    <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[#101010]" ref={viewportRef}>
       <div className="plinth-grid absolute inset-0 opacity-40" />
       <div className="relative z-10 flex min-h-full min-w-full items-center justify-center overflow-auto p-8">
-        <div className="relative shrink-0 rounded-[14px] border border-white/15 bg-[#141821] shadow-2xl shadow-black/50" style={{ height: scaledHeight + 2, width: scaledWidth + 2 }}>
+        <div className="relative shrink-0 border border-white/15 bg-[#1a1a1a] shadow-2xl shadow-black/50" style={{ height: scaledHeight + 2, width: scaledWidth + 2 }}>
           <Stage
             height={scaledHeight}
             onMouseDown={(event) => {
@@ -89,11 +88,11 @@ export function EditorCanvas({ document, projectSlug, assets, selectedElementIds
             >
               <Transformer
                 anchorCornerRadius={4}
-                anchorFill="#f4f2ff"
+                anchorFill="#f5f5f5"
                 anchorSize={8}
-                anchorStroke="#9d8cff"
+                anchorStroke="#b0b0b0"
                 borderDash={[5, 4]}
-                borderStroke="#b6a9ff"
+                borderStroke="#cccccc"
                 boundBoxFunc={(oldBox, newBox) => newBox.width < MIN_TRANSFORM_SIZE || newBox.height < MIN_TRANSFORM_SIZE ? oldBox : newBox}
                 enabledAnchors={["top-left", "top-center", "top-right", "middle-left", "middle-right", "bottom-left", "bottom-center", "bottom-right"]}
                 keepRatio={false}

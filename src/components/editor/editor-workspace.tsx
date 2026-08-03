@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AssetMetadata, DeviceElement, DocumentPreset, ImageElement, Project, ShapeElement, TextElement } from "../../lib/schema";
-import { createId } from "../../lib/ids";
+import { createId, nowIso } from "../../lib/ids";
 import { apiFetch, ApiClientError } from "../../lib/client-api";
 import { EditorStore } from "../../app/editor-store";
 import { selectActiveDocument, selectAssetReferences, selectSelectedElements } from "../../scene/selectors";
@@ -9,7 +9,7 @@ import type { AutosaveState } from "../../hooks/use-autosave";
 import { EditorCanvas } from "../../canvas/editor-canvas";
 import { DocumentNavigator } from "../sidebar/document-navigator";
 import { EditorToolbar } from "../toolbar/editor-toolbar";
-import { DocumentStrip } from "./document-strip";
+import { ProjectPreview } from "./project-preview";
 import { Inspector } from "./inspector";
 import { AssetLibrary, type AssetUploadState } from "./asset-library";
 import { ExportDialog } from "./export-dialog";
@@ -30,8 +30,7 @@ type EditorWorkspaceProps = {
   onProjectSynced: (project: Project) => void;
   onSaveNow: (project?: Project) => Promise<Project>;
   onBack: () => Promise<void>;
-  onRenameProject: (name: string, slug?: string) => Promise<void>;
-  onDeleteProject: () => Promise<void>;
+  onRenameProject: (name: string, slug?: string, exportDirectory?: string | null) => Promise<void>;
 };
 
 export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): boolean {
@@ -42,7 +41,7 @@ export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): bo
   return Boolean(candidate.closest("input, textarea, select, [contenteditable]"));
 }
 
-export function EditorWorkspace({ project, dirty, saveState, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject, onDeleteProject }: EditorWorkspaceProps) {
+export function EditorWorkspace({ project, dirty, saveState, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject }: EditorWorkspaceProps) {
   const storeRef = useRef<EditorStore | null>(null);
   const localCommitRevisionRef = useRef(0);
   const handleProjectCommit = useCallback((nextProject: Project) => {
@@ -55,7 +54,8 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   const store = storeRef.current;
   store.setCommitHandler(handleProjectCommit);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const [fitRequest, setFitRequest] = useState(1);
+  const [fitRequest, setFitRequest] = useState(0);
+  const [previewMode, setPreviewMode] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addPreset, setAddPreset] = useState<DocumentPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
   const [addName, setAddName] = useState("");
@@ -64,6 +64,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameName, setRenameName] = useState(project.name);
   const [renameSlug, setRenameSlug] = useState(project.slug);
+  const [renameExportDirectory, setRenameExportDirectory] = useState(project.settings.exportDirectory ?? "");
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
@@ -81,7 +82,8 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   useEffect(() => {
     setRenameName(project.name);
     setRenameSlug(project.slug);
-  }, [project.name, project.slug]);
+    setRenameExportDirectory(project.settings.exportDirectory ?? "");
+  }, [project.name, project.settings.exportDirectory, project.slug]);
 
   const activeDocument = selectActiveDocument(snapshot.project, snapshot.activeDocumentId);
   const selectedElements = selectSelectedElements(activeDocument, snapshot.selectedElementIds);
@@ -138,6 +140,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         run(() => store.redo());
         return;
       }
+      if (previewMode) return;
       if (command && event.key.toLowerCase() === "c") {
         event.preventDefault();
         store.copy();
@@ -181,7 +184,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [run, store]);
+  }, [previewMode, run, store]);
 
   function addText() {
     const element: TextElement = {
@@ -238,8 +241,8 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
       visible: true,
       shadow: null,
       shape,
-      fill: "#9d8cff",
-      stroke: "#c4baff",
+      fill: "#b0b0b0",
+      stroke: "#dedede",
       strokeWidth: shape === "line" ? 4 : 1,
       radius: shape === "rounded-rectangle" ? 28 : 0,
     };
@@ -408,6 +411,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
       store.addDocument(addPreset, { name: addName.trim() || undefined, ...(addPreset === "custom" ? { width, height } : {}) });
       const added = store.history.project.documents[store.history.project.documents.length - 1];
       if (added) store.setActiveDocument(added.id);
+      setPreviewMode(false);
       setAddOpen(false);
       setAddName("");
       setAddWidth("1320");
@@ -422,7 +426,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     setBusy(true);
     setLocalError(null);
     try {
-      await onRenameProject(renameName.trim(), renameSlug.trim() || undefined);
+      await onRenameProject(renameName.trim(), renameSlug.trim() || undefined, renameExportDirectory.trim() || null);
       setRenameOpen(false);
     } catch (reason) {
       reportError(reason);
@@ -431,26 +435,15 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     }
   }
 
-  async function deleteProject() {
-    commitInspectorTransaction();
-    if (!window.confirm(`Delete “${project.name}”? This removes its local project directory.`)) return;
-    setBusy(true);
-    try {
-      await onDeleteProject();
-    } catch (reason) {
-      reportError(reason);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function deleteDocument() {
+  function deleteDocument(documentId = snapshot.activeDocumentId) {
+    const target = snapshot.project.documents.find((document) => document.id === documentId);
+    if (!target) return;
     if (snapshot.project.documents.length <= 1) {
       setLocalError("A project must keep at least one document.");
       return;
     }
-    if (!window.confirm(`Delete “${activeDocument.name}”?`)) return;
-    run(() => store.removeCurrentDocument());
+    if (!window.confirm(`Delete “${target.name}”?`)) return;
+    run(() => store.removeDocumentById(documentId));
   }
 
   async function flushPendingSave(): Promise<Project> {
@@ -474,20 +467,16 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   const visibleError = localError ?? error;
 
   return (
-    <div className="flex h-screen min-h-[620px] min-w-[960px] flex-col overflow-hidden bg-[#0c0e13]">
+    <div className="flex h-screen min-h-[620px] min-w-[960px] flex-col overflow-hidden bg-[#0d0d0d]">
       <EditorToolbar
         canRedo={snapshot.canRedo}
         canUndo={snapshot.canUndo}
         dirty={dirty}
-        document={activeDocument}
         onAddShape={addShape}
         onAddText={addText}
         onOpenAssets={() => setAssetLibraryOpen(true)}
         onExport={() => setExportOpen(true)}
         onBack={() => { commitInspectorTransaction(); void leaveProject(); }}
-        onDeleteDocument={deleteDocument}
-        onDeleteProject={() => void deleteProject()}
-        onDuplicateDocument={() => run(() => store.duplicateCurrentDocument())}
         onFit={() => setFitRequest((value) => value + 1)}
         onRedo={() => run(() => store.redo())}
         onRenameProject={() => setRenameOpen(true)}
@@ -497,13 +486,18 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         saveState={saveState}
         projectName={project.name}
         zoom={snapshot.zoom}
+        previewMode={previewMode}
       />
       {visibleError ? <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-300/20 bg-red-400/[0.08] px-4 py-2 text-xs text-red-100" role="alert"><span>{visibleError}</span><button className="text-red-100/70 hover:text-red-50" onClick={() => setLocalError(null)} type="button">Dismiss</button></div> : null}
       <div className="flex min-h-0 flex-1">
         <DocumentNavigator
           activeDocumentId={snapshot.activeDocumentId}
+          assets={snapshot.project.assets}
           documents={snapshot.project.documents}
           onAddDocument={() => setAddOpen(true)}
+          onDeleteDocument={deleteDocument}
+          onDuplicateDocument={(documentId) => run(() => store.duplicateDocumentById(documentId))}
+          onOpenPreview={() => { commitInspectorTransaction(); store.setSelection([]); setPreviewMode(true); }}
           onDeleteElement={(elementId) => run(() => { store.setSelection([elementId]); store.deleteSelection(); })}
           onDuplicateElement={(elementId) => run(() => store.duplicateElement(elementId))}
           onMoveDocument={(documentId, direction) => run(() => {
@@ -522,24 +516,39 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
             store.reorderElementToIndex(elementId, sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
           })}
           onRenameElement={(elementId, name) => run(() => store.updateElement(elementId, { name }))}
-          onSelectDocument={(documentId) => store.setActiveDocument(documentId)}
+          onSelectDocument={(documentId) => { store.setActiveDocument(documentId); setPreviewMode(false); }}
           onSelectElement={(elementId, additive) => store.toggleSelection(elementId, additive)}
           onToggleLocked={(element) => run(() => store.updateElement(element.id, { locked: !element.locked }))}
           onToggleVisible={(element) => run(() => store.updateElement(element.id, { visible: !element.visible }))}
+          projectSlug={project.slug}
           selectedElementIds={snapshot.selectedElementIds}
+          previewMode={previewMode}
         />
         <main className="flex min-w-0 flex-1 flex-col">
           <div
             className="relative flex min-h-0 flex-1"
-            onDragEnter={(event) => { event.preventDefault(); setDropActive(true); }}
-            onDragLeave={(event) => { if (event.currentTarget === event.target) setDropActive(false); }}
-            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
-            onDrop={(event) => { event.preventDefault(); void handleDroppedFiles(event.dataTransfer.files); }}
+            onDragEnter={(event) => { if (previewMode) return; event.preventDefault(); setDropActive(true); }}
+            onDragLeave={(event) => { if (!previewMode && event.currentTarget === event.target) setDropActive(false); }}
+            onDragOver={(event) => { if (previewMode) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
+            onDrop={(event) => { if (previewMode) return; event.preventDefault(); void handleDroppedFiles(event.dataTransfer.files); }}
           >
-            {exportRendering ? <div className="grid min-h-0 flex-1 place-items-center text-xs text-muted">Rendering export…</div> : <EditorCanvas
+            {exportRendering ? <div className="grid min-h-0 flex-1 place-items-center text-xs text-muted">Rendering export…</div> : previewMode ? <ProjectPreview
+              assets={snapshot.project.assets}
+              documents={snapshot.project.documents}
+              onMoveDocument={(documentId, direction) => run(() => {
+                const index = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
+                store.reorderCurrentDocuments([documentId], index + direction);
+              })}
+              onOpenDocument={(documentId) => { store.setActiveDocument(documentId); setPreviewMode(false); }}
+              onReorderDocument={(documentId, targetIndex) => run(() => {
+                const sourceIndex = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
+                store.reorderCurrentDocuments([documentId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
+              })}
+              projectSlug={project.slug}
+            /> : <EditorCanvas
               assets={snapshot.project.assets}
               document={activeDocument}
-              fitRequest={fitRequest}
+              fitRequest={`${activeDocument.id}:${fitRequest}`}
               onClearSelection={() => store.setSelection([])}
               onFitZoom={fitZoom}
               onGestureStart={(label) => { commitInspectorTransaction(); store.beginTransaction(label); }}
@@ -563,42 +572,33 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
               selectedElementIds={snapshot.selectedElementIds}
               zoom={snapshot.zoom}
             />}
-            {dropActive ? <div className="pointer-events-none absolute inset-4 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-violet bg-violet/[0.12] text-sm font-semibold text-violet-soft">Drop images to upload and place them</div> : null}
+            {dropActive ? <div className="pointer-events-none absolute inset-4 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-accent bg-accent/[0.12] text-sm font-semibold text-accent-soft">Drop images to upload and place them</div> : null}
           </div>
-          <DocumentStrip
-            activeDocumentId={snapshot.activeDocumentId}
-            assets={snapshot.project.assets}
-            documents={snapshot.project.documents}
-            onAdd={() => setAddOpen(true)}
-            onReorder={(documentId, targetIndex) => run(() => {
-              const sourceIndex = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
-              store.reorderCurrentDocuments([documentId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
-            })}
-            onSelect={(documentId) => store.setActiveDocument(documentId)}
-            projectSlug={project.slug}
-          />
         </main>
-        <aside className="hidden min-h-0 w-[312px] shrink-0 flex-col border-l border-white/[0.08] bg-[#12151c] xl:flex">
+        {!previewMode ? <aside className="flex min-h-0 w-[312px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
           <Inspector document={activeDocument} onUpdateDocument={(patch) => queueInspectorChange("Edit document", () => store.updateCurrentDocument(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
-        </aside>
+        </aside> : null}
       </div>
 
       <Dialog footer={<><Button onClick={() => setAddOpen(false)} variant="ghost">Cancel</Button><Button form="add-document" type="submit" variant="primary">Add document</Button></>} onOpenChange={setAddOpen} open={addOpen} title="New document">
         <form className="space-y-3" id="add-document" onSubmit={submitAddDocument}>
           <label className="block text-xs font-medium text-muted" htmlFor="new-document-preset">Preset</label>
-          <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-violet/70" id="new-document-preset" onChange={(event) => setAddPreset(event.target.value as DocumentPreset)} value={addPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Custom size</option></select>
+          <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-accent/70" id="new-document-preset" onChange={(event) => setAddPreset(event.target.value as DocumentPreset)} value={addPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Custom size</option></select>
           {addPreset === "custom" ? <div className="grid grid-cols-2 gap-2 pt-2"><label className="block space-y-1 text-xs font-medium text-muted" htmlFor="new-document-width"><span>Width</span><Input id="new-document-width" max={100000} min={1} onChange={(event) => setAddWidth(event.target.value)} type="number" value={addWidth} /></label><label className="block space-y-1 text-xs font-medium text-muted" htmlFor="new-document-height"><span>Height</span><Input id="new-document-height" max={100000} min={1} onChange={(event) => setAddHeight(event.target.value)} type="number" value={addHeight} /></label></div> : null}
           <label className="block pt-2 text-xs font-medium text-muted" htmlFor="new-document-name">Name</label>
           <Input id="new-document-name" onChange={(event) => setAddName(event.target.value)} placeholder="Product launch" value={addName} />
         </form>
       </Dialog>
 
-      <Dialog footer={<><Button onClick={() => setRenameOpen(false)} variant="ghost">Cancel</Button><Button disabled={busy || !renameName.trim()} form="rename-project" type="submit" variant="primary">{busy ? "Saving…" : "Save changes"}</Button></>} onOpenChange={setRenameOpen} open={renameOpen} title="Rename project">
+      <Dialog footer={<><Button onClick={() => setRenameOpen(false)} variant="ghost">Cancel</Button><Button disabled={busy || !renameName.trim()} form="rename-project" type="submit" variant="primary">{busy ? "Saving…" : "Save changes"}</Button></>} onOpenChange={setRenameOpen} open={renameOpen} title="Edit project">
         <form className="space-y-3" id="rename-project" onSubmit={(event) => void submitRename(event)}>
           <label className="block text-xs font-medium text-muted" htmlFor="rename-project-name">Project name</label>
           <Input id="rename-project-name" onChange={(event) => setRenameName(event.target.value)} value={renameName} />
           <label className="block pt-2 text-xs font-medium text-muted" htmlFor="rename-project-slug">Project slug</label>
           <Input id="rename-project-slug" onChange={(event) => setRenameSlug(event.target.value)} value={renameSlug} />
+          <label className="block pt-2 text-xs font-medium text-muted" htmlFor="edit-project-export-directory">Export folder</label>
+          <Input id="edit-project-export-directory" onChange={(event) => setRenameExportDirectory(event.target.value)} placeholder="/absolute/path/to/exports" value={renameExportDirectory} />
+          <p className="text-[10px] leading-4 text-muted">Folder exports create timestamped directories inside this existing absolute path.</p>
         </form>
       </Dialog>
 
@@ -618,6 +618,15 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         activeDocumentId={snapshot.activeDocumentId}
         onBeforeExport={flushPendingSave}
         onError={setLocalError}
+        onExportDirectoryChange={(directory) => run(() => {
+          const current = store.getSnapshot().project;
+          if (current.settings.exportDirectory === directory) return;
+          store.apply("Configure export folder", (value) => ({
+            ...value,
+            settings: { ...value.settings, exportDirectory: directory },
+            updatedAt: nowIso(),
+          }));
+        })}
         onOpenChange={setExportOpen}
         onRenderingChange={setExportRendering}
         open={exportOpen}

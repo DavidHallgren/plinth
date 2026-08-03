@@ -1,12 +1,13 @@
 import { ChevronDown, Lock, Unlock, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { EDITABLE_DEVICE_PRESETS, getDevicePreset } from "../../devices/presets";
 import type { Background, Document, SceneElement, Shadow, TextElement } from "../../lib/schema";
 import type { DocumentPatch, ElementPatch, ElementUpdate } from "../../scene/operations";
 import { APP_STORE_PRESETS } from "../../scene/presets";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
-const selectClass = "plinth-focus-ring h-8 w-full rounded-lg border border-line bg-[#0f1218] px-2 text-xs text-ink outline-none focus:border-violet/70";
+const selectClass = "plinth-focus-ring h-8 w-full rounded-lg border border-line bg-[#111111] px-2 text-xs text-ink outline-none focus:border-accent/70";
 const FONT_OPTIONS = [
   "Inter, ui-sans-serif, system-ui, sans-serif",
   "SF Pro Display, Inter, ui-sans-serif, sans-serif",
@@ -67,7 +68,7 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
         <BackgroundControls background={document.background} onChange={(background) => onUpdate({ background })} />
       </Section>
       <Section title="Notes">
-        <textarea aria-label="Notes" className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#0f1218] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-violet/70" onChange={(event) => onUpdate({ notes: event.target.value })} value={document.notes} />
+        <textarea aria-label="Notes" className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#111111] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-accent/70" onChange={(event) => onUpdate({ notes: event.target.value })} value={document.notes} />
       </Section>
     </div>
   );
@@ -127,7 +128,7 @@ function TextControls({ element, onUpdate }: { element: TextElement; onUpdate: (
   }
   return (
     <Section title="Text">
-      <Field label="Content"><textarea className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#0f1218] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-violet/70" onChange={(event) => onUpdate({ text: event.target.value })} value={element.text} /></Field>
+      <Field label="Content"><textarea className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#111111] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-accent/70" onChange={(event) => onUpdate({ text: event.target.value })} value={element.text} /></Field>
       <Field label="Font">
         <select className={selectClass} onChange={(event) => updateStyle({ fontFamily: event.target.value })} value={style.fontFamily}>
           {FONT_OPTIONS.map((font) => <option key={font} value={font}>{font.split(",")[0]}</option>)}
@@ -144,7 +145,7 @@ function TextControls({ element, onUpdate }: { element: TextElement; onUpdate: (
         <ToggleButton active={Boolean(style.underline)} label="Underline" onClick={() => updateStyle({ underline: !style.underline })} />
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {(["left", "center", "right"] as const).map((align) => <button aria-pressed={style.align === align} className={`h-8 rounded-lg border text-xs ${style.align === align ? "border-violet/40 bg-violet/[0.12] text-violet-soft" : "border-line text-muted hover:text-ink"}`} key={align} onClick={() => updateStyle({ align })} type="button">{align}</button>)}
+        {(["left", "center", "right"] as const).map((align) => <button aria-pressed={style.align === align} className={`h-8 rounded-lg border text-xs ${style.align === align ? "border-accent/40 bg-accent/[0.12] text-accent-soft" : "border-line text-muted hover:text-ink"}`} key={align} onClick={() => updateStyle({ align })} type="button">{align}</button>)}
       </div>
       <Field label="Text color"><ColorField onChange={(color) => { if (color) updateStyle({ color }); }} value={style.color} /></Field>
       <div className="grid grid-cols-2 gap-2">
@@ -174,11 +175,25 @@ function ShapeControls({ element, onUpdate }: { element: Extract<SceneElement, {
 }
 
 function DeviceControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "device" }>; onUpdate: (patch: ElementPatch) => void }) {
+  const preset = getDevicePreset(element.preset);
+  const selectedFinish = preset?.frameFinishes?.some((finish) => finish.color === element.frameColor) ? element.frameColor : preset?.defaultFrameColor;
   return (
     <Section title="Device frame">
-      <Field label="Preset"><select className={selectClass} onChange={(event) => onUpdate({ preset: event.target.value as Extract<typeof element.preset, string> })} value={element.preset}><option value="iphone-17-pro-max">iPhone 17 Pro Max</option><option value="iphone-17-pro">iPhone 17 Pro</option><option value="generic-modern-iphone">Generic modern iPhone</option><option value="generic-modern-ipad">Generic modern iPad</option><option value="browser-window">Browser window</option></select></Field>
+      <Field label="Preset"><select className={selectClass} onChange={(event) => {
+        const nextPreset = getDevicePreset(event.target.value);
+        if (!nextPreset) return;
+        onUpdate({
+          preset: nextPreset.id as Extract<typeof element.preset, string>,
+          deviceId: nextPreset.id,
+          deviceName: nextPreset.label,
+          frameColor: nextPreset.defaultFrameColor,
+          screenColor: nextPreset.defaultScreenColor,
+          cornerRadius: null,
+          screenCornerRadius: null,
+        });
+      }} value={element.preset}>{EDITABLE_DEVICE_PRESETS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></Field>
       <Field label="Screenshot"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.screenshotPath ?? "No screenshot selected"}>{element.screenshotPath ? assetFileName(element.screenshotPath) : "No screenshot selected"}</p></Field>
-      <div className="grid grid-cols-2 gap-2"><Field label="Frame color"><ColorField onChange={(frameColor) => { if (frameColor) onUpdate({ frameColor }); }} value={element.frameColor} /></Field><Field label="Screen color"><ColorField onChange={(screenColor) => { if (screenColor) onUpdate({ screenColor }); }} value={element.screenColor} /></Field></div>
+      <div className="grid grid-cols-2 gap-2">{preset?.frameFinishes ? <Field label="Frame finish"><select className={selectClass} onChange={(event) => onUpdate({ frameColor: event.target.value })} value={selectedFinish}>{preset.frameFinishes.map((finish) => <option key={finish.color} value={finish.color}>{finish.label}</option>)}</select></Field> : <Field label="Frame color"><ColorField onChange={(frameColor) => { if (frameColor) onUpdate({ frameColor }); }} value={element.frameColor} /></Field>}<Field label="Screen color"><ColorField onChange={(screenColor) => { if (screenColor) onUpdate({ screenColor }); }} value={element.screenColor} /></Field></div>
       <Field label="Screenshot fit"><select className={selectClass} onChange={(event) => onUpdate({ screenshotFit: event.target.value as "contain" | "cover" | "stretch" })} value={element.screenshotFit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
       <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, x } })} step={0.05} value={element.screenshotPosition.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, y } })} step={0.05} value={element.screenshotPosition.y} /></Field></div>
       <div className="grid grid-cols-2 gap-2"><Field label="Bezel"><select className={selectClass} onChange={(event) => onUpdate({ bezelStyle: event.target.value as "solid" | "metallic" })} value={element.bezelStyle}><option value="solid">Solid</option><option value="metallic">Metallic</option></select></Field><Field label="Outer radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius ?? 0} /></Field><Field label="Screen radius"><NumberField min={0} onChange={(screenCornerRadius) => onUpdate({ screenCornerRadius })} value={element.screenCornerRadius ?? 0} /></Field></div>
@@ -278,5 +293,5 @@ function ColorField({ value, onChange, allowNone = false }: { value: string; onC
 }
 
 function ToggleButton({ active, label, icon, onClick }: { active: boolean; label: string; icon?: React.ReactNode; onClick: () => void }) {
-  return <button aria-pressed={active} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg border text-[11px] ${active ? "border-violet/30 bg-violet/[0.1] text-violet-soft" : "border-line text-muted hover:text-ink"}`} onClick={onClick} type="button">{icon}{label}</button>;
+  return <button aria-pressed={active} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg border text-[11px] ${active ? "border-accent/30 bg-accent/[0.1] text-accent-soft" : "border-line text-muted hover:text-ink"}`} onClick={onClick} type="button">{icon}{label}</button>;
 }

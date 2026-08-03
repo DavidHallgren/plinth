@@ -56,13 +56,13 @@ export function AssetLibrary({ open, projectSlug, assets, usageCounts, uploadSta
     <Dialog onOpenChange={onOpenChange} open={open} title="Asset library">
       <div className="max-h-[calc(100vh-12rem)] space-y-4 overflow-y-auto pr-1">
         <div
-          className={`rounded-lg border border-dashed p-4 text-center transition ${dragging ? "border-violet bg-violet/[0.1]" : "border-white/15 bg-white/[0.025]"}`}
+          className={`rounded-lg border border-dashed p-4 text-center transition ${dragging ? "border-accent bg-accent/[0.1]" : "border-white/15 bg-white/[0.025]"}`}
           onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
           onDragLeave={(event) => { if (event.currentTarget === event.target) setDragging(false); }}
           onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
           onDrop={(event) => { event.preventDefault(); setDragging(false); void upload(event.dataTransfer.files); }}
         >
-          <Upload className="mx-auto text-violet-soft" size={20} />
+          <Upload className="mx-auto text-accent-soft" size={20} />
           <p className="mt-2 text-xs font-medium text-ink">Drop images here or choose files</p>
           <p className="mt-1 text-[10px] text-muted">PNG, JPEG, WebP, or SVG · 25 MB max</p>
           <input accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" multiple onChange={(event) => { if (event.target.files) void upload(event.target.files); }} ref={inputRef} type="file" />
@@ -70,10 +70,10 @@ export function AssetLibrary({ open, projectSlug, assets, usageCounts, uploadSta
         </div>
 
         {[...uploadStates.entries()].map(([fileName, state]) => (
-          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${state.status === "error" ? "border-red-300/20 bg-red-400/[0.06]" : "border-violet/20 bg-violet/[0.06]"}`} key={fileName}>
-            {state.status === "uploading" ? <LoaderCircle className="animate-spin text-violet-soft" size={14} /> : <AlertTriangle className="text-red-200" size={14} />}
+          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${state.status === "error" ? "border-red-300/20 bg-red-400/[0.06]" : "border-accent/20 bg-accent/[0.06]"}`} key={fileName}>
+            {state.status === "uploading" ? <LoaderCircle className="animate-spin text-accent-soft" size={14} /> : <AlertTriangle className="text-red-200" size={14} />}
             <span className="min-w-0 flex-1 truncate text-muted">{fileName}</span>
-            <span className={state.status === "error" ? "text-red-200" : "text-violet-soft"}>{state.status === "error" ? state.message ?? "Upload failed" : state.status === "done" ? `Uploaded${state.message ? ` · ${state.message}` : ""}` : "Uploading…"}</span>
+            <span className={state.status === "error" ? "text-red-200" : "text-accent-soft"}>{state.status === "error" ? state.message ?? "Upload failed" : state.status === "done" ? `Uploaded${state.message ? ` · ${state.message}` : ""}` : "Uploading…"}</span>
           </div>
         ))}
 
@@ -96,7 +96,7 @@ function AssetCard({ asset, projectSlug, usageCount, busy, onAddImage, onPlaceIn
   const [imageError, setImageError] = useState(false);
   return (
     <article className="overflow-hidden rounded-lg border border-white/[0.09] bg-white/[0.025]">
-      <div className="relative grid h-28 place-items-center overflow-hidden bg-[#0d1017]">
+      <div className="relative grid h-28 place-items-center overflow-hidden bg-[#121212]">
         {!imageError ? <img alt={asset.fileName} className="h-full w-full object-contain" onError={() => setImageError(true)} src={assetUrl(projectSlug, asset.path)} /> : <div className="text-center text-[10px] text-red-200"><AlertTriangle className="mx-auto mb-1" size={16} />Missing or unreadable file</div>}
       </div>
       <div className="space-y-2 p-3">

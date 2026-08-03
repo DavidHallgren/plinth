@@ -4,19 +4,21 @@
 
 @theme {
   --font-sans: "Inter", "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
-  --color-ink: #f3f4f7;
-  --color-muted: #8f94a3;
-  --color-panel: #12151c;
-  --color-panel-strong: #181c25;
+  --color-ink: #f4f4f4;
+  --color-muted: #969696;
+  --color-panel: #171717;
+  --color-panel-strong: #1d1d1d;
   --color-line: rgba(255, 255, 255, 0.09);
-  --color-violet: #9d8cff;
-  --color-violet-soft: #c4baff;
+  --color-accent: #b0b0b0;
+  --color-accent-soft: #dedede;
+  --color-primary: #97ff7d;
+  --color-primary-hover: #b4ffa1;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
-    background: #0c0d10;
+    background: #0d0d0d;
     font-family: var(--font-sans);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -30,7 +32,7 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-    background: #0c0d10;
+    background: #0d0d0d;
     color: var(--color-ink);
   }
 
@@ -45,7 +47,7 @@
   }
 
   ::selection {
-    background: rgba(157, 140, 255, 0.35);
+    background: rgba(176, 176, 176, 0.35);
   }
 }
 
@@ -63,7 +65,7 @@
   }
 
   .plinth-focus-ring:focus-visible {
-    outline: 2px solid var(--color-violet);
+    outline: 2px solid var(--color-accent);
     outline-offset: 3px;
   }
 }

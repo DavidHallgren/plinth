@@ -37,7 +37,7 @@ export function Dialog({ open, title, description, onOpenChange, children, foote
         aria-describedby={description ? "dialog-description" : undefined}
         aria-labelledby="dialog-title"
         aria-modal="true"
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#151820] p-5 shadow-2xl shadow-black/50"
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1b1b1b] p-5 shadow-2xl shadow-black/50"
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
       >

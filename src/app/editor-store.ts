@@ -89,7 +89,6 @@ export class EditorStore {
     this.updateSnapshot({
       activeDocumentId: documentId,
       selectedElementIds: [],
-      zoom: 0.45,
     });
   }
 
@@ -290,7 +289,10 @@ export class EditorStore {
   }
 
   duplicateCurrentDocument(): void {
-    const documentId = this.snapshot.activeDocumentId;
+    this.duplicateDocumentById(this.snapshot.activeDocumentId);
+  }
+
+  duplicateDocumentById(documentId: string): void {
     const before = this.history.project.documents.map((document) => document.id);
     this.apply("Duplicate document", (project) => duplicateDocument(project, documentId));
     const added = this.history.project.documents.find((document) => !before.includes(document.id));
@@ -298,9 +300,14 @@ export class EditorStore {
   }
 
   removeCurrentDocument(): void {
-    const documentId = this.snapshot.activeDocumentId;
+    this.removeDocumentById(this.snapshot.activeDocumentId);
+  }
+
+  removeDocumentById(documentId: string): void {
     const index = this.history.project.documents.findIndex((document) => document.id === documentId);
+    const wasActive = documentId === this.snapshot.activeDocumentId;
     this.apply("Delete document", (project) => removeDocument(project, documentId));
+    if (!wasActive) return;
     const next = this.history.project.documents[Math.min(Math.max(index - 1, 0), this.history.project.documents.length - 1)];
     if (next) this.setActiveDocument(next.id);
   }

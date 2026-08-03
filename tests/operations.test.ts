@@ -14,6 +14,7 @@ import {
   resizeElement,
   updateDocument,
   updateElement,
+  updateElements,
 } from "../src/scene/operations";
 import { ProjectHistory } from "../src/scene/history";
 import { EditorStore } from "../src/app/editor-store";
@@ -60,13 +61,13 @@ describe("scene operations", () => {
     const added = addElement(project, "doc_operations", shape("shape_one", 340, 280));
     const element = added.documents[0]?.elements[0];
     expect(element?.zIndex).toBe(0);
-    expect(element?.x).toBe(300);
-    expect(element?.y).toBe(220);
+    expect(element?.x).toBe(340);
+    expect(element?.y).toBe(280);
 
     const updated = updateElement(added, "doc_operations", "shape_one", { name: "Updated", opacity: 0.4 });
     expect(updated.documents[0]?.elements[0]).toMatchObject({ name: "Updated", opacity: 0.4 });
     const moved = moveElements(updated, "doc_operations", ["shape_one"], { x: -1000, y: -1000 });
-    expect(moved.documents[0]?.elements[0]).toMatchObject({ x: 0, y: 0 });
+    expect(moved.documents[0]?.elements[0]).toMatchObject({ x: -99, y: -79 });
     const removed = removeElements(moved, "doc_operations", ["shape_one"]);
     expect(removed.documents[0]?.elements).toHaveLength(0);
   });
@@ -93,10 +94,33 @@ describe("scene operations", () => {
     const element = resized.documents[0]?.elements[0];
     expect(element?.width).toBe(400);
     expect(element?.height).toBe(300);
-    expect(element?.x).toBe(0);
-    expect(element?.y).toBe(0);
+    expect(element?.x).toBe(-399);
+    expect(element?.y).toBe(-299);
     expect(element?.rotation).toBe(32);
     expect(() => addElement(resized, "doc_operations", shape("resize_me"))).toThrow(/already in use/);
+  });
+
+  test("rounds fractional canvas transform dimensions before schema validation", () => {
+    const project = addElement(fixture(), "doc_operations", shape("resize_me", 40, 40));
+    const transformed = updateElements(project, "doc_operations", [{
+      id: "resize_me",
+      patch: { x: 50.25, y: 40.75, width: 299.6, height: 199.4, rotation: 2.5 },
+    }]);
+    const element = transformed.documents[0]?.elements.find((candidate) => candidate.id === "resize_me");
+    expect(element?.width).toBe(300);
+    expect(element?.height).toBe(199);
+    expect(element?.x).toBe(50.25);
+    expect(element?.y).toBe(40.75);
+    expect(element?.rotation).toBe(2.5);
+  });
+
+  test("preserves partially off-canvas layer positions while keeping a recovery edge", () => {
+    const project = addElement(fixture(), "doc_operations", shape("off_canvas", 40, 40));
+    const partiallyOutside = updateElement(project, "doc_operations", "off_canvas", { x: -45, y: 260 });
+    expect(partiallyOutside.documents[0]?.elements[0]).toMatchObject({ x: -45, y: 260 });
+
+    const beyondRecoveryEdge = updateElement(partiallyOutside, "doc_operations", "off_canvas", { x: -500, y: 500 });
+    expect(beyondRecoveryEdge.documents[0]?.elements[0]).toMatchObject({ x: -99, y: 299 });
   });
 
   test("preserves existing z-order when updating element or document properties", () => {
@@ -176,6 +200,18 @@ describe("operation history", () => {
 
     expect(commits).toHaveLength(0);
     expect(store.getSnapshot().project.documents[0]?.elements[0]).toMatchObject({ x: 10, y: 10, locked: true });
+  });
+
+  test("leaves zoom fitting to the viewport when switching documents", () => {
+    const initial = addDocument(fixture(), "ipad-13", { name: "iPad frame" });
+    const store = new EditorStore(initial, () => undefined);
+    const nextDocumentId = initial.documents[1]?.id;
+    if (!nextDocumentId) throw new Error("Missing second document");
+
+    store.setZoom(0.72);
+    store.setActiveDocument(nextDocumentId);
+
+    expect(store.getSnapshot()).toMatchObject({ activeDocumentId: nextDocumentId, zoom: 0.72 });
   });
 
   test("coalesces a gesture and supports bounded undo/redo", () => {

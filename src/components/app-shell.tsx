@@ -119,38 +119,39 @@ export function App() {
     if (latest && dirtyRef.current) await autosave.saveNow(latest);
   }, [autosave.saveNow]);
 
-  const renameProject = useCallback(async (name: string, slug?: string) => {
+  const deleteProjectBySlug = useCallback(async (slug: string) => {
+    setError(null);
+    try {
+      const current = projectRef.current;
+      if (current?.slug === slug) await saveLatestProject();
+      await apiFetch<{ deleted: string }>(`/api/projects/${encodeURIComponent(slug)}`, { method: "DELETE" });
+      if (current?.slug === slug) {
+        projectRef.current = null;
+        setProject(null);
+        setDirty(false);
+        dirtyRef.current = false;
+      }
+      await refreshProjects();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not delete the project.");
+      throw reason;
+    }
+  }, [refreshProjects, saveLatestProject]);
+
+  const renameProject = useCallback(async (name: string, slug?: string, exportDirectory?: string | null) => {
     const current = projectRef.current;
     if (!current) return;
     setError(null);
     try {
       await saveLatestProject();
-      const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(current.slug)}/rename`, jsonRequest({ name, slug }));
+      const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(current.slug)}/rename`, jsonRequest({ name, slug, exportDirectory }));
       projectRef.current = result.project;
       setProject(result.project);
       setDirty(false);
       dirtyRef.current = false;
       await refreshProjects();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not rename the project.");
-      throw reason;
-    }
-  }, [refreshProjects, saveLatestProject]);
-
-  const deleteProject = useCallback(async () => {
-    const current = projectRef.current;
-    if (!current) return;
-    setError(null);
-    try {
-      await saveLatestProject();
-      await apiFetch<{ deleted: string }>(`/api/projects/${encodeURIComponent(current.slug)}`, { method: "DELETE" });
-      projectRef.current = null;
-      setProject(null);
-      setDirty(false);
-      dirtyRef.current = false;
-      await refreshProjects();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not delete the project.");
+      setError(reason instanceof Error ? reason.message : "Could not update the project.");
       throw reason;
     }
   }, [refreshProjects, saveLatestProject]);
@@ -165,7 +166,7 @@ export function App() {
   }, [saveLatestProject]);
 
   if (!project) {
-    return <ProjectPicker error={error} loading={loading} onCreate={createProject} onOpen={openProject} projects={projects} />;
+    return <ProjectPicker error={error} loading={loading} onCreate={createProject} onDelete={deleteProjectBySlug} onOpen={openProject} projects={projects} />;
   }
 
   return (
@@ -173,7 +174,6 @@ export function App() {
       dirty={dirty}
       error={error}
       onBack={leaveProject}
-      onDeleteProject={deleteProject}
       onProjectChange={changeProject}
       onProjectSynced={(nextProject) => void syncProject(nextProject)}
       onRenameProject={renameProject}

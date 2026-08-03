@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
+import { previewDocumentZoom } from "../src/components/editor/project-preview";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
@@ -28,6 +29,12 @@ describe("editor interaction guards and geometry", () => {
     const multiline = calculateTextAutoHeight("One line\nSecond line\nThird line", 220, style);
     expect(multiline).toBeGreaterThan(single);
     expect(calculateTextAutoHeight("Many words", 220, { ...style, autoHeight: false })).toBe(1);
+  });
+
+  test("fits project preview documents within the available vertical space", () => {
+    expect(previewDocumentZoom(2868, 839)).toBeCloseTo(727 / 2868);
+    expect(previewDocumentZoom(600, 839)).toBe(1);
+    expect(previewDocumentZoom(2868, 0)).toBeCloseTo(120 / 2868);
   });
 
   test("reorder normalizes z-index and retains the moved selection identity", () => {
