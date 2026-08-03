@@ -1,10 +1,10 @@
 import type Konva from "konva";
 import { Download, FileOutput, LoaderCircle } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Stage } from "react-konva";
 import type { Document, Project } from "../../lib/schema";
 import { apiFetch } from "../../lib/client-api";
-import { exportFileName } from "../../lib/export-validation";
+import { buildExportPlan } from "../../lib/export-validation";
 import { waitForSceneReady } from "../../canvas/export-readiness";
 import { SceneRenderer } from "../../canvas/scene-renderer";
 import { Button } from "../ui/button";
@@ -16,7 +16,7 @@ type ExportDialogProps = {
   activeDocumentId: string;
   onOpenChange: (open: boolean) => void;
   onError?: (message: string) => void;
-  onBeforeExport?: () => Promise<void>;
+  onBeforeExport?: () => Promise<Project>;
   onRenderingChange?: (rendering: boolean) => void;
 };
 
@@ -61,22 +61,41 @@ function downloadBlob(blob: Blob, fileName: string): void {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
+function planForProject(sourceProject: Project): Array<{ document: Document; fileName: string }> {
+  return buildExportPlan(sourceProject).map((item) => {
+    const document = sourceProject.documents.find((candidate) => candidate.id === item.documentId);
+    if (!document) throw new Error(`Export document "${item.documentId}" is missing from the project.`);
+    return { document, fileName: item.exportName };
+  });
+}
+
 export function ExportDialog({ open, project, activeDocumentId, onOpenChange, onError, onBeforeExport, onRenderingChange }: ExportDialogProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [mode, setMode] = useState<"current" | "all">("current");
   const [rows, setRows] = useState<ExportRow[]>([]);
   const [renderDocument, setRenderDocument] = useState<Document | null>(null);
+  const [renderProject, setRenderProject] = useState<Project | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const currentDocument = project.documents.find((document) => document.id === activeDocumentId) ?? project.documents[0];
-  const plan = useMemo(() => {
+  const planResult = useMemo(() => {
     try {
-      return project.documents.map((document, index) => ({ document, fileName: exportFileName(document, index) }));
+      return {
+        plan: planForProject(project),
+        error: null,
+      };
     } catch (error) {
-      onError?.(error instanceof Error ? error.message : "The export plan is invalid.");
-      return [];
+      return {
+        plan: [],
+        error: error instanceof Error ? error.message : "The export plan is invalid.",
+      };
     }
-  }, [onError, project.documents]);
+  }, [project.documents]);
+  const { plan, error: planError } = planResult;
+
+  useEffect(() => {
+    if (planError) onError?.(planError);
+  }, [onError, planError]);
 
   async function waitForStage(documentId: string): Promise<Konva.Stage> {
     void documentId;
@@ -88,12 +107,13 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
     throw new Error("The export canvas did not become ready. Close other previews and try again.");
   }
 
-  async function renderPng(document: Document): Promise<Blob> {
+  async function renderPng(sourceProject: Project, document: Document): Promise<Blob> {
+    setRenderProject(sourceProject);
     setRenderDocument(document);
     await nextFrame();
     await nextFrame();
     const stage = await waitForStage(document.id);
-    await waitForSceneReady(project, document, project.assets);
+    await waitForSceneReady(sourceProject, document, sourceProject.assets);
     stage.draw();
     const canvas = stage.toCanvas({ imageSmoothingEnabled: true, pixelRatio: 1 });
     if (canvas.width !== document.width || canvas.height !== document.height) {
@@ -107,26 +127,35 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
   }
 
   async function runExport(): Promise<void> {
-    const selected = mode === "all" ? plan : plan.filter(({ document }) => document.id === currentDocument?.id);
-    if (selected.length === 0) {
-      onError?.("There is no document available to export.");
-      return;
-    }
-    const initialRows = selected.map(({ document, fileName }) => ({ document, fileName, status: "pending" as const }));
-    setRows(initialRows);
     setExporting(true);
     onRenderingChange?.(true);
     try {
+      let sourceProject = project;
       try {
-        await onBeforeExport?.();
+        sourceProject = (await onBeforeExport?.()) ?? project;
       } catch (error) {
         onError?.(error instanceof Error ? error.message : "The project could not be saved before export.");
         return;
       }
+      let sourcePlan: Array<{ document: Document; fileName: string }>;
+      try {
+        sourcePlan = planForProject(sourceProject);
+      } catch (error) {
+        onError?.(error instanceof Error ? error.message : "The export plan is invalid.");
+        return;
+      }
+      const sourceCurrentDocument = sourceProject.documents.find((document) => document.id === activeDocumentId) ?? sourceProject.documents[0];
+      const selected = mode === "all" ? sourcePlan : sourcePlan.filter(({ document }) => document.id === sourceCurrentDocument?.id);
+      if (selected.length === 0) {
+        onError?.("There is no document available to export.");
+        return;
+      }
+      const initialRows = selected.map(({ document, fileName }) => ({ document, fileName, status: "pending" as const }));
+      setRows(initialRows);
       for (const item of initialRows) {
         updateRow(item.document.id, { status: "rendering", error: undefined, path: undefined, downloaded: false });
         try {
-          const blob = await renderPng(item.document);
+          const blob = await renderPng(sourceProject, item.document);
           updateRow(item.document.id, { status: "uploading" });
           const formData = new FormData();
           formData.append("metadata", JSON.stringify({
@@ -136,7 +165,7 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
             height: item.document.height,
           }));
           formData.append("file", new File([blob], item.fileName, { type: "image/png" }), item.fileName);
-          const result = await apiFetch<{ export: { relativePath: string; absolutePath?: string } }>(`/api/projects/${encodeURIComponent(project.slug)}/exports`, {
+          const result = await apiFetch<{ export: { relativePath: string; absolutePath?: string } }>(`/api/projects/${encodeURIComponent(sourceProject.slug)}/exports`, {
             method: "POST",
             body: formData,
           });
@@ -147,12 +176,14 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
           updateRow(item.document.id, { status: "error", error: message });
         } finally {
           setRenderDocument(null);
+          setRenderProject(null);
           stageRef.current = null;
           await nextFrame();
         }
       }
     } finally {
       setRenderDocument(null);
+      setRenderProject(null);
       stageRef.current = null;
       setExporting(false);
       onRenderingChange?.(false);
@@ -216,7 +247,7 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
             ref={(stage) => { stageRef.current = stage; }}
             width={renderDocument.width}
           >
-            <SceneRenderer assets={project.assets} document={renderDocument} projectSlug={project.slug} />
+            <SceneRenderer assets={renderProject?.assets ?? project.assets} document={renderDocument} projectSlug={renderProject?.slug ?? project.slug} />
           </Stage>
         </div>
       ) : null}
