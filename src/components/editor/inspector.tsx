@@ -51,7 +51,7 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
       <InspectorHeading title="Document" detail={`${document.width} × ${document.height}`} />
       <Section title="Identity">
         <Field label="Name"><Input onChange={(event) => onUpdate({ name: event.target.value })} value={document.name} /></Field>
-        <Field label="Export filename stem"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={document.exportSlug} /></Field>
+        <Field label="Export name"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={document.exportSlug} /></Field>
         <Field label="Preset">
           <select className={selectClass} onChange={(event) => changePreset(event.target.value)} value={APP_STORE_PRESETS.some((preset) => preset.id === document.preset) ? document.preset : "custom"}>
             {APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
@@ -67,9 +67,8 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
         <BackgroundControls background={document.background} onChange={(background) => onUpdate({ background })} />
       </Section>
       <Section title="Notes">
-        <textarea className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#0f1218] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-violet/70" onChange={(event) => onUpdate({ notes: event.target.value })} placeholder="Optional production notes" value={document.notes} />
+        <textarea aria-label="Notes" className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#0f1218] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-violet/70" onChange={(event) => onUpdate({ notes: event.target.value })} value={document.notes} />
       </Section>
-      <p className="mt-4 text-[10px] leading-4 text-muted/70">Presets keep the requested source dimensions editable. The export filename stem is saved separately from the display name.</p>
     </div>
   );
 }
@@ -88,7 +87,7 @@ function MultiSelectionInspector({ elements, onUpdateElements }: { elements: Sce
           <ToggleButton active={!locked} icon={locked ? <Lock size={13} /> : <Unlock size={13} />} label={locked ? "Locked" : "Editable"} onClick={() => onUpdateElements(elements.map((element) => ({ id: element.id, patch: { locked: !locked } })))} />
         </div>
       </Section>
-      <p className="mt-4 text-xs leading-5 text-muted">Shift-click layers or canvas elements to edit a group. Position and size controls appear for one selected layer.</p>
+      <p className="mt-4 text-xs leading-5 text-muted">Shift-click to edit multiple layers.</p>
     </div>
   );
 }
@@ -145,7 +144,7 @@ function TextControls({ element, onUpdate }: { element: TextElement; onUpdate: (
         <ToggleButton active={Boolean(style.underline)} label="Underline" onClick={() => updateStyle({ underline: !style.underline })} />
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {(["left", "center", "right"] as const).map((align) => <button className={`h-8 rounded-lg border text-xs ${style.align === align ? "border-violet/40 bg-violet/[0.12] text-violet-soft" : "border-line text-muted hover:text-ink"}`} key={align} onClick={() => updateStyle({ align })} type="button">{align}</button>)}
+        {(["left", "center", "right"] as const).map((align) => <button aria-pressed={style.align === align} className={`h-8 rounded-lg border text-xs ${style.align === align ? "border-violet/40 bg-violet/[0.12] text-violet-soft" : "border-line text-muted hover:text-ink"}`} key={align} onClick={() => updateStyle({ align })} type="button">{align}</button>)}
       </div>
       <Field label="Text color"><ColorField onChange={(color) => { if (color) updateStyle({ color }); }} value={style.color} /></Field>
       <div className="grid grid-cols-2 gap-2">
@@ -178,7 +177,7 @@ function DeviceControls({ element, onUpdate }: { element: Extract<SceneElement, 
   return (
     <Section title="Device frame">
       <Field label="Preset"><select className={selectClass} onChange={(event) => onUpdate({ preset: event.target.value as Extract<typeof element.preset, string> })} value={element.preset}><option value="iphone-17-pro-max">iPhone 17 Pro Max</option><option value="iphone-17-pro">iPhone 17 Pro</option><option value="generic-modern-iphone">Generic modern iPhone</option><option value="generic-modern-ipad">Generic modern iPad</option><option value="browser-window">Browser window</option></select></Field>
-      <Field label="Screenshot"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.screenshotPath ?? "No screenshot selected"}>{element.screenshotPath ?? "No screenshot selected — use Asset Library"}</p></Field>
+      <Field label="Screenshot"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.screenshotPath ?? "No screenshot selected"}>{element.screenshotPath ? assetFileName(element.screenshotPath) : "No screenshot selected"}</p></Field>
       <div className="grid grid-cols-2 gap-2"><Field label="Frame color"><ColorField onChange={(frameColor) => { if (frameColor) onUpdate({ frameColor }); }} value={element.frameColor} /></Field><Field label="Screen color"><ColorField onChange={(screenColor) => { if (screenColor) onUpdate({ screenColor }); }} value={element.screenColor} /></Field></div>
       <Field label="Screenshot fit"><select className={selectClass} onChange={(event) => onUpdate({ screenshotFit: event.target.value as "contain" | "cover" | "stretch" })} value={element.screenshotFit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
       <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, x } })} step={0.05} value={element.screenshotPosition.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, y } })} step={0.05} value={element.screenshotPosition.y} /></Field></div>
@@ -191,14 +190,18 @@ function DeviceControls({ element, onUpdate }: { element: Extract<SceneElement, 
 
 function ImageControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "image" }>; onUpdate: (patch: ElementPatch) => void }) {
   return (
-    <Section title="Image asset">
-      <Field label="Asset path"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.assetPath}>{element.assetPath}</p></Field>
+    <Section title="Image">
+      <Field label="Image"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.assetPath}>{assetFileName(element.assetPath)}</p></Field>
       <Field label="Alt text"><Input onChange={(event) => onUpdate({ alt: event.target.value })} value={element.alt} /></Field>
       <Field label="Fit"><select className={selectClass} onChange={(event) => onUpdate({ fit: event.target.value as "contain" | "cover" | "stretch" })} value={element.fit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
       <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ position: { ...element.position, x } })} step={0.05} value={element.position.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ position: { ...element.position, y } })} step={0.05} value={element.position.y} /></Field><Field label="Corner radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius} /></Field></div>
       <ShadowControls shadow={element.shadow} onChange={(shadow) => onUpdate({ shadow })} />
     </Section>
   );
+}
+
+function assetFileName(path: string): string {
+  return path.split("/").pop() ?? path;
 }
 
 function BackgroundControls({ background, onChange }: { background: Background; onChange: (background: Background) => void }) {
@@ -224,12 +227,12 @@ function BackgroundControls({ background, onChange }: { background: Background; 
 
 function LinearGradientControls({ background, onChange }: { background: Extract<Background, { type: "linear-gradient" }>; onChange: (background: Background) => void }) {
   const updateStop = (index: number, value: Partial<(typeof background.stops)[number]>) => onChange({ ...background, stops: background.stops.map((stop, stopIndex) => stopIndex === index ? { ...stop, ...value } : stop) });
-  return <div className="space-y-3"><div className="space-y-2">{background.stops.map((stop, index) => <div className="grid grid-cols-[1fr_62px] gap-2" key={`${index}-${stop.offset}`}><ColorField onChange={(color) => { if (color) updateStop(index, { color }); }} value={stop.color} /><NumberField max={1} min={0} onChange={(offset) => updateStop(index, { offset })} step={0.05} value={stop.offset} /></div>)}</div><p className="text-[10px] text-muted">Direction (normalized)</p><div className="grid grid-cols-4 gap-2"><NumberField onChange={(x) => onChange({ ...background, start: { ...background.start, x } })} value={background.start.x} /><NumberField onChange={(y) => onChange({ ...background, start: { ...background.start, y } })} value={background.start.y} /><NumberField onChange={(x) => onChange({ ...background, end: { ...background.end, x } })} value={background.end.x} /><NumberField onChange={(y) => onChange({ ...background, end: { ...background.end, y } })} value={background.end.y} /></div><p className="text-[10px] text-muted/70">start x/y · end x/y</p></div>;
+  return <div className="space-y-3"><div className="space-y-2">{background.stops.map((stop, index) => <div className="grid grid-cols-[1fr_62px] gap-2" key={`${index}-${stop.offset}`}><ColorField onChange={(color) => { if (color) updateStop(index, { color }); }} value={stop.color} /><NumberField ariaLabel={`Color stop ${index + 1} position`} max={1} min={0} onChange={(offset) => updateStop(index, { offset })} step={0.05} value={stop.offset} /></div>)}</div><p className="text-[10px] text-muted">Direction</p><div className="grid grid-cols-4 gap-2"><NumberField ariaLabel="Start X" onChange={(x) => onChange({ ...background, start: { ...background.start, x } })} value={background.start.x} /><NumberField ariaLabel="Start Y" onChange={(y) => onChange({ ...background, start: { ...background.start, y } })} value={background.start.y} /><NumberField ariaLabel="End X" onChange={(x) => onChange({ ...background, end: { ...background.end, x } })} value={background.end.x} /><NumberField ariaLabel="End Y" onChange={(y) => onChange({ ...background, end: { ...background.end, y } })} value={background.end.y} /></div></div>;
 }
 
 function RadialGradientControls({ background, onChange }: { background: Extract<Background, { type: "radial-gradient" }>; onChange: (background: Background) => void }) {
   const updateStop = (index: number, value: Partial<(typeof background.stops)[number]>) => onChange({ ...background, stops: background.stops.map((stop, stopIndex) => stopIndex === index ? { ...stop, ...value } : stop) });
-  return <div className="space-y-3"><div className="space-y-2">{background.stops.map((stop, index) => <div className="grid grid-cols-[1fr_62px] gap-2" key={`${index}-${stop.offset}`}><ColorField onChange={(color) => { if (color) updateStop(index, { color }); }} value={stop.color} /><NumberField max={1} min={0} onChange={(offset) => updateStop(index, { offset })} step={0.05} value={stop.offset} /></div>)}</div><p className="text-[10px] text-muted">Center and radius (normalized)</p><div className="grid grid-cols-3 gap-2"><NumberField max={1} min={0} onChange={(x) => onChange({ ...background, center: { ...background.center, x } })} value={background.center.x} /><NumberField max={1} min={0} onChange={(y) => onChange({ ...background, center: { ...background.center, y } })} value={background.center.y} /><NumberField min={0.01} onChange={(radius) => onChange({ ...background, radius })} value={background.radius} /></div><p className="text-[10px] text-muted/70">center x/y · radius</p></div>;
+  return <div className="space-y-3"><div className="space-y-2">{background.stops.map((stop, index) => <div className="grid grid-cols-[1fr_62px] gap-2" key={`${index}-${stop.offset}`}><ColorField onChange={(color) => { if (color) updateStop(index, { color }); }} value={stop.color} /><NumberField ariaLabel={`Color stop ${index + 1} position`} max={1} min={0} onChange={(offset) => updateStop(index, { offset })} step={0.05} value={stop.offset} /></div>)}</div><p className="text-[10px] text-muted">Center and radius</p><div className="grid grid-cols-3 gap-2"><NumberField ariaLabel="Center X" max={1} min={0} onChange={(x) => onChange({ ...background, center: { ...background.center, x } })} value={background.center.x} /><NumberField ariaLabel="Center Y" max={1} min={0} onChange={(y) => onChange({ ...background, center: { ...background.center, y } })} value={background.center.y} /><NumberField ariaLabel="Radius" min={0.01} onChange={(radius) => onChange({ ...background, radius })} value={background.radius} /></div></div>;
 }
 
 function ShadowControls({ shadow, onChange }: { shadow?: Shadow | null; onChange: (shadow: Shadow | null) => void }) {
@@ -239,7 +242,7 @@ function ShadowControls({ shadow, onChange }: { shadow?: Shadow | null; onChange
 }
 
 function InspectorHeading({ title, detail }: { title: string; detail: string }) {
-  return <div className="mb-3 flex items-end justify-between gap-2"><div><p className="text-sm font-semibold text-ink">{title}</p><p className="mt-0.5 text-[10px] text-muted">{detail}</p></div><div className="h-2 w-2 rounded-full bg-violet" /></div>;
+  return <div className="mb-3"><p className="text-sm font-semibold text-ink">{title}</p><p className="mt-0.5 text-[10px] text-muted">{detail}</p></div>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -250,7 +253,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="block space-y-1"><span className="block text-[10px] text-muted">{label}</span>{children}</label>;
 }
 
-function NumberField({ value, onChange, min, max, step = 1, disabled = false }: { value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; disabled?: boolean }) {
+function NumberField({ value, onChange, min, max, step = 1, disabled = false, ariaLabel }: { value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; disabled?: boolean; ariaLabel?: string }) {
   const [draft, setDraft] = useState(String(value));
   const [focused, setFocused] = useState(false);
   useEffect(() => {
@@ -264,7 +267,7 @@ function NumberField({ value, onChange, min, max, step = 1, disabled = false }: 
     setFocused(false);
   }
 
-  return <Input className="h-8 rounded-lg px-2 text-xs" disabled={disabled} max={max} min={min} onBlur={commit} onChange={(event) => setDraft(event.target.value)} onFocus={() => setFocused(true)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(String(value)); setFocused(false); } }} step={step} type="number" value={draft} />;
+  return <Input aria-label={ariaLabel} className="h-8 rounded-lg px-2 text-xs" disabled={disabled} max={max} min={min} onBlur={commit} onChange={(event) => setDraft(event.target.value)} onFocus={() => setFocused(true)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(String(value)); setFocused(false); } }} step={step} type="number" value={draft} />;
 }
 
 function ColorField({ value, onChange, allowNone = false }: { value: string; onChange: (value: string | null) => void; allowNone?: boolean }) {
@@ -275,5 +278,5 @@ function ColorField({ value, onChange, allowNone = false }: { value: string; onC
 }
 
 function ToggleButton({ active, label, icon, onClick }: { active: boolean; label: string; icon?: React.ReactNode; onClick: () => void }) {
-  return <button className={`flex h-8 items-center justify-center gap-1.5 rounded-lg border text-[11px] ${active ? "border-violet/30 bg-violet/[0.1] text-violet-soft" : "border-line text-muted hover:text-ink"}`} onClick={onClick} type="button">{icon}{label}</button>;
+  return <button aria-pressed={active} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg border text-[11px] ${active ? "border-violet/30 bg-violet/[0.1] text-violet-soft" : "border-line text-muted hover:text-ink"}`} onClick={onClick} type="button">{icon}{label}</button>;
 }

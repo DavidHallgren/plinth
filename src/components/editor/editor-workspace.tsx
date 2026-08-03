@@ -579,12 +579,11 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
           />
         </main>
         <aside className="hidden min-h-0 w-[312px] shrink-0 flex-col border-l border-white/[0.08] bg-[#12151c] xl:flex">
-          <div className="flex h-11 shrink-0 items-center border-b border-white/[0.08] px-3"><p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">Inspector</p></div>
           <Inspector document={activeDocument} onUpdateDocument={(patch) => queueInspectorChange("Edit document", () => store.updateCurrentDocument(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
         </aside>
       </div>
 
-      <Dialog description="Choose an App Store screenshot size or start with a custom frame." footer={<><Button onClick={() => setAddOpen(false)} variant="ghost">Cancel</Button><Button form="add-document" type="submit" variant="primary">Add document</Button></>} onOpenChange={setAddOpen} open={addOpen} title="New document">
+      <Dialog footer={<><Button onClick={() => setAddOpen(false)} variant="ghost">Cancel</Button><Button form="add-document" type="submit" variant="primary">Add document</Button></>} onOpenChange={setAddOpen} open={addOpen} title="New document">
         <form className="space-y-3" id="add-document" onSubmit={submitAddDocument}>
           <label className="block text-xs font-medium text-muted" htmlFor="new-document-preset">Preset</label>
           <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-violet/70" id="new-document-preset" onChange={(event) => setAddPreset(event.target.value as DocumentPreset)} value={addPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Custom size</option></select>
@@ -594,7 +593,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         </form>
       </Dialog>
 
-      <Dialog description="Update the project display name and export-safe slug." footer={<><Button onClick={() => setRenameOpen(false)} variant="ghost">Cancel</Button><Button disabled={busy || !renameName.trim()} form="rename-project" type="submit" variant="primary">{busy ? "Saving…" : "Save changes"}</Button></>} onOpenChange={setRenameOpen} open={renameOpen} title="Rename project">
+      <Dialog footer={<><Button onClick={() => setRenameOpen(false)} variant="ghost">Cancel</Button><Button disabled={busy || !renameName.trim()} form="rename-project" type="submit" variant="primary">{busy ? "Saving…" : "Save changes"}</Button></>} onOpenChange={setRenameOpen} open={renameOpen} title="Rename project">
         <form className="space-y-3" id="rename-project" onSubmit={(event) => void submitRename(event)}>
           <label className="block text-xs font-medium text-muted" htmlFor="rename-project-name">Project name</label>
           <Input id="rename-project-name" onChange={(event) => setRenameName(event.target.value)} value={renameName} />

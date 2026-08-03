@@ -140,7 +140,7 @@
           "name": "Headline",
           "shadow": null,
           "type": "text",
-          "text": "A clearer way to present the work.",
+          "text": "Project overview",
           "style": {
             "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 63,
@@ -172,7 +172,7 @@
           "name": "Subheadline",
           "shadow": null,
           "type": "text",
-          "text": "Compose the story once, then make every frame feel considered.",
+          "text": "Sample frame",
           "style": {
             "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 21,
@@ -303,7 +303,7 @@
           "name": "Headline",
           "shadow": null,
           "type": "text",
-          "text": "A clearer way to present the work.",
+          "text": "Project overview",
           "style": {
             "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 62,
@@ -335,7 +335,7 @@
           "name": "Subheadline",
           "shadow": null,
           "type": "text",
-          "text": "Compose the story once, then make every frame feel considered.",
+          "text": "Sample frame",
           "style": {
             "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 21,
@@ -467,7 +467,7 @@
           "name": "Headline",
           "shadow": null,
           "type": "text",
-          "text": "Make the first screen feel inevitable.",
+          "text": "Project overview",
           "style": {
             "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 72,
@@ -499,7 +499,7 @@
           "name": "Subheadline",
           "shadow": null,
           "type": "text",
-          "text": "Compose the story once, then make every frame feel considered.",
+          "text": "Sample frame",
           "style": {
             "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
             "fontSize": 24,

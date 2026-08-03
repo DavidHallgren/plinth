@@ -4,9 +4,10 @@ import {
   Circle,
   Copy,
   FileOutput,
+  FolderX,
   Images,
   Minus,
-  Plus,
+  Pencil,
   Redo2,
   Save,
   Square,
@@ -18,7 +19,6 @@ import {
 } from "lucide-react";
 import type { Document } from "../../lib/schema";
 import type { AutosaveState } from "../../hooks/use-autosave";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
 export function SaveStatus({ state }: { state: AutosaveState }) {
@@ -29,7 +29,8 @@ export function SaveStatus({ state }: { state: AutosaveState }) {
     error: { label: "Save failed", tone: "red" },
   };
   const item = content[state];
-  return <Badge tone={item.tone}><span className="h-1.5 w-1.5 rounded-full bg-current" />{item.label}</Badge>;
+  const toneClass = item.tone === "green" ? "text-emerald-200" : item.tone === "violet" ? "text-violet-soft" : item.tone === "amber" ? "text-amber-200" : "text-red-200";
+  return <span className={`inline-flex items-center gap-1.5 text-[11px] ${toneClass}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{item.label}</span>;
 }
 
 type EditorToolbarProps = {
@@ -90,9 +91,9 @@ export function EditorToolbar({
             <span className="text-white/20">/</span>
             <p className="max-w-[180px] truncate text-xs text-muted">{document.name}</p>
           </div>
-          <p className="truncate text-[10px] text-muted/70">{document.width} × {document.height} · {document.preset}</p>
+          <p className="truncate text-[10px] text-muted/70">{document.width} × {document.height}</p>
         </div>
-        <Button aria-label="Rename project" onClick={onRenameProject} size="icon" variant="ghost"><PencilIcon /></Button>
+        <Button aria-label="Rename project" onClick={onRenameProject} size="icon" variant="ghost"><Pencil size={14} /></Button>
       </div>
 
       <div className="hidden items-center gap-1 md:flex">
@@ -125,7 +126,7 @@ export function EditorToolbar({
         <Button aria-label="Save now" disabled={!dirty || saveState === "saving"} onClick={onSaveNow} size="icon" variant="ghost"><Save size={15} /></Button>
         <Button aria-label="Duplicate document" onClick={onDuplicateDocument} size="icon" variant="ghost"><Copy size={15} /></Button>
         <Button aria-label="Delete document" onClick={onDeleteDocument} size="icon" variant="danger"><Trash2 size={15} /></Button>
-        <Button aria-label="Delete project" onClick={onDeleteProject} size="icon" variant="ghost"><Trash2 size={14} /></Button>
+        <Button aria-label="Delete project" onClick={onDeleteProject} size="icon" variant="ghost"><FolderX size={14} /></Button>
       </div>
     </header>
   );
@@ -133,8 +134,4 @@ export function EditorToolbar({
 
 function ShapeMenuItem({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
   return <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-muted hover:bg-white/[0.07] hover:text-ink" onClick={onClick} type="button">{icon}{label}</button>;
-}
-
-function PencilIcon() {
-  return <Plus className="rotate-45" size={14} />;
 }

@@ -19,7 +19,6 @@ type DocumentStripProps = {
 export function DocumentStrip({ documents, activeDocumentId, onSelect, onAdd, projectSlug, assets, onReorder }: DocumentStripProps) {
   return (
     <footer className="flex h-[76px] shrink-0 items-center gap-2 border-t border-white/[0.08] bg-[#11141b] px-3">
-      <div className="mr-1 hidden shrink-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-muted lg:flex"><span className="h-1.5 w-1.5 rounded-full bg-violet" />Frames</div>
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
         {documents.map((document, index) => (
           <button

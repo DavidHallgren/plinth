@@ -132,7 +132,6 @@ export function DocumentNavigator({
           </div>
         ) : null}
       </section>
-      <div className="border-t border-white/[0.08] px-3 py-2 text-[10px] text-muted/70">Drag gestures are saved as one history entry.</div>
     </aside>
   );
 }
@@ -164,7 +163,7 @@ function LayerRow({ element, selected, index, allLayers, onSelect, onRename, onT
 
   return (
     <div
-      className={`group flex items-center gap-1 rounded-md border px-1 py-1 ${selected ? "border-violet/30 bg-violet/[0.12]" : "border-transparent hover:border-white/[0.07] hover:bg-white/[0.035]"}`}
+      className={`group relative flex items-center gap-1 rounded-md border px-1 py-1 ${selected ? "border-violet/30 bg-violet/[0.12]" : "border-transparent hover:border-white/[0.07] hover:bg-white/[0.035]"}`}
       draggable
       onDragOver={(event) => event.preventDefault()}
       onDragStart={(event) => {
@@ -182,7 +181,7 @@ function LayerRow({ element, selected, index, allLayers, onSelect, onRename, onT
         <ElementTypeIcon element={element} />
         {editing ? <Input autoFocus className="h-6 min-w-0 rounded-md px-1.5 text-[11px]" onBlur={commitName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") commitName(); if (event.key === "Escape") setEditing(false); }} value={draftName} /> : <span className={`truncate text-[11px] ${element.visible ? "text-ink/85" : "text-muted/50 line-through"}`}>{element.name}</span>}
       </button>
-      <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="pointer-events-none absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center rounded-md border border-white/10 bg-[#171a22] p-0.5 opacity-0 shadow-lg shadow-black/30 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
         <Button aria-label={`Move ${element.name} up`} disabled={index === allLayers.length - 1} onClick={() => onMove(element.id, 1)} size="icon" variant="ghost"><ArrowUp size={11} /></Button>
         <Button aria-label={`Move ${element.name} down`} disabled={index === 0} onClick={() => onMove(element.id, -1)} size="icon" variant="ghost"><ArrowDown size={11} /></Button>
         <Button aria-label={element.visible ? `Hide ${element.name}` : `Show ${element.name}`} onClick={() => onToggleVisible(element)} size="icon" variant="ghost">{element.visible ? <Eye size={12} /> : <EyeOff size={12} />}</Button>

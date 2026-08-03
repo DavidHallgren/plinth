@@ -33,7 +33,7 @@ type ExportRow = {
 
 function statusText(status: ExportStatus): string {
   if (status === "rendering") return "Rendering…";
-  if (status === "uploading") return "Writing project copy…";
+  if (status === "uploading") return "Saving…";
   if (status === "done") return "Exported";
   if (status === "error") return "Failed";
   return "Waiting";
@@ -196,7 +196,6 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
   return (
     <>
       <Dialog
-        description="Render the shared scene graph to exact 1× PNGs, save project copies, and download each file."
         footer={(
           <>
             <Button disabled={exporting} onClick={() => onOpenChange(false)} variant="ghost">Close</Button>
@@ -231,13 +230,13 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
                     <span className={`shrink-0 text-[10px] ${row?.status === "error" ? "text-red-200" : row?.status === "done" ? "text-emerald-200" : "text-muted"}`}>{statusText(row?.status ?? "pending")}</span>
                     {row?.status === "done" ? <a aria-label={`Download ${fileName}`} className="text-violet-soft hover:text-ink" download={fileName} href={`/api/projects/${encodeURIComponent(project.slug)}/exports/${encodeURIComponent(fileName)}`}><Download size={14} /></a> : null}
                   </div>
-                  {row?.path ? <p className="mt-1 truncate text-[10px] text-emerald-200/75" title={row.path}>Saved to {row.path}{row.downloaded ? " · download started" : ""}</p> : null}
+                  {row?.path ? <p className="mt-1 text-[10px] text-emerald-200/75">Saved{row.downloaded ? " · download started" : ""}</p> : null}
                   {row?.error ? <p className="mt-1 text-[10px] leading-4 text-red-200" role="alert">{row.error}</p> : null}
                 </div>
               );
             })}
           </div>
-          {rows.length > 0 ? <p className="text-[11px] text-muted">{completed} of {rows.length} complete{failed > 0 ? ` · ${failed} failed` : ""}. Exports run sequentially to keep inactive documents lightweight.</p> : <p className="text-xs leading-5 text-muted">PNG files are rendered at their document’s exact dimensions. Missing or failed assets stop only the affected document with a repair message.</p>}
+          {rows.length > 0 ? <p className="text-[11px] text-muted">{completed} of {rows.length} complete{failed > 0 ? ` · ${failed} failed` : ""}.</p> : null}
         </div>
       </Dialog>
       {renderDocument ? (

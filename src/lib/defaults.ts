@@ -219,7 +219,7 @@ function createAppStoreElements(
       zIndex: 1,
     }),
     textElement(
-      isTablet ? "Make the first screen feel inevitable." : "A clearer way to present the work.",
+      "Project overview",
       {
         x: horizontalPadding,
         y: Math.round(height * 0.085),
@@ -240,7 +240,7 @@ function createAppStoreElements(
       "Headline",
     ),
     textElement(
-      "Compose the story once, then make every frame feel considered.",
+      "Sample frame",
       {
         x: horizontalPadding,
         y: Math.round(height * 0.19),
@@ -291,7 +291,7 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
         { shape: "rounded-rectangle", fill: "#8b7cff", stroke: "#8b7cff", strokeWidth: 0, radius: 40 },
       ),
       textElement(
-        "Make the first frame count.",
+        "Sample composition",
         { x: 208, y: 320, width: 790, height: 220, zIndex: 1 },
         {
           fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
@@ -316,7 +316,7 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
       zIndex: 0,
     }),
     textElement(
-      isPhone ? "Pocket-sized clarity" : "A clearer way to present the work",
+      "Project overview",
       {
         x: isPhone ? 148 : 176,
         y: isPhone ? 230 : 184,
