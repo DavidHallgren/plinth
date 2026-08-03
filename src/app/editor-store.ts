@@ -238,7 +238,7 @@ export class EditorStore {
   sendToBack(): void { this.reorderSelection(0, "Send to back"); }
 
   nudge(delta: MoveDelta): void {
-    const ids = this.snapshot.selectedElementIds;
+    const ids = this.editableSelectedIds();
     if (ids.length === 0) return;
     const documentId = this.snapshot.activeDocumentId;
     this.apply("Nudge selection", (project) => moveElements(project, documentId, ids, delta));
@@ -255,7 +255,7 @@ export class EditorStore {
   }
 
   moveSelection(delta: MoveDelta): void {
-    const ids = this.snapshot.selectedElementIds;
+    const ids = this.editableSelectedIds();
     if (ids.length === 0) return;
     const documentId = this.snapshot.activeDocumentId;
     this.apply("Move selection", (project) => moveElements(project, documentId, ids, delta));
@@ -308,6 +308,11 @@ export class EditorStore {
 
   private activeDocument() {
     return this.history.project.documents.find((document) => document.id === this.snapshot.activeDocumentId);
+  }
+
+  private editableSelectedIds(): string[] {
+    const selected = new Set(this.snapshot.selectedElementIds);
+    return this.activeDocument()?.elements.filter((element) => selected.has(element.id) && !element.locked).map((element) => element.id) ?? [];
   }
 
   private validSelection(project: Project, documentId: string, ids: readonly string[]): string[] {

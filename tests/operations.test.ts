@@ -138,6 +138,17 @@ describe("operation history", () => {
     expect(store.getSnapshot().project.documents[0]?.elements[0]).toMatchObject({ x: 10, y: 10 });
   });
 
+  test("does not nudge a locked-only selection", () => {
+    const initial = updateElement(addElement(fixture(), "doc_operations", shape("locked", 10, 10)), "doc_operations", "locked", { locked: true });
+    const commits: Project[] = [];
+    const store = new EditorStore(initial, (project) => commits.push(project));
+    store.setSelection(["locked"]);
+    store.nudge({ x: 10, y: 10 });
+
+    expect(commits).toHaveLength(0);
+    expect(store.getSnapshot().project.documents[0]?.elements[0]).toMatchObject({ x: 10, y: 10, locked: true });
+  });
+
   test("coalesces a gesture and supports bounded undo/redo", () => {
     const initial = fixture();
     const history = new ProjectHistory(initial, 100);

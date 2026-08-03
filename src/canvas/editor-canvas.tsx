@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Ellipse, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Document, GradientStop, SceneElement } from "../lib/schema";
+import { konvaFontStyle } from "./text-style";
 
 type CanvasTransform = {
   id: string;
@@ -76,10 +77,12 @@ function ElementNode({ element, selected, register, onSelect, onGestureStart, on
     onSelect(element.id, event.evt.shiftKey);
   };
   const handleDragStart = () => {
+    if (element.locked) return;
     if (!selected) onSelect(element.id, false);
     onGestureStart("Move selection");
   };
   const handleDragEnd = (event: KonvaEventObject<DragEvent>) => {
+    if (element.locked) return;
     onMoveEnd(element.id, event.target.x(), event.target.y());
   };
   const baseProps = {
@@ -109,8 +112,7 @@ function ElementNode({ element, selected, register, onSelect, onGestureStart, on
           fill={element.style.color}
           fontFamily={element.style.fontFamily}
           fontSize={element.style.fontSize}
-          fontStyle={element.style.italic ? "italic" : "normal"}
-          fontVariant={element.style.fontWeight >= 700 ? "bold" : "normal"}
+          fontStyle={konvaFontStyle(element.style.fontWeight, element.style.italic ?? false)}
           height={element.height}
           letterSpacing={element.style.letterSpacing}
           lineHeight={element.style.lineHeight}
@@ -234,6 +236,7 @@ export function EditorCanvas({
     const transformer = transformerRef.current;
     if (!transformer) return;
     const nodes = selectedElementIds
+      .filter((id) => document.elements.find((element) => element.id === id)?.locked !== true)
       .map((id) => nodeRefs.current.get(id))
       .filter((node): node is Konva.Node => Boolean(node));
     transformer.nodes(nodes);
@@ -262,20 +265,23 @@ export function EditorCanvas({
   };
 
   const orderedElements = [...document.elements].sort((left, right) => left.zIndex - right.zIndex);
+  const scaledWidth = document.width * zoom;
+  const scaledHeight = document.height * zoom;
+  const lockedElementIds = new Set(document.elements.filter((element) => element.locked).map((element) => element.id));
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[#0e1016]" ref={viewportRef}>
       <div className="plinth-grid absolute inset-0 opacity-40" />
       <div className="relative z-10 flex min-h-full min-w-full items-center justify-center overflow-auto p-8">
-        <div className="relative shrink-0 rounded-[14px] border border-white/15 bg-[#141821] shadow-2xl shadow-black/50" style={{ height: document.height * zoom + 2, width: document.width * zoom + 2 }}>
+        <div className="relative shrink-0 rounded-[14px] border border-white/15 bg-[#141821] shadow-2xl shadow-black/50" style={{ height: scaledHeight + 2, width: scaledWidth + 2 }}>
           <Stage
-            height={document.height}
+            height={scaledHeight}
             onMouseDown={(event) => {
               if (event.target === event.target.getStage()) onClearSelection();
             }}
             scaleX={zoom}
             scaleY={zoom}
-            width={document.width}
+            width={scaledWidth}
           >
             <Layer>
               <Rect {...backgroundProps} height={document.height} listening name="document-background" onClick={onClearSelection} onMouseDown={onClearSelection} width={document.width} />
@@ -303,9 +309,12 @@ export function EditorCanvas({
                 boundBoxFunc={(oldBox, newBox) => newBox.width < MIN_TRANSFORM_SIZE || newBox.height < MIN_TRANSFORM_SIZE ? oldBox : newBox}
                 enabledAnchors={["top-left", "top-center", "top-right", "middle-left", "middle-right", "bottom-left", "bottom-center", "bottom-right"]}
                 keepRatio={false}
-                onTransformStart={() => onGestureStart("Resize selection")}
+                onTransformStart={() => {
+                  if ((transformerRef.current?.nodes().length ?? 0) > 0) onGestureStart("Resize selection");
+                }}
                 onTransformEnd={() => {
-                  const nodes = transformerRef.current?.nodes() ?? [];
+                  const nodes = (transformerRef.current?.nodes() ?? []).filter((node) => !lockedElementIds.has(node.name().replace(/^element-/, "")));
+                  if (nodes.length === 0) return;
                   const transforms = nodes.map((node) => ({
                     id: node.name().replace(/^element-/, ""),
                     x: node.x(),
