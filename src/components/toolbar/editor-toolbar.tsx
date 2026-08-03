@@ -7,38 +7,21 @@ import {
   Minus,
   Pencil,
   Redo2,
-  Save,
   Square,
   Type,
   Undo2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { AutosaveState } from "../../hooks/use-autosave";
 import { Button } from "../ui/button";
-
-export function SaveStatus({ state }: { state: AutosaveState }) {
-  const content: Record<AutosaveState, { label: string; tone: "green" | "accent" | "amber" | "red" }> = {
-    saved: { label: "Saved", tone: "green" },
-    pending: { label: "Save pending", tone: "accent" },
-    saving: { label: "Saving", tone: "amber" },
-    error: { label: "Save failed", tone: "red" },
-  };
-  const item = content[state];
-  const toneClass = item.tone === "green" ? "text-emerald-200" : item.tone === "accent" ? "text-accent-soft" : item.tone === "amber" ? "text-amber-200" : "text-red-200";
-  return <span className={`inline-flex items-center gap-1.5 text-[11px] ${toneClass}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{item.label}</span>;
-}
 
 type EditorToolbarProps = {
   projectName: string;
-  dirty: boolean;
-  saveState: AutosaveState;
   canUndo: boolean;
   canRedo: boolean;
   zoom: number;
   onBack: () => void;
   onRenameProject: () => void;
-  onSaveNow: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onAddText: () => void;
@@ -52,14 +35,11 @@ type EditorToolbarProps = {
 
 export function EditorToolbar({
   projectName,
-  dirty,
-  saveState,
   canUndo,
   canRedo,
   zoom,
   onBack,
   onRenameProject,
-  onSaveNow,
   onUndo,
   onRedo,
   onAddText,
@@ -85,7 +65,7 @@ export function EditorToolbar({
     );
   }
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] bg-[#141414] px-3">
+    <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-3 border-b border-white/[0.08] bg-[#141414] px-3">
       <div className="flex min-w-0 items-center gap-2">
         <Button aria-label="Back to projects" onClick={onBack} size="icon" variant="ghost"><ArrowLeft size={16} /></Button>
         <div className="hidden h-6 w-px bg-white/10 sm:block" />
@@ -93,12 +73,11 @@ export function EditorToolbar({
         <Button aria-label="Edit project" onClick={onRenameProject} size="icon" variant="ghost"><Pencil size={14} /></Button>
       </div>
 
-      <div className="hidden items-center gap-1 md:flex">
+      <div className="hidden min-w-0 items-center gap-1 justify-self-center md:flex">
         <Button aria-label="Undo" disabled={!canUndo} onClick={onUndo} size="icon" variant="ghost"><Undo2 size={15} /></Button>
         <Button aria-label="Redo" disabled={!canRedo} onClick={onRedo} size="icon" variant="ghost"><Redo2 size={15} /></Button>
         <span className="mx-2 h-5 w-px bg-white/10" />
         <Button onClick={onOpenAssets} size="sm" variant="secondary"><Images size={14} /> Assets</Button>
-        <Button onClick={onExport} size="sm" variant="secondary"><FileOutput size={14} /> Export</Button>
         <Button onClick={onAddText} size="sm" variant="secondary"><Type size={14} /> Text</Button>
         <div className="relative">
           <details className="group">
@@ -111,16 +90,16 @@ export function EditorToolbar({
             </div>
           </details>
         </div>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="mx-2 hidden h-5 w-px bg-white/10 lg:block" />
         <div className="hidden items-center gap-0.5 rounded-lg border border-line bg-panel-strong p-0.5 lg:flex">
           <Button aria-label="Zoom out" onClick={() => onZoomChange(zoom - 0.05)} size="icon" variant="ghost"><ZoomOut size={14} /></Button>
           <button className="h-7 min-w-12 px-1 text-[11px] text-muted hover:text-ink" onClick={onFit} type="button">{Math.round(zoom * 100)}%</button>
           <Button aria-label="Zoom in" onClick={() => onZoomChange(zoom + 0.05)} size="icon" variant="ghost"><ZoomIn size={14} /></Button>
         </div>
-        <div className="hidden sm:block"><SaveStatus state={saveState} /></div>
-        <Button aria-label="Save now" disabled={!dirty || saveState === "saving"} onClick={onSaveNow} size="icon" variant="ghost"><Save size={15} /></Button>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1.5 justify-self-end">
+        <Button onClick={onExport} size="sm" variant="secondary"><FileOutput size={14} /> Export</Button>
       </div>
     </header>
   );

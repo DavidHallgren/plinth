@@ -5,7 +5,6 @@ import { apiFetch, ApiClientError } from "../../lib/client-api";
 import { EditorStore } from "../../app/editor-store";
 import { selectActiveDocument, selectAssetReferences, selectSelectedElements } from "../../scene/selectors";
 import { addElement } from "../../scene/operations";
-import type { AutosaveState } from "../../hooks/use-autosave";
 import { EditorCanvas } from "../../canvas/editor-canvas";
 import { DocumentNavigator } from "../sidebar/document-navigator";
 import { EditorToolbar } from "../toolbar/editor-toolbar";
@@ -23,8 +22,6 @@ import { assetUrl, clearImageCache } from "../../canvas/image-loading";
 
 type EditorWorkspaceProps = {
   project: Project;
-  dirty: boolean;
-  saveState: AutosaveState;
   error: string | null;
   onProjectChange: (project: Project) => void;
   onProjectSynced: (project: Project) => void;
@@ -41,7 +38,7 @@ export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): bo
   return Boolean(candidate.closest("input, textarea, select, [contenteditable]"));
 }
 
-export function EditorWorkspace({ project, dirty, saveState, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject }: EditorWorkspaceProps) {
+export function EditorWorkspace({ project, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject }: EditorWorkspaceProps) {
   const storeRef = useRef<EditorStore | null>(null);
   const localCommitRevisionRef = useRef(0);
   const handleProjectCommit = useCallback((nextProject: Project) => {
@@ -471,7 +468,6 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
       <EditorToolbar
         canRedo={snapshot.canRedo}
         canUndo={snapshot.canUndo}
-        dirty={dirty}
         onAddShape={addShape}
         onAddText={addText}
         onOpenAssets={() => setAssetLibraryOpen(true)}
@@ -480,10 +476,8 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         onFit={() => setFitRequest((value) => value + 1)}
         onRedo={() => run(() => store.redo())}
         onRenameProject={() => setRenameOpen(true)}
-        onSaveNow={() => { commitInspectorTransaction(); void onSaveNow(store.getSnapshot().project).catch(reportError); }}
         onUndo={() => run(() => store.undo())}
         onZoomChange={(zoom) => store.setZoom(zoom)}
-        saveState={saveState}
         projectName={project.name}
         zoom={snapshot.zoom}
         previewMode={previewMode}

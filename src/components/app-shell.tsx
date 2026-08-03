@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project } from "../lib/schema";
 import { apiFetch, ApiClientError, jsonRequest } from "../lib/client-api";
 import type { ProjectMetadata } from "../lib/storage";
-import { useDebouncedAutosave, type AutosaveState } from "../hooks/use-autosave";
+import { useDebouncedAutosave } from "../hooks/use-autosave";
 import { ProjectPicker } from "./project-picker";
 import { EditorWorkspace } from "./editor/editor-workspace";
 
@@ -171,7 +171,6 @@ export function App() {
 
   return (
     <EditorWorkspace
-      dirty={dirty}
       error={error}
       onBack={leaveProject}
       onProjectChange={changeProject}
@@ -179,7 +178,6 @@ export function App() {
       onRenameProject={renameProject}
       onSaveNow={autosave.saveNow}
       project={project}
-      saveState={autosave.state as AutosaveState}
     />
   );
 }
