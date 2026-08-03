@@ -32,6 +32,7 @@ type ParsedArgs = {
   positionals: string[];
   json: boolean;
   yes: boolean;
+  help: boolean;
   options: Map<string, string>;
 };
 
@@ -40,6 +41,7 @@ function parseArgs(args: string[]): ParsedArgs {
   const options = new Map<string, string>();
   let json = false;
   let yes = false;
+  let help = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index];
@@ -50,6 +52,10 @@ function parseArgs(args: string[]): ParsedArgs {
     }
     if (value === "--yes") {
       yes = true;
+      continue;
+    }
+    if (value === "--help" || value === "-h") {
+      help = true;
       continue;
     }
     if (value.startsWith("--")) {
@@ -70,6 +76,7 @@ function parseArgs(args: string[]): ParsedArgs {
     positionals,
     json,
     yes,
+    help,
     options,
   };
 }
@@ -194,7 +201,7 @@ async function run(parsed: ParsedArgs, storage: ProjectStorage): Promise<{ value
 
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv.slice(2));
-  if (parsed.command === "help" || parsed.command === "--help" || parsed.command === "-h") {
+  if (parsed.help || parsed.command === "help" || parsed.command === "--help" || parsed.command === "-h") {
     printResult(HELP, parsed.json);
     return;
   }
