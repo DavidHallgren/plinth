@@ -1,12 +1,17 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 2 as const;
+export const CURRENT_SCHEMA_VERSION = 3 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
 const TimestampSchema = z.string().datetime({ offset: true });
 const DimensionSchema = z.number().int().positive().max(100_000);
+export const AssetPathSchema = z.string().regex(/^assets\/[a-z0-9][a-z0-9._-]{0,254}$/);
+export type AssetPath = z.infer<typeof AssetPathSchema>;
+export const ImageFitSchema = z.enum(["contain", "cover", "stretch"]);
+export type ImageFit = z.infer<typeof ImageFitSchema>;
+export const AssetMimeTypeSchema = z.enum(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 
 export const DocumentPresetSchema = z.enum([
   "iphone-6-9",
@@ -51,12 +56,20 @@ const GradientStopSchema = z
   .strict();
 
 const GradientStopsSchema = z.array(GradientStopSchema).min(2).max(16);
-const PointSchema = z
+export const PointSchema = z
   .object({
     x: z.number().finite(),
     y: z.number().finite(),
   })
   .strict();
+export type Point = z.infer<typeof PointSchema>;
+export const NormalizedPointSchema = z
+  .object({
+    x: z.number().min(0).max(1).finite(),
+    y: z.number().min(0).max(1).finite(),
+  })
+  .strict();
+export type NormalizedPoint = z.infer<typeof NormalizedPointSchema>;
 
 export const LinearGradientBackgroundSchema = z
   .object({
@@ -110,11 +123,20 @@ export const ElementFrameSchema = z
 
 export const DeviceElementSchema = ElementFrameSchema.extend({
   type: z.literal("device"),
+  preset: z.enum(["iphone-17-pro-max", "iphone-17-pro", "generic-modern-iphone", "generic-modern-ipad", "browser-window"] as const),
   deviceId: z.string().min(1).max(96),
   deviceName: z.string().min(1).max(120),
   frame: z.enum(["browser", "phone", "tablet"]),
   frameColor: ColorSchema,
   screenColor: ColorSchema,
+  screenshotPath: AssetPathSchema.nullable(),
+  screenshotFit: ImageFitSchema,
+  screenshotPosition: NormalizedPointSchema,
+  bezelStyle: z.enum(["solid", "metallic"]),
+  cornerRadius: z.number().min(0).finite().nullable(),
+  screenCornerRadius: z.number().min(0).finite().nullable(),
+  showGlare: z.boolean(),
+  showCamera: z.boolean(),
 }).strict();
 export type DeviceElement = z.infer<typeof DeviceElementSchema>;
 
@@ -147,8 +169,10 @@ export type TextElement = z.infer<typeof TextElementSchema>;
 
 export const ImageElementSchema = ElementFrameSchema.extend({
   type: z.literal("image"),
-  assetId: IdSchema,
-  fit: z.enum(["contain", "cover", "fill"]),
+  assetPath: AssetPathSchema,
+  fit: ImageFitSchema,
+  position: NormalizedPointSchema,
+  cornerRadius: z.number().min(0).finite(),
   alt: z.string().max(500),
 }).strict();
 export type ImageElement = z.infer<typeof ImageElementSchema>;
@@ -175,13 +199,20 @@ export const AssetMetadataSchema = z
   .object({
     id: IdSchema,
     kind: z.literal("image"),
+    path: AssetPathSchema,
     fileName: z.string().min(1).max(255),
-    mimeType: z.string().min(1).max(120),
+    mimeType: AssetMimeTypeSchema,
     width: z.number().int().positive(),
     height: z.number().int().positive(),
     byteSize: z.number().int().nonnegative(),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((asset, context) => {
+    if (asset.path.slice("assets/".length) !== asset.fileName) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["fileName"], message: "Asset fileName must match the basename of path." });
+    }
+  });
 export type AssetMetadata = z.infer<typeof AssetMetadataSchema>;
 
 export const SettingsSchema = z
@@ -252,6 +283,7 @@ function identityPath(path: Array<string | number>): string {
 
 const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) => {
   const seen = new Map<string, { namespace: string; path: Array<string | number> }>();
+  const assetPaths = new Map<string, number>();
 
   function checkIdentity(id: string, namespace: string, path: Array<string | number>): void {
     const previous = seen.get(id);
@@ -267,7 +299,19 @@ const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) =
   }
 
   checkIdentity(project.id, "project", ["id"]);
-  project.assets.forEach((asset, assetIndex) => checkIdentity(asset.id, "asset", ["assets", assetIndex, "id"]));
+  project.assets.forEach((asset, assetIndex) => {
+    checkIdentity(asset.id, "asset", ["assets", assetIndex, "id"]);
+    const previousIndex = assetPaths.get(asset.path);
+    if (previousIndex !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["assets", assetIndex, "path"],
+        message: `Duplicate asset path "${asset.path}"; already used by project.assets[${previousIndex}].path.`,
+      });
+    } else {
+      assetPaths.set(asset.path, assetIndex);
+    }
+  });
   project.documents.forEach((document, documentIndex) => {
     checkIdentity(document.id, "document", ["documents", documentIndex, "id"]);
     document.elements.forEach((element, elementIndex) => checkIdentity(

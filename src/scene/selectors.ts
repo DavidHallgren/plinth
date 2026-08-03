@@ -21,11 +21,38 @@ export function selectAssetReferences(project: Project, documentId?: string): Ma
   const references = new Map<string, number>();
   for (const document of documents) {
     for (const element of document.elements) {
-      if (element.type !== "image") continue;
-      references.set(element.assetId, (references.get(element.assetId) ?? 0) + 1);
+      const assetPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
+      if (!assetPath) continue;
+      references.set(assetPath, (references.get(assetPath) ?? 0) + 1);
     }
   }
   return references;
+}
+
+export type AssetUsage = {
+  documentId: string;
+  documentName: string;
+  elementId: string;
+  elementName: string;
+  elementType: "image" | "device";
+};
+
+export function selectAssetUsages(project: Project, assetPath: string): AssetUsage[] {
+  const usages: AssetUsage[] = [];
+  for (const document of project.documents) {
+    for (const element of document.elements) {
+      const referencedPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
+      if (referencedPath !== assetPath || (element.type !== "image" && element.type !== "device")) continue;
+      usages.push({
+        documentId: document.id,
+        documentName: document.name,
+        elementId: element.id,
+        elementName: element.name,
+        elementType: element.type,
+      });
+    }
+  }
+  return usages;
 }
 
 export function selectElementById(document: Document, elementId: string | null | undefined): SceneElement | undefined {

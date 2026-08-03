@@ -79,6 +79,12 @@ export function App() {
     setDirty(true);
   }, []);
 
+  const syncProject = useCallback(async (nextProject: Project) => {
+    setProject(nextProject);
+    setDirty(false);
+    await refreshProjects();
+  }, [refreshProjects]);
+
   const renameProject = useCallback(async (name: string, slug?: string) => {
     if (!project) return;
     setError(null);
@@ -118,6 +124,7 @@ export function App() {
       onBack={() => { setProject(null); setDirty(false); setError(null); }}
       onDeleteProject={deleteProject}
       onProjectChange={changeProject}
+      onProjectSynced={(nextProject) => void syncProject(nextProject)}
       onRenameProject={renameProject}
       onSaveNow={autosave.saveNow}
       project={project}

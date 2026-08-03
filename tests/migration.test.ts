@@ -84,4 +84,51 @@ describe("project migrations", () => {
     expect(migrated.documents[0]?.elements[0]).toMatchObject({ type: "text", shadow: null });
     expect(migrated.documents[0]?.elements[0]?.type === "text" && migrated.documents[0].elements[0].style).toMatchObject({ italic: false, autoHeight: true });
   });
+
+  test("migrates the Phase 2 asset id and device placeholder to canonical v3 paths and presets", () => {
+    const migrated = parseProject({
+      schemaVersion: 2,
+      id: "phase-two-project",
+      name: "Phase 2 project",
+      slug: "phase-two-project",
+      assets: [{ id: "asset_old", kind: "image", fileName: "screen.svg", mimeType: "image/svg+xml", width: 100, height: 200, byteSize: 20 }],
+      documents: [{
+        id: "phase-two-document",
+        name: "Phase 2 document",
+        slug: "phase-two-document",
+        preset: "custom",
+        width: 400,
+        height: 800,
+        background: { type: "solid", color: "#111111" },
+        elements: [{
+          id: "old-device",
+          type: "device",
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 400,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 0,
+          locked: false,
+          visible: true,
+          name: "Old phone",
+          deviceId: "iphone-placeholder",
+          deviceName: "iPhone placeholder",
+          frame: "phone",
+          frameColor: "#20242d",
+          screenColor: "#f6f7fb",
+          assetId: "asset_old",
+        }],
+        notes: "",
+      }],
+      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
+      background: { type: "solid", color: "#10131a" },
+      createdAt: "2026-08-02T00:00:00.000Z",
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    });
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrated.assets[0]?.path).toBe("assets/screen.svg");
+    expect(migrated.documents[0]?.elements[0]).toMatchObject({ type: "device", preset: "iphone-17-pro-max", screenshotPath: "assets/screen.svg" });
+  });
 });

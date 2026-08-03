@@ -13,6 +13,7 @@ import type {
 } from "./schema";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
 import { getPresetDefinition, isAppStorePreset } from "../scene/presets";
+import { getDevicePreset } from "../devices/presets";
 
 export const DEFAULT_BACKGROUND: Background = {
   type: "solid",
@@ -75,14 +76,25 @@ function deviceElement(
 ): DeviceElement {
   const isPhone = frameKind === "phone";
   const isTablet = frameKind === "tablet";
+  const preset = frameKind === "browser" ? "browser-window" : isTablet ? "generic-modern-ipad" : "iphone-17-pro-max";
+  const deviceName = frameKind === "browser" ? "Browser window" : isTablet ? "Generic modern iPad" : "iPhone 17 Pro Max";
   return {
-    ...frame(id, isPhone ? "iPhone placeholder" : isTablet ? "iPad placeholder" : "Browser placeholder", values),
+    ...frame(id, deviceName, values),
     type: "device",
-    deviceId: isPhone ? "iphone-placeholder" : isTablet ? "ipad-placeholder" : "browser-placeholder",
-    deviceName: isPhone ? "iPhone placeholder" : isTablet ? "iPad placeholder" : "Browser placeholder",
+    preset,
+    deviceId: isPhone ? "iphone-17-pro-max" : isTablet ? "generic-modern-ipad" : "browser-window",
+    deviceName,
     frame: frameKind,
     frameColor: isPhone ? "#1d2029" : isTablet ? "#242833" : "#242934",
     screenColor: isPhone ? "#f8f9fc" : "#f6f7fb",
+    screenshotPath: null,
+    screenshotFit: "cover",
+    screenshotPosition: { x: 0.5, y: 0.5 },
+    bezelStyle: "solid",
+    cornerRadius: null,
+    screenCornerRadius: null,
+    showGlare: false,
+    showCamera: true,
     shadow: DEFAULT_SHADOW,
   };
 }
@@ -185,10 +197,11 @@ function createAppStoreElements(
   const isTablet = preset === "ipad-13";
   const isLight = preset === "iphone-6-7";
   const horizontalPadding = Math.round(width * 0.085);
-  const deviceWidth = Math.round(width * (isTablet ? 0.72 : 0.76));
-  const deviceHeight = Math.round(height * (isTablet ? 0.47 : 0.43));
+  const devicePreset = getDevicePreset(isTablet ? "generic-modern-ipad" : isLight ? "iphone-17-pro" : "iphone-17-pro-max");
+  const deviceWidth = Math.round(width * (isTablet ? 0.72 : 0.46));
+  const deviceHeight = Math.round(deviceWidth / (devicePreset?.aspectRatio ?? (isTablet ? 0.75 : 0.47)));
   const deviceX = Math.round((width - deviceWidth) / 2);
-  const deviceY = Math.round(height * (isTablet ? 0.36 : 0.34));
+  const deviceY = Math.round(height * (isTablet ? 0.28 : 0.34));
   const headlineSize = Math.max(42, Math.round(width * (isTablet ? 0.035 : 0.048)));
   const bodySize = Math.max(20, Math.round(headlineSize * 0.34));
   const foreground = isLight ? "#10131a" : "#ffffff";

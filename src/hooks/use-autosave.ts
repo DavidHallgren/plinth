@@ -13,20 +13,25 @@ export function useDebouncedAutosave<T>({ value, enabled, delayMs, save }: Autos
   const [state, setState] = useState<AutosaveState>("saved");
   const saveRef = useRef(save);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     saveRef.current = save;
   }, [save]);
 
   const saveValue = useCallback(async (snapshot: T): Promise<void> => {
-    setState("saving");
-    try {
-      await saveRef.current(snapshot);
-      setState("saved");
-    } catch (error) {
-      setState("error");
-      throw error;
-    }
+    const operation = saveQueueRef.current.then(async () => {
+      setState("saving");
+      try {
+        await saveRef.current(snapshot);
+        setState("saved");
+      } catch (error) {
+        setState("error");
+        throw error;
+      }
+    });
+    saveQueueRef.current = operation.then(() => undefined, () => undefined);
+    await operation;
   }, []);
 
   useEffect(() => {
@@ -54,15 +59,16 @@ export function useDebouncedAutosave<T>({ value, enabled, delayMs, save }: Autos
     };
   }, [delayMs, enabled, saveValue, value]);
 
-  const saveNow = useCallback(async (): Promise<void> => {
-    if (!value) {
+  const saveNow = useCallback(async (snapshot?: T): Promise<void> => {
+    const nextValue = snapshot ?? value;
+    if (!nextValue) {
       return;
     }
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    await saveValue(value);
+    await saveValue(nextValue);
   }, [saveValue, value]);
 
   return { state, saveNow };

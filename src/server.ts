@@ -7,11 +7,15 @@ import {
   handleDeleteProject,
   handleDuplicateProject,
   handleGetProject,
+  handleGetAsset,
   handleHealth,
+  handleListAssets,
   handleListProjects,
   handleRenameProject,
-  handleReservedExportOrAsset,
+  handleReservedExport,
   handleSaveProject,
+  handleUploadAsset,
+  handleDeleteAsset,
 } from "./lib/api";
 import { ProjectStorage } from "./lib/storage";
 
@@ -40,15 +44,18 @@ const routes = {
     POST: (request: Request) => apiAction(() => handleAddDocument(request, storage)),
   },
   "/api/projects/:slug/assets": {
-    GET: () => handleReservedExportOrAsset(),
-    POST: () => handleReservedExportOrAsset(),
+    GET: (request: Request) => apiAction(() => handleListAssets(request, storage)),
+    POST: (request: Request) => apiAction(() => handleUploadAsset(request, storage)),
   },
-  "/api/projects/:slug/assets/*": () => handleReservedExportOrAsset(),
+  "/api/projects/:slug/assets/*": {
+    GET: (request: Request) => apiAction(() => handleGetAsset(request, storage)),
+    DELETE: (request: Request) => apiAction(() => handleDeleteAsset(request, storage)),
+  },
   "/api/projects/:slug/exports": {
-    GET: () => handleReservedExportOrAsset(),
-    POST: () => handleReservedExportOrAsset(),
+    GET: () => handleReservedExport(),
+    POST: () => handleReservedExport(),
   },
-  "/api/projects/:slug/exports/*": () => handleReservedExportOrAsset(),
+  "/api/projects/:slug/exports/*": () => handleReservedExport(),
   "/api/*": () => handleApiNotFound(),
   "/": index,
   "/*": index,

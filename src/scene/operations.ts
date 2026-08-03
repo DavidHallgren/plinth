@@ -1,7 +1,7 @@
 import { createDocumentPreset } from "../lib/defaults";
 import { createId, nowIso, slugify } from "../lib/ids";
 import { DocumentSchema, SceneElementSchema } from "../lib/schema";
-import type { Document, DocumentPreset, Project, SceneElement, Shadow, TextStyle } from "../lib/schema";
+import type { Document, DocumentPreset, ImageFit, Point, Project, SceneElement, Shadow, TextStyle } from "../lib/schema";
 import type { ShapeElement } from "../lib/schema";
 
 export const MIN_DIMENSION = 1;
@@ -40,10 +40,20 @@ export type ElementPatch = {
   deviceId?: string;
   deviceName?: string;
   frame?: "browser" | "phone" | "tablet";
+  preset?: "iphone-17-pro-max" | "iphone-17-pro" | "generic-modern-iphone" | "generic-modern-ipad" | "browser-window";
   frameColor?: string;
   screenColor?: string;
-  assetId?: string;
-  fit?: "contain" | "cover" | "fill";
+  screenshotPath?: string | null;
+  screenshotFit?: ImageFit;
+  screenshotPosition?: Point;
+  bezelStyle?: "solid" | "metallic";
+  cornerRadius?: number | null;
+  screenCornerRadius?: number | null;
+  showGlare?: boolean;
+  showCamera?: boolean;
+  assetPath?: string;
+  fit?: ImageFit;
+  position?: Point;
   alt?: string;
 };
 export type ElementUpdate = { id: string; patch: ElementPatch };

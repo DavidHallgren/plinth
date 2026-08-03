@@ -115,8 +115,8 @@ function ElementInspector({ element, onUpdate }: { element: SceneElement; onUpda
       </Section>
       {element.type === "text" ? <TextControls element={element} onUpdate={update} /> : null}
       {element.type === "shape" ? <ShapeControls element={element} onUpdate={update} /> : null}
-      {element.type === "device" ? <DeviceControls element={element} /> : null}
-      {element.type === "image" ? <ImageControls element={element} /> : null}
+      {element.type === "device" ? <DeviceControls element={element} onUpdate={update} /> : null}
+      {element.type === "image" ? <ImageControls element={element} onUpdate={update} /> : null}
     </div>
   );
 }
@@ -174,12 +174,31 @@ function ShapeControls({ element, onUpdate }: { element: Extract<SceneElement, {
   );
 }
 
-function DeviceControls({ element }: { element: Extract<SceneElement, { type: "device" }> }) {
-  return <Section title="Device placeholder"><p className="text-xs leading-5 text-muted">{element.deviceName} is a Phase 2 visual placeholder. Device image clipping and real device frames are intentionally deferred.</p></Section>;
+function DeviceControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "device" }>; onUpdate: (patch: ElementPatch) => void }) {
+  return (
+    <Section title="Device frame">
+      <Field label="Preset"><select className={selectClass} onChange={(event) => onUpdate({ preset: event.target.value as Extract<typeof element.preset, string> })} value={element.preset}><option value="iphone-17-pro-max">iPhone 17 Pro Max</option><option value="iphone-17-pro">iPhone 17 Pro</option><option value="generic-modern-iphone">Generic modern iPhone</option><option value="generic-modern-ipad">Generic modern iPad</option><option value="browser-window">Browser window</option></select></Field>
+      <Field label="Screenshot"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.screenshotPath ?? "No screenshot selected"}>{element.screenshotPath ?? "No screenshot selected — use Asset Library"}</p></Field>
+      <div className="grid grid-cols-2 gap-2"><Field label="Frame color"><ColorField onChange={(frameColor) => { if (frameColor) onUpdate({ frameColor }); }} value={element.frameColor} /></Field><Field label="Screen color"><ColorField onChange={(screenColor) => { if (screenColor) onUpdate({ screenColor }); }} value={element.screenColor} /></Field></div>
+      <Field label="Screenshot fit"><select className={selectClass} onChange={(event) => onUpdate({ screenshotFit: event.target.value as "contain" | "cover" | "stretch" })} value={element.screenshotFit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
+      <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, x } })} step={0.05} value={element.screenshotPosition.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, y } })} step={0.05} value={element.screenshotPosition.y} /></Field></div>
+      <div className="grid grid-cols-2 gap-2"><Field label="Bezel"><select className={selectClass} onChange={(event) => onUpdate({ bezelStyle: event.target.value as "solid" | "metallic" })} value={element.bezelStyle}><option value="solid">Solid</option><option value="metallic">Metallic</option></select></Field><Field label="Outer radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius ?? 0} /></Field><Field label="Screen radius"><NumberField min={0} onChange={(screenCornerRadius) => onUpdate({ screenCornerRadius })} value={element.screenCornerRadius ?? 0} /></Field></div>
+      <div className="grid grid-cols-2 gap-2"><ToggleButton active={element.showCamera} label="Camera" onClick={() => onUpdate({ showCamera: !element.showCamera })} /><ToggleButton active={element.showGlare} label="Glare" onClick={() => onUpdate({ showGlare: !element.showGlare })} /></div>
+      <ShadowControls shadow={element.shadow} onChange={(shadow) => onUpdate({ shadow })} />
+    </Section>
+  );
 }
 
-function ImageControls({ element }: { element: Extract<SceneElement, { type: "image" }> }) {
-  return <Section title="Asset placeholder"><p className="text-xs leading-5 text-muted">{element.alt || "Unregistered asset"}</p><p className="mt-2 text-[10px] text-muted/70">Asset ingestion and clipping are reserved for Phase 3/4.</p></Section>;
+function ImageControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "image" }>; onUpdate: (patch: ElementPatch) => void }) {
+  return (
+    <Section title="Image asset">
+      <Field label="Asset path"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.assetPath}>{element.assetPath}</p></Field>
+      <Field label="Alt text"><Input onChange={(event) => onUpdate({ alt: event.target.value })} value={element.alt} /></Field>
+      <Field label="Fit"><select className={selectClass} onChange={(event) => onUpdate({ fit: event.target.value as "contain" | "cover" | "stretch" })} value={element.fit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
+      <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ position: { ...element.position, x } })} step={0.05} value={element.position.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ position: { ...element.position, y } })} step={0.05} value={element.position.y} /></Field><Field label="Corner radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius} /></Field></div>
+      <ShadowControls shadow={element.shadow} onChange={(shadow) => onUpdate({ shadow })} />
+    </Section>
+  );
 }
 
 function BackgroundControls({ background, onChange }: { background: Background; onChange: (background: Background) => void }) {

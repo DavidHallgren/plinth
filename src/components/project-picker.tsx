@@ -135,7 +135,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate }: Pr
               </div>
               <div className="flex items-center justify-between px-2.5 pt-3 text-[11px] text-muted">
                 <span className="inline-flex items-center gap-1.5"><Clock3 size={12} /> Autosave architecture ready</span>
-                <span>Schema v2</span>
+                <span>Schema v3</span>
               </div>
             </div>
           </section>
@@ -143,7 +143,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate }: Pr
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] py-5 text-[11px] text-muted">
           <span>Projects stay in your local workspace.</span>
-          <span>Plinth studio · schema v2</span>
+          <span>Plinth studio · schema v3</span>
         </footer>
       </div>
     </div>

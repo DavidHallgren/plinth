@@ -2,7 +2,7 @@ import { z } from "zod";
 import { PlinthError, toPlinthError } from "./errors";
 import { parseProject } from "./migrations";
 import { CURRENT_SCHEMA_VERSION, DocumentPresetSchema } from "./schema";
-import { ProjectStorage } from "./storage";
+import { assetPathFromRequestName, ProjectStorage } from "./storage";
 
 const CreateProjectRequestSchema = z
   .object({
@@ -95,6 +95,16 @@ function pathSegment(request: Request, index: number): string {
   }
 }
 
+function assetPathSegment(request: Request): string {
+  const pathname = new URL(request.url).pathname;
+  const marker = "/assets/";
+  const markerIndex = pathname.indexOf(marker);
+  if (markerIndex < 0) {
+    throw new PlinthError("INVALID_REQUEST", 400, "The asset file name is required.");
+  }
+  return assetPathFromRequestName(pathname.slice(markerIndex + marker.length));
+}
+
 export function handleHealth(): Response {
   return success({ service: "plinth", status: "ok", schemaVersion: CURRENT_SCHEMA_VERSION });
 }
@@ -156,12 +166,55 @@ export async function handleAddDocument(request: Request, storage: ProjectStorag
   return success({ project });
 }
 
-export function handleReservedExportOrAsset(): Response {
+export async function handleListAssets(request: Request, storage: ProjectStorage): Promise<Response> {
+  const assets = await storage.listAssets(pathSegment(request, 3));
+  return success({ assets });
+}
+
+export async function handleUploadAsset(request: Request, storage: ProjectStorage): Promise<Response> {
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    throw new PlinthError("INVALID_REQUEST", 400, "The upload must be a valid multipart form.", { cause: error instanceof Error ? error.message : String(error) });
+  }
+  const file = formData.get("file");
+  if (!(file instanceof Blob)) {
+    throw new PlinthError("INVALID_REQUEST", 400, "Multipart uploads must include an image file in the `file` field.");
+  }
+  const fileName = typeof (file as { name?: unknown }).name === "string" ? (file as { name: string }).name : "asset";
+  const mutation = await storage.ingestAsset(pathSegment(request, 3), file, fileName);
+  return success({ asset: mutation.asset, duplicate: mutation.duplicate, project: mutation.project }, mutation.duplicate ? 200 : 201);
+}
+
+export async function handleGetAsset(request: Request, storage: ProjectStorage): Promise<Response> {
+  const asset = await storage.readAsset(pathSegment(request, 3), assetPathSegment(request));
+  const headers = new Headers({
+    "cache-control": "public, max-age=31536000, immutable",
+    "content-disposition": `inline; filename="${asset.asset.fileName.replaceAll('"', "")}"`,
+    "content-length": String(asset.bytes.byteLength),
+    "content-type": asset.asset.mimeType,
+    "x-content-type-options": "nosniff",
+  });
+  if (asset.asset.mimeType === "image/svg+xml") {
+    headers.set("content-security-policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+  }
+  return new Response(asset.bytes.buffer as ArrayBuffer, { headers });
+}
+
+export async function handleDeleteAsset(request: Request, storage: ProjectStorage): Promise<Response> {
+  const url = new URL(request.url);
+  const force = url.searchParams.get("force") === "true" || request.headers.get("x-plinth-force") === "true";
+  const result = await storage.deleteAsset(pathSegment(request, 3), assetPathSegment(request), force);
+  return success({ deleted: result.deleted.path, project: result.project, usages: result.usages });
+}
+
+export function handleReservedExport(): Response {
   return failure(
     new PlinthError(
       "NOT_IMPLEMENTED",
       501,
-      "This route is reserved for a later phase. Browser rendering or asset ingestion is required.",
+      "Export rendering and download are reserved for a later phase.",
     ),
   );
 }

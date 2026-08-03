@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { DocumentPreset, Project, ShapeElement, TextElement } from "../../lib/schema";
+import type { AssetMetadata, DeviceElement, DocumentPreset, ImageElement, Project, ShapeElement, TextElement } from "../../lib/schema";
 import { createId } from "../../lib/ids";
+import { apiFetch, ApiClientError } from "../../lib/client-api";
 import { EditorStore } from "../../app/editor-store";
-import { selectActiveDocument, selectSelectedElements } from "../../scene/selectors";
+import { selectActiveDocument, selectAssetReferences, selectSelectedElements } from "../../scene/selectors";
 import { addElement } from "../../scene/operations";
 import type { AutosaveState } from "../../hooks/use-autosave";
 import { EditorCanvas } from "../../canvas/editor-canvas";
@@ -10,10 +11,14 @@ import { DocumentNavigator } from "../sidebar/document-navigator";
 import { EditorToolbar } from "../toolbar/editor-toolbar";
 import { DocumentStrip } from "./document-strip";
 import { Inspector } from "./inspector";
+import { AssetLibrary, type AssetUploadState } from "./asset-library";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { APP_STORE_PRESETS } from "../../scene/presets";
+import { getDevicePreset } from "../../devices/presets";
+import { createAssetMutationQueue } from "../../lib/asset-mutations";
+import { assetUrl, clearImageCache } from "../../canvas/image-loading";
 
 type EditorWorkspaceProps = {
   project: Project;
@@ -21,13 +26,14 @@ type EditorWorkspaceProps = {
   saveState: AutosaveState;
   error: string | null;
   onProjectChange: (project: Project) => void;
-  onSaveNow: () => Promise<void>;
+  onProjectSynced: (project: Project) => void;
+  onSaveNow: (project?: Project) => Promise<void>;
   onBack: () => void;
   onRenameProject: (name: string, slug?: string) => Promise<void>;
   onDeleteProject: () => Promise<void>;
 };
 
-export function EditorWorkspace({ project, dirty, saveState, error, onProjectChange, onSaveNow, onBack, onRenameProject, onDeleteProject }: EditorWorkspaceProps) {
+export function EditorWorkspace({ project, dirty, saveState, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject, onDeleteProject }: EditorWorkspaceProps) {
   const storeRef = useRef<EditorStore | null>(null);
   if (!storeRef.current || storeRef.current.history.project.id !== project.id) {
     storeRef.current = new EditorStore(project, onProjectChange);
@@ -46,6 +52,10 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   const [renameSlug, setRenameSlug] = useState(project.slug);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
+  const [uploadStates, setUploadStates] = useState<Map<string, AssetUploadState>>(new Map());
+  const [dropActive, setDropActive] = useState(false);
+  const assetMutationQueueRef = useRef(createAssetMutationQueue());
 
   useEffect(() => {
     store.replaceProject(project);
@@ -198,6 +208,139 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     });
   }
 
+  function addImage(asset: AssetMetadata) {
+    const maxWidth = Math.max(120, Math.round(activeDocument.width * 0.58));
+    const aspect = asset.width / Math.max(1, asset.height);
+    const width = Math.min(maxWidth, Math.max(120, Math.round(activeDocument.width * 0.58)));
+    const height = Math.max(80, Math.min(activeDocument.height * 0.42, Math.round(width / Math.max(0.1, aspect))));
+    const element: ImageElement = {
+      id: createId("image"),
+      type: "image",
+      name: asset.fileName,
+      x: Math.round((activeDocument.width - width) / 2),
+      y: Math.round((activeDocument.height - height) / 2),
+      width,
+      height,
+      rotation: 0,
+      opacity: 1,
+      zIndex: activeDocument.elements.length,
+      locked: false,
+      visible: true,
+      shadow: null,
+      assetPath: asset.path,
+      fit: "cover",
+      position: { x: 0.5, y: 0.5 },
+      cornerRadius: Math.min(32, Math.round(Math.min(width, height) * 0.06)),
+      alt: asset.fileName,
+    };
+    run(() => {
+      store.apply("Add image", (current) => addElement(current, activeDocument.id, element));
+      store.setSelection([element.id]);
+    });
+  }
+
+  function placeAssetInDevice(asset: AssetMetadata) {
+    const selectedDevice = selectedElements.find((element): element is DeviceElement => element.type === "device");
+    if (selectedDevice) {
+      run(() => store.updateElement(selectedDevice.id, { screenshotPath: asset.path }));
+      return;
+    }
+    const preset = getDevicePreset("iphone-17-pro-max");
+    if (!preset) return;
+    const width = Math.round(activeDocument.width * 0.46);
+    const height = Math.min(Math.round(width / preset.aspectRatio), Math.round(activeDocument.height * 0.58));
+    const element: DeviceElement = {
+      id: createId("device"),
+      type: "device",
+      preset: "iphone-17-pro-max",
+      deviceId: "iphone-17-pro-max",
+      deviceName: "iPhone 17 Pro Max",
+      frame: "phone",
+      frameColor: preset.defaultFrameColor,
+      screenColor: preset.defaultScreenColor,
+      screenshotPath: asset.path,
+      screenshotFit: "cover",
+      screenshotPosition: { x: 0.5, y: 0.5 },
+      bezelStyle: "solid",
+      cornerRadius: null,
+      screenCornerRadius: null,
+      showGlare: false,
+      showCamera: true,
+      name: "iPhone 17 Pro Max",
+      x: Math.round((activeDocument.width - width) / 2),
+      y: Math.round((activeDocument.height - height) / 2),
+      width,
+      height,
+      rotation: 0,
+      opacity: 1,
+      zIndex: activeDocument.elements.length,
+      locked: false,
+      visible: true,
+      shadow: null,
+    };
+    run(() => {
+      store.apply("Add device", (current) => addElement(current, activeDocument.id, element));
+      store.setSelection([element.id]);
+    });
+  }
+
+  async function uploadFiles(files: File[]): Promise<AssetMetadata[]> {
+    const uploaded: AssetMetadata[] = [];
+    for (const file of files) {
+      setUploadStates((current) => new Map(current).set(file.name, { status: "uploading" }));
+      try {
+        const result = await assetMutationQueueRef.current(
+          () => onSaveNow(store.getSnapshot().project),
+          async () => {
+            const formData = new FormData();
+            formData.append("file", file, file.name);
+            return apiFetch<{ asset: AssetMetadata; project: Project }>(`/api/projects/${encodeURIComponent(project.slug)}/assets`, { method: "POST", body: formData });
+          },
+        );
+        uploaded.push(result.asset);
+        clearImageCache(assetUrl(project.slug, result.asset.path));
+        store.replaceProject(result.project);
+        onProjectSynced(result.project);
+        setUploadStates((current) => new Map(current).set(file.name, { status: "done", message: result.asset.fileName }));
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : "Upload failed.";
+        setUploadStates((current) => new Map(current).set(file.name, { status: "error", message }));
+      }
+    }
+    return uploaded;
+  }
+
+  async function deleteAsset(asset: AssetMetadata): Promise<void> {
+    const path = `/api/projects/${encodeURIComponent(project.slug)}/assets/${encodeURIComponent(asset.fileName)}`;
+    try {
+      const result = await assetMutationQueueRef.current(
+        () => onSaveNow(store.getSnapshot().project),
+        () => apiFetch<{ project: Project }>(path, { method: "DELETE" }),
+      );
+      clearImageCache(assetUrl(project.slug, asset.path));
+      store.replaceProject(result.project);
+      onProjectSynced(result.project);
+    } catch (reason) {
+      if (!(reason instanceof ApiClientError) || reason.code !== "ASSET_IN_USE") throw reason;
+      const details = reason.details as { usages?: Array<{ documentName: string; elementName: string }> } | undefined;
+      const usages = details?.usages?.map((usage) => `${usage.documentName} / ${usage.elementName}`).join(", ") ?? "another element";
+      if (!window.confirm(`${asset.fileName} is used by ${usages}. Force delete it? References will show missing-asset errors.`)) throw reason;
+      const result = await assetMutationQueueRef.current(
+        () => onSaveNow(store.getSnapshot().project),
+        () => apiFetch<{ project: Project }>(`${path}?force=true`, { method: "DELETE" }),
+      );
+      clearImageCache(assetUrl(project.slug, asset.path));
+      store.replaceProject(result.project);
+      onProjectSynced(result.project);
+    }
+  }
+
+  async function handleDroppedFiles(files: FileList | File[]) {
+    setDropActive(false);
+    const uploaded = await uploadFiles(Array.from(files));
+    for (const asset of uploaded) addImage(asset);
+  }
+
   function submitAddDocument(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     run(() => {
@@ -260,6 +403,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         document={activeDocument}
         onAddShape={addShape}
         onAddText={addText}
+        onOpenAssets={() => setAssetLibraryOpen(true)}
         onBack={onBack}
         onDeleteDocument={deleteDocument}
         onDeleteProject={() => void deleteProject()}
@@ -295,30 +439,41 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
           selectedElementIds={snapshot.selectedElementIds}
         />
         <main className="flex min-w-0 flex-1 flex-col">
-          <EditorCanvas
-            document={activeDocument}
-            fitRequest={fitRequest}
-            onClearSelection={() => store.setSelection([])}
-            onFitZoom={fitZoom}
-            onGestureStart={store.beginTransaction.bind(store)}
-            onMoveEnd={(elementId, x, y) => run(() => {
-              const current = activeDocument.elements.find((element) => element.id === elementId);
-              if (!current) return;
-              const dx = x - current.x;
-              const dy = y - current.y;
-              if (!snapshot.selectedElementIds.includes(elementId)) store.setSelection([elementId]);
-              store.moveSelection({ x: dx, y: dy });
-              store.commitTransaction();
-            })}
-            onSelect={(elementId, additive) => store.toggleSelection(elementId, additive)}
-            onTransformEnd={(transforms) => run(() => {
-              store.updateElements(transforms.map((transform) => ({ id: transform.id, patch: transform })));
-              store.commitTransaction();
-            })}
-            selectedElementIds={snapshot.selectedElementIds}
-            zoom={snapshot.zoom}
-          />
-          <DocumentStrip activeDocumentId={snapshot.activeDocumentId} documents={snapshot.project.documents} onAdd={() => setAddOpen(true)} onSelect={(documentId) => store.setActiveDocument(documentId)} />
+          <div
+            className="relative flex min-h-0 flex-1"
+            onDragEnter={(event) => { event.preventDefault(); setDropActive(true); }}
+            onDragLeave={(event) => { if (event.currentTarget === event.target) setDropActive(false); }}
+            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
+            onDrop={(event) => { event.preventDefault(); void handleDroppedFiles(event.dataTransfer.files); }}
+          >
+            <EditorCanvas
+              assets={snapshot.project.assets}
+              document={activeDocument}
+              fitRequest={fitRequest}
+              onClearSelection={() => store.setSelection([])}
+              onFitZoom={fitZoom}
+              onGestureStart={store.beginTransaction.bind(store)}
+              onMoveEnd={(elementId, x, y) => run(() => {
+                const current = activeDocument.elements.find((element) => element.id === elementId);
+                if (!current) return;
+                const dx = x - current.x;
+                const dy = y - current.y;
+                if (!snapshot.selectedElementIds.includes(elementId)) store.setSelection([elementId]);
+                store.moveSelection({ x: dx, y: dy });
+                store.commitTransaction();
+              })}
+              onSelect={(elementId, additive) => store.toggleSelection(elementId, additive)}
+              onTransformEnd={(transforms) => run(() => {
+                store.updateElements(transforms.map((transform) => ({ id: transform.id, patch: transform })));
+                store.commitTransaction();
+              })}
+              projectSlug={project.slug}
+              selectedElementIds={snapshot.selectedElementIds}
+              zoom={snapshot.zoom}
+            />
+            {dropActive ? <div className="pointer-events-none absolute inset-4 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-violet bg-violet/[0.12] text-sm font-semibold text-violet-soft">Drop images to upload and place them</div> : null}
+          </div>
+          <DocumentStrip activeDocumentId={snapshot.activeDocumentId} assets={snapshot.project.assets} documents={snapshot.project.documents} onAdd={() => setAddOpen(true)} onSelect={(documentId) => store.setActiveDocument(documentId)} projectSlug={project.slug} />
         </main>
         <aside className="hidden min-h-0 w-[312px] shrink-0 flex-col border-l border-white/[0.08] bg-[#12151c] xl:flex">
           <div className="flex h-11 shrink-0 items-center border-b border-white/[0.08] px-3"><p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">Inspector</p></div>
@@ -344,6 +499,19 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
           <Input id="rename-project-slug" onChange={(event) => setRenameSlug(event.target.value)} value={renameSlug} />
         </form>
       </Dialog>
+
+      <AssetLibrary
+        assets={snapshot.project.assets}
+        onAddImage={addImage}
+        onDeleteAsset={deleteAsset}
+        onOpenChange={setAssetLibraryOpen}
+        onPlaceInDevice={placeAssetInDevice}
+        onUploadFiles={uploadFiles}
+        open={assetLibraryOpen}
+        projectSlug={project.slug}
+        uploadStates={uploadStates}
+        usageCounts={selectAssetReferences(snapshot.project)}
+      />
     </div>
   );
 }

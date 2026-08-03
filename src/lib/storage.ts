@@ -4,7 +4,9 @@ import { createDocumentPreset, createDefaultProject } from "./defaults";
 import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject } from "./migrations";
-import type { Document, Project, ProjectInput, SceneElement } from "./schema";
+import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, deriveAssetFileName, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
+import type { AssetMetadata, Document, Project, ProjectInput, SceneElement } from "./schema";
+import { selectAssetReferences, selectAssetUsages, type AssetUsage } from "../scene/selectors";
 import { addDocument as addSceneDocument, type AddDocumentOptions } from "../scene/operations";
 
 export type ProjectMetadata = {
@@ -17,6 +19,21 @@ export type ProjectMetadata = {
   updatedAt: string | null;
   valid: boolean;
   error?: string;
+};
+
+export type AssetLibraryItem = AssetMetadata & {
+  usageCount: number;
+};
+
+export type AssetRead = {
+  asset: AssetMetadata;
+  bytes: Uint8Array;
+};
+
+export type AssetMutation = {
+  project: Project;
+  asset: AssetMetadata;
+  duplicate: boolean;
 };
 
 const PROJECT_FILE = "project.json";
@@ -69,6 +86,17 @@ export function resolveWithin(rootPath: string, ...segments: string[]): string {
   return candidate;
 }
 
+export function assetPathFromRequestName(value: string): string {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    throw new PlinthError("INVALID_PATH", 400, "Asset path is not valid URL encoding.");
+  }
+  if (decoded.startsWith("assets/")) return assertAssetPath(decoded);
+  return assetPathForFileName(decoded);
+}
+
 export async function writePrettyJsonAtomic(filePath: string, value: unknown): Promise<void> {
   const temporaryPath = join(
     dirname(filePath),
@@ -110,6 +138,11 @@ export class ProjectStorage {
 
   projectSubdirectory(slug: string, subdirectory: (typeof PROJECT_SUBDIRECTORIES)[number]): string {
     return resolveWithin(this.projectDirectory(slug), subdirectory);
+  }
+
+  assetFilePath(slug: string, assetPath: string): string {
+    const safePath = assertAssetPath(assetPath);
+    return resolveWithin(this.projectSubdirectory(slug, "assets"), assetFileNameFromPath(safePath));
   }
 
   async ensureProjectDirectories(slug: string): Promise<void> {
@@ -186,6 +219,149 @@ export class ProjectStorage {
     await this.ensureProjectDirectories(validated.slug);
     await writePrettyJsonAtomic(this.projectFile(validated.slug), validated);
     return validated;
+  }
+
+  async listAssets(slug: string): Promise<AssetLibraryItem[]> {
+    const project = await this.loadProject(slug);
+    const references = selectAssetReferences(project);
+    return project.assets.map((asset) => ({ ...asset, usageCount: references.get(asset.path) ?? 0 }));
+  }
+
+  async readAsset(slug: string, assetPath: string): Promise<AssetRead> {
+    const project = await this.loadProject(slug);
+    const safePath = assertAssetPath(assetPath);
+    const asset = project.assets.find((candidate) => candidate.path === safePath);
+    if (!asset) {
+      throw new PlinthError("ASSET_NOT_FOUND", 404, `Asset "${safePath}" was not found in project "${slug}".`, { assetPath: safePath });
+    }
+    try {
+      const bytes = new Uint8Array(await readFile(this.assetFilePath(slug, safePath)));
+      let validated;
+      try {
+        validated = await validateImageBytes(bytes, asset.fileName, asset.mimeType);
+      } catch (error) {
+        if (isPlinthError(error) && ["ASSET_TOO_LARGE", "ASSET_UNSUPPORTED", "ASSET_INVALID_CONTENT"].includes(error.code)) {
+          throw new PlinthError(
+            error.code === "ASSET_TOO_LARGE" ? "ASSET_TOO_LARGE" : "ASSET_INVALID_CONTENT",
+            422,
+            `Stored asset "${safePath}" failed content validation. Re-upload the asset to repair it.`,
+            { assetPath: safePath, repair: "re-upload", cause: error.message, validation: error.details },
+          );
+        }
+        throw error;
+      }
+      const mismatches = [
+        validated.mimeType !== asset.mimeType ? "mimeType" : null,
+        validated.width !== asset.width ? "width" : null,
+        validated.height !== asset.height ? "height" : null,
+        validated.byteSize !== asset.byteSize ? "byteSize" : null,
+        asset.contentHash && validated.contentHash !== asset.contentHash ? "contentHash" : null,
+      ].filter((value): value is string => value !== null);
+      if (mismatches.length > 0) {
+        throw new PlinthError(
+          "ASSET_INVALID_CONTENT",
+          422,
+          `Stored asset "${safePath}" does not match its project metadata. Re-upload the asset to repair it.`,
+          { assetPath: safePath, repair: "re-upload", mismatches, expected: asset, actual: validated },
+        );
+      }
+      return { asset, bytes };
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") {
+        throw new PlinthError("ASSET_NOT_FOUND", 404, `Asset file "${safePath}" is missing from project storage.`, { assetPath: safePath, missingFile: true });
+      }
+      throw error;
+    }
+  }
+
+  async ingestAsset(slug: string, file: Blob, originalName = "asset"): Promise<AssetMutation> {
+    const project = await this.loadProject(slug);
+    if (file.size > MAX_ASSET_BYTES) {
+      throw new PlinthError("ASSET_TOO_LARGE", 422, `Images must be ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} MB or smaller.`, { maxBytes: MAX_ASSET_BYTES, byteSize: file.size });
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const validated = await validateImageBytes(bytes, originalName, file.type);
+    let existing: AssetMetadata | undefined;
+    for (const candidate of project.assets) {
+      if (candidate.byteSize !== validated.byteSize) continue;
+      let diskHash: string | null = null;
+      try {
+        diskHash = await hashBytes(new Uint8Array(await readFile(this.assetFilePath(slug, candidate.path))));
+      } catch (error) {
+        if (errorCode(error) !== "ENOENT") throw error;
+      }
+      if (candidate.contentHash === validated.contentHash || diskHash === validated.contentHash) {
+        existing = candidate;
+        break;
+      }
+    }
+    if (existing) {
+      const existingPath = this.assetFilePath(slug, existing.path);
+      let repair = !(await pathExists(existingPath));
+      if (!repair) {
+        repair = (await hashBytes(new Uint8Array(await readFile(existingPath)))) !== validated.contentHash;
+      }
+      if (repair) {
+        await this.writeAssetFileAtomic(slug, existing.path, bytes);
+      }
+      return { project, asset: existing, duplicate: true };
+    }
+
+    const fileName = deriveAssetFileName(originalName, validated.extension, validated.contentHash, new Set(project.assets.map((asset) => asset.fileName)));
+    const asset: AssetMetadata = {
+      id: `asset_${validated.contentHash}`,
+      kind: "image",
+      path: assetPathForFileName(fileName),
+      fileName,
+      mimeType: validated.mimeType,
+      width: validated.width,
+      height: validated.height,
+      byteSize: validated.byteSize,
+      contentHash: validated.contentHash,
+    };
+    const assetFile = this.assetFilePath(slug, asset.path);
+    await this.writeAssetFileAtomic(slug, asset.path, bytes);
+    try {
+      const nextProject = await this.saveProject({ ...project, assets: [...project.assets, asset], updatedAt: nowIso() });
+      return { project: nextProject, asset, duplicate: false };
+    } catch (error) {
+      await unlink(assetFile).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async deleteAsset(slug: string, assetPath: string, force = false): Promise<{ project: Project; deleted: AssetMetadata; usages: AssetUsage[] }> {
+    const project = await this.loadProject(slug);
+    const safePath = assertAssetPath(assetPath);
+    const asset = project.assets.find((candidate) => candidate.path === safePath);
+    if (!asset) {
+      throw new PlinthError("ASSET_NOT_FOUND", 404, `Asset "${safePath}" was not found in project "${slug}".`, { assetPath: safePath });
+    }
+    const usages = selectAssetUsages(project, safePath);
+    if (usages.length > 0 && !force) {
+      throw new PlinthError("ASSET_IN_USE", 409, `Asset "${asset.fileName}" is still referenced by ${usages.length} element${usages.length === 1 ? "" : "s"}.`, {
+        assetPath: safePath,
+        usages,
+      });
+    }
+
+    const filePath = this.assetFilePath(slug, safePath);
+    let originalBytes: Uint8Array | null = null;
+    try {
+      originalBytes = new Uint8Array(await readFile(filePath));
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") throw error;
+    }
+    await unlink(filePath).catch((error) => {
+      if (errorCode(error) !== "ENOENT") throw error;
+    });
+    try {
+      const nextProject = await this.saveProject({ ...project, assets: project.assets.filter((candidate) => candidate.path !== safePath), updatedAt: nowIso() });
+      return { project: nextProject, deleted: asset, usages };
+    } catch (error) {
+      if (originalBytes) await this.writeAssetFileAtomic(slug, safePath, originalBytes).catch(() => undefined);
+      throw error;
+    }
   }
 
   async listProjectMetadata(): Promise<ProjectMetadata[]> {
@@ -348,6 +524,22 @@ export class ProjectStorage {
         resolveWithin(targetDirectory, entry.name),
         { errorOnExist: true, force: false },
       );
+    }
+  }
+
+  private async writeAssetFileAtomic(slug: string, assetPath: string, bytes: Uint8Array): Promise<void> {
+    const filePath = this.assetFilePath(slug, assetPath);
+    await this.ensureProjectDirectories(slug);
+    const temporaryPath = resolveWithin(
+      this.projectSubdirectory(slug, "assets"),
+      `.${basename(filePath)}.tmp-${process.pid}-${crypto.randomUUID().replaceAll("-", "")}`,
+    );
+    try {
+      await Bun.write(temporaryPath, bytes);
+      await fsRename(temporaryPath, filePath);
+    } catch (error) {
+      await unlink(temporaryPath).catch(() => undefined);
+      throw error;
     }
   }
 }

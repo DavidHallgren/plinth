@@ -33,8 +33,10 @@ describe("project schema", () => {
       zIndex: 1,
       locked: false,
       visible: true,
-      assetId: "asset_fixture",
+      assetPath: "assets/fixture.svg",
       fit: "cover" as const,
+      position: { x: 0.5, y: 0.5 },
+      cornerRadius: 0,
       alt: "Fixture asset",
     };
 
@@ -68,6 +70,7 @@ describe("project schema", () => {
     const asset = {
       id: "asset_duplicate",
       kind: "image" as const,
+      path: "assets/fixture.svg",
       fileName: "fixture.svg",
       mimeType: "image/svg+xml",
       width: 100,

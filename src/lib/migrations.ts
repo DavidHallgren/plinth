@@ -2,8 +2,10 @@ import { createDefaultProject, DEFAULT_BACKGROUND } from "./defaults";
 import { PlinthError } from "./errors";
 import { createId, slugify } from "./ids";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
-import type { Background, Document, Project, SceneElement, Shadow } from "./schema";
+import type { AssetMetadata, Background, Document, Project, SceneElement, Shadow } from "./schema";
 import { isAppStorePreset } from "../scene/presets";
+import { isDevicePreset, getDevicePreset } from "../devices/presets";
+import { sanitizeAssetStem } from "./asset-validation";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -24,6 +26,18 @@ function asPositiveNumber(value: unknown, fallback: number): number {
 
 function asBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function normalizePoint(value: unknown, fallback = 0.5): { x: number; y: number } {
+  const source = isRecord(value) ? value : {};
+  return {
+    x: Math.min(1, Math.max(0, asFiniteNumber(source.x, fallback))),
+    y: Math.min(1, Math.max(0, asFiniteNumber(source.y, fallback))),
+  };
 }
 
 function normalizeShadow(value: unknown): Shadow | null {
@@ -95,7 +109,55 @@ function migratePreset(value: unknown): Document["preset"] {
   return "custom";
 }
 
-function migrateElement(value: unknown, index: number): SceneElement | null {
+function safeExtension(value: unknown, fallback = "png"): "png" | "jpg" | "webp" | "svg" {
+  const extension = typeof value === "string" ? value.toLowerCase().replace(/^\./, "") : fallback;
+  return extension === "jpeg" ? "jpg" : extension === "jpg" || extension === "webp" || extension === "svg" || extension === "png" ? extension : fallback as "png" | "jpg" | "webp" | "svg";
+}
+
+function legacyAssetPath(value: unknown, assets: AssetMetadata[], fallbackName = "asset-placeholder"): string {
+  if (typeof value === "string") {
+    const direct = value.match(/^assets\/([a-z0-9][a-z0-9._-]{0,254})$/i);
+    if (direct?.[1]) return `assets/${direct[1].toLowerCase()}`;
+    const byId = assets.find((asset) => asset.id === value || asset.path === value);
+    if (byId) return byId.path;
+  }
+  const source = typeof value === "string" ? value.split(/[\\/]/).pop() ?? fallbackName : fallbackName;
+  const extension = safeExtension(source.includes(".") ? source.split(".").pop() : undefined);
+  return `assets/${sanitizeAssetStem(source)}.${extension}`;
+}
+
+function normalizeAsset(value: unknown, index: number): AssetMetadata {
+  const source = isRecord(value) ? value : {};
+  const originalPath = typeof source.path === "string" ? source.path : undefined;
+  const originalName = typeof source.fileName === "string" ? source.fileName : originalPath?.split("/").pop();
+  const extension = safeExtension(originalName?.split(".").pop());
+  const fileName = `${sanitizeAssetStem(originalName ?? `asset-${index + 1}`)}.${extension}`;
+  const path = originalPath?.match(/^assets\/([a-z0-9][a-z0-9._-]{0,254})$/i)?.[1]
+    ? `assets/${originalPath.split("/").pop()?.toLowerCase()}`
+    : `assets/${fileName}`;
+  const sourceMimeType = typeof source.mimeType === "string" ? source.mimeType : "";
+  const mimeType = sourceMimeType === "image/png" || sourceMimeType === "image/jpeg" || sourceMimeType === "image/webp" || sourceMimeType === "image/svg+xml"
+    ? sourceMimeType
+    : extension === "svg" ? "image/svg+xml" : extension === "jpg" ? "image/jpeg" : extension === "webp" ? "image/webp" : "image/png";
+  const contentHash = typeof source.contentHash === "string" && /^[a-f0-9]{64}$/.test(source.contentHash) ? source.contentHash : undefined;
+  return {
+    id: asString(source.id, createId("asset")),
+    kind: "image",
+    path,
+    fileName: path.slice("assets/".length),
+    mimeType,
+    width: Math.round(asPositiveNumber(source.width, 1)),
+    height: Math.round(asPositiveNumber(source.height, 1)),
+    byteSize: Math.max(0, Math.round(asFiniteNumber(source.byteSize, 0))),
+    ...(contentHash ? { contentHash } : {}),
+  };
+}
+
+function normalizeAssets(value: unknown): AssetMetadata[] {
+  return Array.isArray(value) ? value.map((asset, index) => normalizeAsset(asset, index)) : [];
+}
+
+function migrateElement(value: unknown, index: number, assets: AssetMetadata[]): SceneElement | null {
   if (!isRecord(value) || typeof value.type !== "string") return null;
   const type = value.type;
   const base = {
@@ -115,14 +177,27 @@ function migrateElement(value: unknown, index: number): SceneElement | null {
 
   if (type === "device") {
     const frame = value.frame === "browser" || value.frame === "tablet" ? value.frame : "phone";
+    const fallbackPreset = frame === "browser" ? "browser-window" : frame === "tablet" ? "generic-modern-ipad" : "iphone-17-pro-max";
+    const preset = typeof value.preset === "string" && isDevicePreset(value.preset) ? value.preset : fallbackPreset;
+    const definition = getDevicePreset(preset);
+    const screenshotValue = value.screenshotPath ?? value.assetPath ?? value.assetId;
     return {
       ...base,
       type: "device",
-      deviceId: asString(value.deviceId, `${frame}-placeholder`),
-      deviceName: asString(value.deviceName, `${frame[0]?.toUpperCase() ?? "D"}${frame.slice(1)} placeholder`),
+      preset,
+      deviceId: asString(value.deviceId, preset),
+      deviceName: asString(value.deviceName, definition?.label ?? "Device"),
       frame,
-      frameColor: asString(value.frameColor, "#20242d"),
-      screenColor: asString(value.screenColor, "#f6f7fb"),
+      frameColor: asString(value.frameColor, definition?.defaultFrameColor ?? "#20242d"),
+      screenColor: asString(value.screenColor, definition?.defaultScreenColor ?? "#f6f7fb"),
+      screenshotPath: screenshotValue === undefined || screenshotValue === null ? null : legacyAssetPath(screenshotValue, assets),
+      screenshotFit: value.screenshotFit === "contain" || value.screenshotFit === "stretch" ? value.screenshotFit : "cover",
+      screenshotPosition: normalizePoint(value.screenshotPosition ?? value.position),
+      bezelStyle: value.bezelStyle === "metallic" ? "metallic" : "solid",
+      cornerRadius: asNullableNumber(value.cornerRadius),
+      screenCornerRadius: asNullableNumber(value.screenCornerRadius),
+      showGlare: asBoolean(value.showGlare, false),
+      showCamera: asBoolean(value.showCamera, true),
     };
   }
 
@@ -155,8 +230,10 @@ function migrateElement(value: unknown, index: number): SceneElement | null {
     return {
       ...base,
       type: "image",
-      assetId: asString(value.assetId, "asset-placeholder"),
-      fit: value.fit === "contain" || value.fit === "fill" ? value.fit : "cover",
+      assetPath: legacyAssetPath(value.assetPath ?? value.assetId, assets),
+      fit: value.fit === "contain" ? "contain" : value.fit === "fill" || value.fit === "stretch" ? "stretch" : "cover",
+      position: normalizePoint(value.position),
+      cornerRadius: Math.max(0, asFiniteNumber(value.cornerRadius, 0)),
       alt: typeof value.alt === "string" ? value.alt : "Asset placeholder",
     };
   }
@@ -177,14 +254,14 @@ function migrateElement(value: unknown, index: number): SceneElement | null {
   return null;
 }
 
-function legacyDocument(value: unknown, index: number, now: string): Document {
+function legacyDocument(value: unknown, index: number, now: string, assets: AssetMetadata[]): Document {
   const source = isRecord(value) ? value : {};
   const name = asString(source.name, asString(source.title, `Composition ${index + 1}`));
   const width = Math.round(asPositiveNumber(source.width, 1320));
   const height = Math.round(asPositiveNumber(source.height, 2868));
   const rawElements = Array.isArray(source.elements) ? source.elements : [];
   const elements = rawElements
-    .map((element, elementIndex) => migrateElement(element, elementIndex))
+    .map((element, elementIndex) => migrateElement(element, elementIndex, assets))
     .filter((element): element is SceneElement => element !== null)
     .map((element, elementIndex) => ({ ...element, zIndex: elementIndex }));
 
@@ -229,6 +306,7 @@ function migrateVersionOne(source: Record<string, unknown>): Record<string, unkn
     slug: typeof source.slug === "string" ? slugify(source.slug) : slugify(name),
     documentCount: 1,
   });
+  const assets = normalizeAssets(source.assets);
   const rawDocuments = Array.isArray(source.documents) ? source.documents : [];
 
   return {
@@ -237,13 +315,21 @@ function migrateVersionOne(source: Record<string, unknown>): Record<string, unkn
     description: typeof source.description === "string" ? source.description : starter.description,
     settings: normalizeSettings(source.settings, starter.settings),
     background: migrateBackground(source.background),
-    assets: Array.isArray(source.assets) ? source.assets : starter.assets,
-    documents: rawDocuments.length > 0 ? rawDocuments.map((document, index) => legacyDocument(document, index, now)) : starter.documents,
+    assets,
+    documents: rawDocuments.length > 0 ? rawDocuments.map((document, index) => legacyDocument(document, index, now, assets)) : starter.documents,
     updatedAt: asString(source.updatedAt, now),
   };
 }
 
 function migrateVersionZero(source: Record<string, unknown>): Record<string, unknown> {
+  return migrateVersionOne({
+    ...source,
+    schemaVersion: 1,
+    documents: Array.isArray(source.documents) ? source.documents : [],
+  });
+}
+
+function migrateVersionTwo(source: Record<string, unknown>): Record<string, unknown> {
   return migrateVersionOne({
     ...source,
     schemaVersion: 1,
@@ -272,6 +358,7 @@ export function migrateProject(input: unknown): unknown {
 
   if (versionValue === 0) return migrateVersionZero(input);
   if (versionValue === 1) return migrateVersionOne(input);
+  if (versionValue === 2) return migrateVersionTwo(input);
   return input;
 }
 

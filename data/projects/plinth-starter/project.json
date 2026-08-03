@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "id": "project_plinth_starter",
   "slug": "plinth-starter",
   "name": "Plinth starter studio",
-  "description": "Three App Store-ready starting frames for exploring Plinth's local-first composition model.",
+  "description": "Three App Store-ready starting frames with offline-safe screenshot assets and editable vector device frames.",
   "settings": {
     "autosave": true,
     "autosaveDelayMs": 800,
@@ -18,7 +18,41 @@
     "type": "solid",
     "color": "#10131a"
   },
-  "assets": [],
+  "assets": [
+    {
+      "id": "asset_starter_dashboard",
+      "kind": "image",
+      "path": "assets/asset_dashboard.svg",
+      "fileName": "asset_dashboard.svg",
+      "mimeType": "image/svg+xml",
+      "width": 1600,
+      "height": 1000,
+      "byteSize": 1084,
+      "contentHash": "f439074772edf87a75202eda0dc30f19943e356e60f71913da91b0c05f69c863"
+    },
+    {
+      "id": "asset_starter_phone",
+      "kind": "image",
+      "path": "assets/asset_phone.svg",
+      "fileName": "asset_phone.svg",
+      "mimeType": "image/svg+xml",
+      "width": 900,
+      "height": 1400,
+      "byteSize": 1039,
+      "contentHash": "7ec2c80ed94dced7b3a451c353014d6a33e5f41b3f250779b3c1ff8c987b7610"
+    },
+    {
+      "id": "asset_starter_social",
+      "kind": "image",
+      "path": "assets/asset_social.svg",
+      "fileName": "asset_social.svg",
+      "mimeType": "image/svg+xml",
+      "width": 1200,
+      "height": 1500,
+      "byteSize": 1010,
+      "contentHash": "a1f5bed21fe5fbb9de4137a07d1af08f4fbdace37ea91605d632c50dc8ed18a9"
+    }
+  ],
   "documents": [
     {
       "id": "doc_iphone_69",
@@ -55,16 +89,16 @@
       "elements": [
         {
           "id": "iphone_device_1",
-          "x": 159,
+          "x": 357,
           "y": 975,
-          "width": 1003,
-          "height": 1233,
+          "width": 607,
+          "height": 1272,
           "rotation": 0,
           "opacity": 1,
           "zIndex": 1,
           "locked": false,
           "visible": true,
-          "name": "iPhone placeholder",
+          "name": "iPhone 17 Pro Max",
           "shadow": {
             "color": "#05060a",
             "blur": 28,
@@ -73,11 +107,23 @@
             "opacity": 0.24
           },
           "type": "device",
-          "deviceId": "iphone-placeholder",
-          "deviceName": "iPhone placeholder",
+          "preset": "iphone-17-pro-max",
+          "deviceId": "iphone-17-pro-max",
+          "deviceName": "iPhone 17 Pro Max",
           "frame": "phone",
-          "frameColor": "#1d2029",
-          "screenColor": "#f8f9fc"
+          "frameColor": "#182d55",
+          "screenColor": "#f8f9fc",
+          "screenshotPath": "assets/asset_phone.svg",
+          "screenshotFit": "cover",
+          "screenshotPosition": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "bezelStyle": "metallic",
+          "cornerRadius": null,
+          "screenCornerRadius": null,
+          "showGlare": true,
+          "showCamera": true
         },
         {
           "id": "iphone_text_2",
@@ -205,16 +251,16 @@
       "elements": [
         {
           "id": "iphone-fallback_device_1",
-          "x": 154,
+          "x": 347,
           "y": 945,
-          "width": 976,
-          "height": 1195,
+          "width": 591,
+          "height": 1238,
           "rotation": 0,
           "opacity": 1,
           "zIndex": 1,
           "locked": false,
           "visible": true,
-          "name": "iPhone placeholder",
+          "name": "iPhone 17 Pro",
           "shadow": {
             "color": "#05060a",
             "blur": 28,
@@ -223,11 +269,23 @@
             "opacity": 0.24
           },
           "type": "device",
-          "deviceId": "iphone-placeholder",
-          "deviceName": "iPhone placeholder",
+          "preset": "iphone-17-pro",
+          "deviceId": "iphone-17-pro",
+          "deviceName": "iPhone 17 Pro",
           "frame": "phone",
-          "frameColor": "#1d2029",
-          "screenColor": "#f8f9fc"
+          "frameColor": "#d9dce2",
+          "screenColor": "#f8f9fc",
+          "screenshotPath": "assets/asset_phone.svg",
+          "screenshotFit": "cover",
+          "screenshotPosition": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "bezelStyle": "metallic",
+          "cornerRadius": null,
+          "screenCornerRadius": null,
+          "showGlare": true,
+          "showCamera": true
         },
         {
           "id": "iphone-fallback_text_2",
@@ -357,15 +415,15 @@
         {
           "id": "ipad_device_1",
           "x": 289,
-          "y": 991,
+          "y": 771,
           "width": 1486,
-          "height": 1293,
+          "height": 1981,
           "rotation": 0,
           "opacity": 1,
           "zIndex": 1,
           "locked": false,
           "visible": true,
-          "name": "iPad placeholder",
+          "name": "Generic modern iPad",
           "shadow": {
             "color": "#05060a",
             "blur": 28,
@@ -374,11 +432,23 @@
             "opacity": 0.24
           },
           "type": "device",
-          "deviceId": "ipad-placeholder",
-          "deviceName": "iPad placeholder",
+          "preset": "generic-modern-ipad",
+          "deviceId": "generic-modern-ipad",
+          "deviceName": "Generic modern iPad",
           "frame": "tablet",
           "frameColor": "#242833",
-          "screenColor": "#f6f7fb"
+          "screenColor": "#f6f7fb",
+          "screenshotPath": "assets/asset_social.svg",
+          "screenshotFit": "cover",
+          "screenshotPosition": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "bezelStyle": "metallic",
+          "cornerRadius": null,
+          "screenCornerRadius": null,
+          "showGlare": true,
+          "showCamera": true
         },
         {
           "id": "ipad_text_2",

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Circle,
   Copy,
+  Images,
   Minus,
   Plus,
   Redo2,
@@ -45,6 +46,7 @@ type EditorToolbarProps = {
   onUndo: () => void;
   onRedo: () => void;
   onAddText: () => void;
+  onOpenAssets: () => void;
   onAddShape: (shape: "rectangle" | "rounded-rectangle" | "ellipse" | "line") => void;
   onDuplicateDocument: () => void;
   onDeleteDocument: () => void;
@@ -67,6 +69,7 @@ export function EditorToolbar({
   onUndo,
   onRedo,
   onAddText,
+  onOpenAssets,
   onAddShape,
   onDuplicateDocument,
   onDeleteDocument,
@@ -93,6 +96,7 @@ export function EditorToolbar({
         <Button aria-label="Undo" disabled={!canUndo} onClick={onUndo} size="icon" variant="ghost"><Undo2 size={15} /></Button>
         <Button aria-label="Redo" disabled={!canRedo} onClick={onRedo} size="icon" variant="ghost"><Redo2 size={15} /></Button>
         <span className="mx-2 h-5 w-px bg-white/10" />
+        <Button onClick={onOpenAssets} size="sm" variant="secondary"><Images size={14} /> Assets</Button>
         <Button onClick={onAddText} size="sm" variant="secondary"><Type size={14} /> Text</Button>
         <div className="relative">
           <details className="group">
