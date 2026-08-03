@@ -22,4 +22,17 @@ describe("project migrations", () => {
   test("rejects a project from a future schema version", () => {
     expect(() => migrateProject({ schemaVersion: CURRENT_SCHEMA_VERSION + 1 })).toThrow(/newer/);
   });
+
+  test("runs migrated data through duplicate identity validation", () => {
+    expect(() => parseProject({
+      version: 0,
+      id: "legacy_project",
+      name: "Legacy duplicate",
+      slug: "legacy-duplicate",
+      documents: [
+        { id: "duplicate_document", name: "First", elements: [] },
+        { id: "duplicate_document", name: "Second", elements: [] },
+      ],
+    })).toThrow(/Duplicate document id/);
+  });
 });

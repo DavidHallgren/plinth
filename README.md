@@ -19,38 +19,46 @@ Then open [http://localhost:3000](http://localhost:3000). The default project is
 Set `PLINTH_DATA_ROOT` when a script or test needs an alternate local project directory:
 
 ```sh
-PLINTH_DATA_ROOT=/tmp/plinth-projects bun run tool -- list --json
+PLINTH_DATA_ROOT=/tmp/plinth-projects bun run tool list --json
 ```
 
 ## Scripts
 
 | Script | Purpose |
 | --- | --- |
-| `bun run dev` | Tailwind watch plus Bun's HTML development server |
-| `bun run start` | Run the production bundle after `bun run build` |
-| `bun run build` | Compile Tailwind and build the Bun server/HTML bundle |
-| `bun test` | Run schema, migration, storage, preset, and round-trip tests |
+| `bun run dev` | `bun --hot src/server.ts` |
+| `bun run start` | `bun src/server.ts` |
+| `bun run build` | `bun build --compile src/server.ts --outfile dist/plinth` |
+| `bun run test` | Run schema, migration, storage, preset, and round-trip tests |
 | `bun run typecheck` | Strict TypeScript validation |
-| `bun run check` | Typecheck, tests, and a production build |
-| `bun run tool -- help` | Run the project CLI |
+| `bun run check` | Typecheck and tests |
+| `bun run tool help` | Run the project CLI |
+
+`bun run build` produces the standalone executable `dist/plinth`. Run it from the repository root with `./dist/plinth` so the default `data/projects/` location is found; set `PLINTH_DATA_ROOT` when launching it from elsewhere.
+
+Tailwind 4 note: Bun's HTML bundler handles the HTML, TypeScript, and CSS import, but does not run Tailwind's CLI expansion. The `postinstall`, `predev`, `prestart`, and `prebuild` lifecycle hooks generate `src/styles.generated.css`; that file is ignored and never needs to be tracked. If `src/styles.css` changes while the dev server is running, restart `bun run dev` to regenerate it.
 
 ## CLI
 
 The CLI uses the same Zod schema and file storage as the app:
 
 ```sh
-bun run tool -- list
-bun run tool -- new "Client launch" --json
-bun run tool -- inspect client-launch
-bun run tool -- validate client-launch
-bun run tool -- duplicate client-launch client-launch-copy
-bun run tool -- rename client-launch "Client launch v2"
-bun run tool -- add-document client-launch browser "Desktop frame"
-bun run tool -- delete client-launch-copy --yes
-bun run tool -- export client-launch
+bun run tool list
+bun run tool list --json
+bun run tool new "Client launch"
+bun run tool new "Client launch JSON" --json
+bun run tool inspect client-launch
+bun run tool inspect client-launch --json
+bun run tool validate client-launch
+bun run tool validate client-launch --json
+bun run tool duplicate client-launch client-launch-copy
+bun run tool rename client-launch "Client launch v2"
+bun run tool add-document client-launch browser "Desktop frame"
+bun run tool delete client-launch-copy --yes
+bun run tool export client-launch
 ```
 
-`--json` wraps successful results and failures in machine-readable objects. Commands fail with a nonzero exit code on invalid input or storage errors. `export` intentionally reports that browser rendering is required; it reserves the command shape without pretending Phase 1 can render a browser.
+`--json` works directly after the command, as shown above, and wraps successful results and failures in machine-readable objects. Commands fail with a nonzero exit code on invalid input or storage errors. `export` intentionally reports that browser rendering is required; it reserves the command shape without pretending Phase 1 can render a browser.
 
 ## Project format
 

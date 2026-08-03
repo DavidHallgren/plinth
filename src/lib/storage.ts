@@ -171,7 +171,7 @@ export class ProjectStorage {
       return parseProject(raw);
     } catch (error) {
       if (isPlinthError(error)) {
-        throw new PlinthError("PROJECT_INVALID", 422, `Project "${slug}" failed validation.`, {
+        throw new PlinthError("PROJECT_INVALID", 422, `Project "${slug}" failed validation: ${error.message}`, {
           cause: error.message,
           details: error.details,
         });

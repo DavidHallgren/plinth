@@ -8,7 +8,7 @@ Plinth is a local-first screenshot composition tool. Phase 1 establishes the fou
 - `src/lib/schema.ts`, `src/lib/migrations.ts`, and `src/lib/defaults.ts` are the source of truth for project data. Do not put UI-only state into the persisted schema.
 - `src/lib/storage.ts` is the only filesystem boundary for projects. Project directories are `data/projects/<slug>/` with `project.json`, `assets/`, and `exports/`.
 - `src/lib/api.ts` is the shared request handler used by the server. API errors are structured and stable enough for the UI and future clients.
-- `src/cli.ts` shares the schema and storage modules. Add CLI commands without duplicating persistence logic.
+- `src/cli/index.ts` shares the schema and storage modules. Add CLI commands without duplicating persistence logic.
 - `src/components/ui/` contains small shadcn-style primitives. Screens should compose these primitives rather than adding one-off controls.
 - There is no router, database, ORM, Electron/Tauri shell, or global state library in Phase 1.
 
@@ -18,10 +18,12 @@ Before a Phase 1 change is considered complete, run:
 
 ```sh
 bun run typecheck
-bun test
+bun run test
 bun run check
 bun run build
 ```
+
+The build contract produces the standalone `dist/plinth` executable. Tailwind's ignored `src/styles.generated.css` is refreshed by package lifecycle hooks before dev, start, and build commands.
 
 Also review `git diff --stat`, the complete diff, generated files, secrets, and oversized files. Keep commits focused and use Conventional Commit messages. Do not push or create a pull request without explicit instruction.
 

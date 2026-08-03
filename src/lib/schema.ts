@@ -155,7 +155,7 @@ export const DocumentSchema = z
   .strict();
 export type Document = z.infer<typeof DocumentSchema>;
 
-export const ProjectSchema = z
+const ProjectBaseSchema = z
   .object({
     schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
     id: IdSchema,
@@ -170,6 +170,40 @@ export const ProjectSchema = z
     updatedAt: TimestampSchema,
   })
   .strict();
+
+function identityPath(path: Array<string | number>): string {
+  return path.reduce<string>((result, segment) => typeof segment === "number" ? `${result}[${segment}]` : `${result}.${segment}`, "project");
+}
+
+const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) => {
+  const seen = new Map<string, { namespace: string; path: Array<string | number> }>();
+
+  function checkIdentity(id: string, namespace: string, path: Array<string | number>): void {
+    const previous = seen.get(id);
+    if (previous) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path,
+        message: `Duplicate ${namespace} id "${id}"; already used by ${previous.namespace} at ${identityPath(previous.path)}. Project-owned IDs must be unique.`,
+      });
+      return;
+    }
+    seen.set(id, { namespace, path });
+  }
+
+  checkIdentity(project.id, "project", ["id"]);
+  project.assets.forEach((asset, assetIndex) => checkIdentity(asset.id, "asset", ["assets", assetIndex, "id"]));
+  project.documents.forEach((document, documentIndex) => {
+    checkIdentity(document.id, "document", ["documents", documentIndex, "id"]);
+    document.elements.forEach((element, elementIndex) => checkIdentity(
+      element.id,
+      "scene element",
+      ["documents", documentIndex, "elements", elementIndex, "id"],
+    ));
+  });
+});
+
+export const ProjectSchema = ProjectIdentitySchema;
 export type Project = z.infer<typeof ProjectSchema>;
 
 export type ProjectInput = Pick<Project, "name" | "description"> &

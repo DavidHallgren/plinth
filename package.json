@@ -5,13 +5,17 @@
   "description": "A local-first screenshot composition tool.",
   "type": "module",
   "scripts": {
-    "dev": "bun src/tooling.ts dev",
-    "start": "bun src/tooling.ts start",
-    "build": "bun src/tooling.ts build",
+    "dev": "bun --hot src/server.ts",
+    "start": "bun src/server.ts",
+    "build": "bun build --compile src/server.ts --outfile dist/plinth",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck && bun test && bun run build",
-    "tool": "bun src/cli.ts"
+    "check": "bun run typecheck && bun run test",
+    "tool": "bun src/cli/index.ts",
+    "postinstall": "bun scripts/generate-styles.ts",
+    "predev": "bun scripts/generate-styles.ts",
+    "prestart": "bun scripts/generate-styles.ts",
+    "prebuild": "bun scripts/generate-styles.ts --minify"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

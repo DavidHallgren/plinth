@@ -1,11 +1,11 @@
-import { ProjectStorage } from "./lib/storage";
-import { PlinthError, isPlinthError } from "./lib/errors";
-import { DocumentPresetSchema } from "./lib/schema";
+import { ProjectStorage } from "../lib/storage";
+import { PlinthError, isPlinthError } from "../lib/errors";
+import { DocumentPresetSchema } from "../lib/schema";
 
 const HELP = `Plinth CLI
 
 Usage:
-  bun run tool -- <command> [options]
+  bun run tool <command> [options]
 
 Commands:
   list                                  List project metadata

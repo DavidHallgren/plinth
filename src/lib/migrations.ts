@@ -19,8 +19,9 @@ function legacyDocument(value: unknown, index: number, now: string): Project["do
 
   return {
     ...template,
+    id: typeof source.id === "string" ? source.id : template.id,
     name,
-    slug: slugify(name),
+    slug: typeof source.slug === "string" ? slugify(source.slug) : slugify(name),
     elements: Array.isArray(source.elements) ? source.elements : [],
     createdAt: typeof source.createdAt === "string" ? source.createdAt : now,
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : now,
@@ -44,6 +45,7 @@ function migrateVersionZero(source: Record<string, unknown>): Record<string, unk
     description: typeof source.description === "string" ? source.description : starter.description,
     settings: isRecord(source.settings) ? { ...starter.settings, ...source.settings } : starter.settings,
     background: isRecord(source.background) ? source.background : starter.background,
+    assets: Array.isArray(source.assets) ? source.assets : starter.assets,
     documents: rawDocuments.length > 0 ? rawDocuments.map((document, index) => legacyDocument(document, index, now)) : starter.documents,
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : now,
   };
@@ -80,8 +82,12 @@ export function parseProject(input: unknown): Project {
   const result = ProjectSchema.safeParse(migrated);
 
   if (!result.success) {
-    throw new PlinthError("SCHEMA_INVALID", 422, "Project data failed schema validation.", {
+    const issueSummary = result.error.issues
+      .map((issue) => `${issue.path.join(".") || "project"}: ${issue.message}`)
+      .join("; ");
+    throw new PlinthError("SCHEMA_INVALID", 422, `Project data failed schema validation: ${issueSummary}`, {
       issues: result.error.issues,
+      summary: issueSummary,
     });
   }
 

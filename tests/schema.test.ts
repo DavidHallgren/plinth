@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { assertProjectSlug, slugify } from "../src/lib/ids";
 import { createDefaultProject, createDocumentPreset } from "../src/lib/defaults";
-import { CURRENT_SCHEMA_VERSION, DocumentSchema, SceneElementSchema } from "../src/lib/schema";
+import { CURRENT_SCHEMA_VERSION, DocumentSchema, ProjectSchema, SceneElementSchema } from "../src/lib/schema";
 
 describe("project schema", () => {
   test("creates a serializable project with normalized discriminated elements", () => {
@@ -47,5 +47,60 @@ describe("project schema", () => {
     expect(assertProjectSlug("valid-project-2")).toBe("valid-project-2");
     expect(() => assertProjectSlug("../escape")).toThrow();
     expect(() => assertProjectSlug("Has Spaces")).toThrow();
+  });
+
+  test("rejects duplicate document and asset ids with actionable paths", () => {
+    const project = createDefaultProject("Identity fixture", { documentCount: 2 });
+    const firstDocument = project.documents[0];
+    const secondDocument = project.documents[1];
+    if (!firstDocument || !secondDocument) throw new Error("Expected two documents.");
+
+    const duplicateDocument = ProjectSchema.safeParse({
+      ...project,
+      documents: [firstDocument, { ...secondDocument, id: firstDocument.id }],
+    });
+    expect(duplicateDocument.success).toBe(false);
+    if (!duplicateDocument.success) {
+      expect(duplicateDocument.error.issues[0]?.message).toContain("Duplicate document id");
+      expect(duplicateDocument.error.issues[0]?.path).toEqual(["documents", 1, "id"]);
+    }
+
+    const asset = {
+      id: "asset_duplicate",
+      kind: "image" as const,
+      fileName: "fixture.svg",
+      mimeType: "image/svg+xml",
+      width: 100,
+      height: 100,
+      byteSize: 10,
+    };
+    const duplicateAsset = ProjectSchema.safeParse({ ...project, assets: [asset, { ...asset }] });
+    expect(duplicateAsset.success).toBe(false);
+    if (!duplicateAsset.success) {
+      expect(duplicateAsset.error.issues[0]?.message).toContain("Duplicate asset id");
+      expect(duplicateAsset.error.issues[0]?.path).toEqual(["assets", 1, "id"]);
+    }
+  });
+
+  test("rejects scene element ids duplicated across documents", () => {
+    const project = createDefaultProject("Element identity fixture");
+    const firstDocument = project.documents[0];
+    if (!firstDocument?.elements[0]) throw new Error("Expected a foundation element.");
+    const secondDocument = createDocumentPreset("browser", { name: "Second document" });
+    const secondElement = secondDocument.elements[0];
+    if (!secondElement) throw new Error("Expected a second foundation element.");
+
+    const duplicateElement = ProjectSchema.safeParse({
+      ...project,
+      documents: [
+        firstDocument,
+        { ...secondDocument, elements: [{ ...secondElement, id: firstDocument.elements[0].id }, ...secondDocument.elements.slice(1)] },
+      ],
+    });
+    expect(duplicateElement.success).toBe(false);
+    if (!duplicateElement.success) {
+      expect(duplicateElement.error.issues[0]?.message).toContain("Duplicate scene element id");
+      expect(duplicateElement.error.issues[0]?.path).toEqual(["documents", 1, "elements", 0, "id"]);
+    }
   });
 });
