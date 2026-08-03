@@ -2,7 +2,7 @@
 
 Plinth is a local-first screenshot composition studio. It keeps editable project data in human-readable JSON, keeps binary assets beside the project, and renders compositions with a shared Konva scene graph for both the editor and exact PNG export.
 
-Screenshot placeholder: capture the editor at a laptop viewport and add it at `docs/plinth-editor-screenshot.png`.
+The editor supports multiple App Store screenshot documents per project, editable text, image, shape, and device layers, local asset ingestion, autosave, undo/redo, and validated PNG export. The bundled Example project opens with representative iPhone compositions.
 
 ## Prerequisites and setup
 
@@ -16,7 +16,7 @@ bun install
 bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The deterministic starter project is stored at `data/projects/plinth-starter/`.
+Open [http://localhost:3000](http://localhost:3000). The deterministic, generic example project is stored at `data/projects/example/`. All other contents of `data/` are ignored by Git so local projects and their assets remain private.
 
 Use an alternate storage root for tests or scripts:
 

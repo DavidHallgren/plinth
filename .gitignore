@@ -5,8 +5,21 @@ dist/
 .env.*
 !.env.example
 *.log
-data/.tmp/
-data/projects/*/exports/*.png
+# Runtime project data is private by default. Keep only the generic example.
+/data/*
+!/data/projects/
+/data/projects/*
+!/data/projects/example/
+/data/projects/example/*
+!/data/projects/example/project.json
+!/data/projects/example/assets/
+/data/projects/example/assets/*
+!/data/projects/example/assets/asset_dashboard.svg
+!/data/projects/example/assets/asset_phone.svg
+!/data/projects/example/assets/asset_social.svg
+!/data/projects/example/exports/
+/data/projects/example/exports/*
+!/data/projects/example/exports/.gitkeep
 src/styles.generated.css
 .bun/
 .idea/

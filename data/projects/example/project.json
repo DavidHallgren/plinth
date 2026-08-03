@@ -1,13 +1,14 @@
 {
-  "schemaVersion": 4,
-  "id": "project_plinth_starter",
-  "slug": "plinth-starter",
-  "name": "Plinth starter studio",
-  "description": "Three App Store-ready starting frames with offline-safe screenshot assets and editable vector device frames.",
+  "schemaVersion": 5,
+  "id": "project_example",
+  "slug": "example",
+  "name": "Example",
+  "description": "Three generic App Store screenshot examples with offline-safe assets and editable vector device frames.",
   "settings": {
     "autosave": true,
     "autosaveDelayMs": 800,
     "defaultDocumentPreset": "iphone-6-9",
+    "exportDirectory": null,
     "grid": {
       "enabled": true,
       "size": 8,
@@ -28,7 +29,7 @@
       "width": 1600,
       "height": 1000,
       "byteSize": 1084,
-      "contentHash": "f439074772edf87a75202eda0dc30f19943e356e60f71913da91b0c05f69c863"
+      "contentHash": "7041fac9a7ab26b84895f338b9d35b180e9b43af00d873a5b775b1ecfedee787"
     },
     {
       "id": "asset_starter_phone",
@@ -39,7 +40,7 @@
       "width": 900,
       "height": 1400,
       "byteSize": 1039,
-      "contentHash": "7ec2c80ed94dced7b3a451c353014d6a33e5f41b3f250779b3c1ff8c987b7610"
+      "contentHash": "b745206a9f7c5653610809bcded8090696c45794a78f1e7702dafa1c13b4597b"
     },
     {
       "id": "asset_starter_social",
@@ -50,7 +51,7 @@
       "width": 1200,
       "height": 1500,
       "byteSize": 1010,
-      "contentHash": "a1f5bed21fe5fbb9de4137a07d1af08f4fbdace37ea91605d632c50dc8ed18a9"
+      "contentHash": "1a767428059661904f9bde460b3e85b5e80b4dd851f5f23b9ce7ccbfb067b25e"
     }
   ],
   "documents": [
@@ -89,11 +90,37 @@
       },
       "elements": [
         {
-          "id": "iphone_device_1",
+          "id": "iphone_shape_1",
+          "x": 112,
+          "y": 2409,
+          "width": 1096,
+          "height": 158,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 0,
+          "locked": false,
+          "visible": true,
+          "name": "Decorative surface",
+          "shadow": {
+            "color": "#05060a",
+            "blur": 18,
+            "offsetX": 0,
+            "offsetY": 8,
+            "opacity": 0.12
+          },
+          "type": "shape",
+          "shape": "rounded-rectangle",
+          "fill": "#ffffff",
+          "stroke": "#ffffff",
+          "strokeWidth": 1,
+          "radius": 26
+        },
+        {
+          "id": "iphone_device_2",
           "x": 357,
           "y": 975,
           "width": 607,
-          "height": 1272,
+          "height": 1239,
           "rotation": 0,
           "opacity": 1,
           "zIndex": 1,
@@ -113,7 +140,7 @@
           "deviceName": "iPhone 17 Pro Max",
           "frame": "phone",
           "frameColor": "#182d55",
-          "screenColor": "#f8f9fc",
+          "screenColor": "#f7f8fc",
           "screenshotPath": "assets/asset_phone.svg",
           "screenshotFit": "cover",
           "screenshotPosition": {
@@ -127,7 +154,7 @@
           "showCamera": true
         },
         {
-          "id": "iphone_text_2",
+          "id": "iphone_text_3",
           "x": 112,
           "y": 244,
           "width": 1096,
@@ -159,7 +186,7 @@
           }
         },
         {
-          "id": "iphone_text_3",
+          "id": "iphone_text_4",
           "x": 112,
           "y": 545,
           "width": 950,
@@ -189,32 +216,6 @@
             "shadow": null,
             "autoHeight": true
           }
-        },
-        {
-          "id": "iphone_shape_4",
-          "x": 112,
-          "y": 2409,
-          "width": 1096,
-          "height": 158,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 0,
-          "locked": false,
-          "visible": true,
-          "name": "Decorative surface",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 18,
-            "offsetX": 0,
-            "offsetY": 8,
-            "opacity": 0.12
-          },
-          "type": "shape",
-          "shape": "rounded-rectangle",
-          "fill": "#ffffff",
-          "stroke": "#ffffff",
-          "strokeWidth": 1,
-          "radius": 26
         }
       ],
       "notes": "",
@@ -252,11 +253,37 @@
       },
       "elements": [
         {
-          "id": "iphone-fallback_device_1",
+          "id": "iphone-fallback_shape_1",
+          "x": 109,
+          "y": 2334,
+          "width": 1066,
+          "height": 153,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 0,
+          "locked": false,
+          "visible": true,
+          "name": "Decorative surface",
+          "shadow": {
+            "color": "#05060a",
+            "blur": 18,
+            "offsetX": 0,
+            "offsetY": 8,
+            "opacity": 0.12
+          },
+          "type": "shape",
+          "shape": "rounded-rectangle",
+          "fill": "#ffffff",
+          "stroke": "#ffffff",
+          "strokeWidth": 1,
+          "radius": 26
+        },
+        {
+          "id": "iphone-fallback_device_2",
           "x": 347,
           "y": 945,
           "width": 591,
-          "height": 1238,
+          "height": 1206,
           "rotation": 0,
           "opacity": 1,
           "zIndex": 1,
@@ -276,7 +303,7 @@
           "deviceName": "iPhone 17 Pro",
           "frame": "phone",
           "frameColor": "#d9dce2",
-          "screenColor": "#f8f9fc",
+          "screenColor": "#f7f8fc",
           "screenshotPath": "assets/asset_phone.svg",
           "screenshotFit": "cover",
           "screenshotPosition": {
@@ -290,7 +317,7 @@
           "showCamera": true
         },
         {
-          "id": "iphone-fallback_text_2",
+          "id": "iphone-fallback_text_3",
           "x": 109,
           "y": 236,
           "width": 1066,
@@ -322,7 +349,7 @@
           }
         },
         {
-          "id": "iphone-fallback_text_3",
+          "id": "iphone-fallback_text_4",
           "x": 109,
           "y": 528,
           "width": 924,
@@ -352,32 +379,6 @@
             "shadow": null,
             "autoHeight": true
           }
-        },
-        {
-          "id": "iphone-fallback_shape_4",
-          "x": 109,
-          "y": 2334,
-          "width": 1066,
-          "height": 153,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 0,
-          "locked": false,
-          "visible": true,
-          "name": "Decorative surface",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 18,
-            "offsetX": 0,
-            "offsetY": 8,
-            "opacity": 0.12
-          },
-          "type": "shape",
-          "shape": "rounded-rectangle",
-          "fill": "#ffffff",
-          "stroke": "#ffffff",
-          "strokeWidth": 1,
-          "radius": 26
         }
       ],
       "notes": "",
@@ -416,7 +417,33 @@
       },
       "elements": [
         {
-          "id": "ipad_device_1",
+          "id": "ipad_shape_1",
+          "x": 175,
+          "y": 2312,
+          "width": 1714,
+          "height": 151,
+          "rotation": 0,
+          "opacity": 1,
+          "zIndex": 0,
+          "locked": false,
+          "visible": true,
+          "name": "Decorative surface",
+          "shadow": {
+            "color": "#05060a",
+            "blur": 18,
+            "offsetX": 0,
+            "offsetY": 8,
+            "opacity": 0.12
+          },
+          "type": "shape",
+          "shape": "rounded-rectangle",
+          "fill": "#ffffff",
+          "stroke": "#ffffff",
+          "strokeWidth": 1,
+          "radius": 41
+        },
+        {
+          "id": "ipad_device_2",
           "x": 289,
           "y": 771,
           "width": 1486,
@@ -454,7 +481,7 @@
           "showCamera": true
         },
         {
-          "id": "ipad_text_2",
+          "id": "ipad_text_3",
           "x": 175,
           "y": 234,
           "width": 1714,
@@ -486,7 +513,7 @@
           }
         },
         {
-          "id": "ipad_text_3",
+          "id": "ipad_text_4",
           "x": 175,
           "y": 523,
           "width": 1486,
@@ -516,32 +543,6 @@
             "shadow": null,
             "autoHeight": true
           }
-        },
-        {
-          "id": "ipad_shape_4",
-          "x": 175,
-          "y": 2312,
-          "width": 1714,
-          "height": 151,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 0,
-          "locked": false,
-          "visible": true,
-          "name": "Decorative surface",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 18,
-            "offsetX": 0,
-            "offsetY": 8,
-            "opacity": 0.12
-          },
-          "type": "shape",
-          "shape": "rounded-rectangle",
-          "fill": "#ffffff",
-          "stroke": "#ffffff",
-          "strokeWidth": 1,
-          "radius": 41
         }
       ],
       "notes": "",
