@@ -10,7 +10,7 @@ import { calculateDeviceScreenGeometry, calculateImageFitGeometry, thumbnailSize
 import { getDevicePreset } from "../src/devices/presets";
 import { ProjectStorage } from "../src/lib/storage";
 import type { AssetMetadata } from "../src/lib/schema";
-import { createAssetMutationQueue } from "../src/lib/asset-mutations";
+import { createAssetMutationQueue, mergeAssetMutationProject } from "../src/lib/asset-mutations";
 import { clearImageCache, imageResourceState, loadImageResource } from "../src/canvas/image-cache";
 
 const temporaryDirectories: string[] = [];
@@ -117,6 +117,26 @@ describe("asset validation and geometry", () => {
 });
 
 describe("asset storage and API", () => {
+  test("merges a completed asset mutation into a newer local scene snapshot", async () => {
+    const project = await (await temporaryStorage()).createProject({ name: "Merge fixture", slug: "merge-fixture", description: "Asset merge" });
+    const latest = { ...project, documents: project.documents.map((document) => ({ ...document, notes: "edited while uploading" })) };
+    const asset: AssetMetadata = {
+      id: "asset_merge",
+      kind: "image",
+      path: "assets/merge.png",
+      fileName: "merge.png",
+      mimeType: "image/png",
+      width: 16,
+      height: 12,
+      byteSize: 24,
+    };
+    const server = { ...project, assets: [asset] };
+    const merged = mergeAssetMutationProject(latest, server, true);
+    expect(merged.documents[0]?.notes).toBe("edited while uploading");
+    expect(merged.assets).toEqual([asset]);
+    expect(mergeAssetMutationProject(latest, server, false)).toBe(server);
+  });
+
   test("flushes an immediately unsaved scene mutation before upload and delete", async () => {
     const storage = await temporaryStorage();
     const initial = await storage.createProject({ name: "Mutation queue", slug: "mutation-queue", description: "Queue fixture" });

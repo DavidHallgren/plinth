@@ -18,7 +18,7 @@ import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { APP_STORE_PRESETS } from "../../scene/presets";
 import { getDevicePreset } from "../../devices/presets";
-import { createAssetMutationQueue } from "../../lib/asset-mutations";
+import { createAssetMutationQueue, mergeAssetMutationProject } from "../../lib/asset-mutations";
 import { assetUrl, clearImageCache } from "../../canvas/image-loading";
 
 type EditorWorkspaceProps = {
@@ -28,7 +28,7 @@ type EditorWorkspaceProps = {
   error: string | null;
   onProjectChange: (project: Project) => void;
   onProjectSynced: (project: Project) => void;
-  onSaveNow: (project?: Project) => Promise<void>;
+  onSaveNow: (project?: Project) => Promise<Project>;
   onBack: () => Promise<void>;
   onRenameProject: (name: string, slug?: string) => Promise<void>;
   onDeleteProject: () => Promise<void>;
@@ -44,11 +44,16 @@ export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): bo
 
 export function EditorWorkspace({ project, dirty, saveState, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject, onDeleteProject }: EditorWorkspaceProps) {
   const storeRef = useRef<EditorStore | null>(null);
+  const localCommitRevisionRef = useRef(0);
+  const handleProjectCommit = useCallback((nextProject: Project) => {
+    localCommitRevisionRef.current += 1;
+    onProjectChange(nextProject);
+  }, [onProjectChange]);
   if (!storeRef.current || storeRef.current.history.project.id !== project.id) {
-    storeRef.current = new EditorStore(project, onProjectChange);
+    storeRef.current = new EditorStore(project, handleProjectCommit);
   }
   const store = storeRef.current;
-  store.setCommitHandler(onProjectChange);
+  store.setCommitHandler(handleProjectCommit);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [fitRequest, setFitRequest] = useState(1);
   const [addOpen, setAddOpen] = useState(false);
@@ -325,8 +330,12 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     for (const file of files) {
       setUploadStates((current) => new Map(current).set(file.name, { status: "uploading" }));
       try {
+        let flushedRevision = localCommitRevisionRef.current;
         const result = await assetMutationQueueRef.current(
-          () => onSaveNow(store.getSnapshot().project),
+          async () => {
+            await flushPendingSave();
+            flushedRevision = localCommitRevisionRef.current;
+          },
           async () => {
             const formData = new FormData();
             formData.append("file", file, file.name);
@@ -335,8 +344,7 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
         );
         uploaded.push(result.asset);
         clearImageCache(assetUrl(project.slug, result.asset.path));
-        store.replaceProject(result.project);
-        onProjectSynced(result.project);
+        applyAssetMutationProject(result.project, flushedRevision);
         setUploadStates((current) => new Map(current).set(file.name, { status: "done", message: result.asset.fileName }));
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : "Upload failed.";
@@ -349,25 +357,31 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   async function deleteAsset(asset: AssetMetadata): Promise<void> {
     const path = `/api/projects/${encodeURIComponent(project.slug)}/assets/${encodeURIComponent(asset.fileName)}`;
     try {
+      let flushedRevision = localCommitRevisionRef.current;
       const result = await assetMutationQueueRef.current(
-        () => onSaveNow(store.getSnapshot().project),
+        async () => {
+          await flushPendingSave();
+          flushedRevision = localCommitRevisionRef.current;
+        },
         () => apiFetch<{ project: Project }>(path, { method: "DELETE" }),
       );
       clearImageCache(assetUrl(project.slug, asset.path));
-      store.replaceProject(result.project);
-      onProjectSynced(result.project);
+      applyAssetMutationProject(result.project, flushedRevision);
     } catch (reason) {
       if (!(reason instanceof ApiClientError) || reason.code !== "ASSET_IN_USE") throw reason;
       const details = reason.details as { usages?: Array<{ documentName: string; elementName: string }> } | undefined;
       const usages = details?.usages?.map((usage) => `${usage.documentName} / ${usage.elementName}`).join(", ") ?? "another element";
       if (!window.confirm(`${asset.fileName} is used by ${usages}. Force delete it? References will show missing-asset errors.`)) throw reason;
+      let flushedRevision = localCommitRevisionRef.current;
       const result = await assetMutationQueueRef.current(
-        () => onSaveNow(store.getSnapshot().project),
+        async () => {
+          await flushPendingSave();
+          flushedRevision = localCommitRevisionRef.current;
+        },
         () => apiFetch<{ project: Project }>(`${path}?force=true`, { method: "DELETE" }),
       );
       clearImageCache(assetUrl(project.slug, asset.path));
-      store.replaceProject(result.project);
-      onProjectSynced(result.project);
+      applyAssetMutationProject(result.project, flushedRevision);
     }
   }
 
@@ -375,6 +389,15 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     setDropActive(false);
     const uploaded = await uploadFiles(Array.from(files));
     for (const asset of uploaded) addImage(asset);
+  }
+
+  function applyAssetMutationProject(serverProject: Project, flushedRevision: number): void {
+    const latest = store.getSnapshot();
+    const hasLocalChanges = localCommitRevisionRef.current !== flushedRevision || latest.isInTransaction;
+    const nextProject = mergeAssetMutationProject(latest.project, serverProject, hasLocalChanges);
+    store.replaceProject(nextProject);
+    if (hasLocalChanges) handleProjectCommit(nextProject);
+    else onProjectSynced(nextProject);
   }
 
   function submitAddDocument(event: React.FormEvent<HTMLFormElement>) {
@@ -395,10 +418,10 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
   async function submitRename(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!renameName.trim()) return;
+    commitInspectorTransaction();
     setBusy(true);
     setLocalError(null);
     try {
-      await flushPendingSave();
       await onRenameProject(renameName.trim(), renameSlug.trim() || undefined);
       setRenameOpen(false);
     } catch (reason) {
@@ -413,7 +436,6 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     if (!window.confirm(`Delete “${project.name}”? This removes its local project directory.`)) return;
     setBusy(true);
     try {
-      await flushPendingSave();
       await onDeleteProject();
     } catch (reason) {
       reportError(reason);
@@ -431,15 +453,16 @@ export function EditorWorkspace({ project, dirty, saveState, error, onProjectCha
     run(() => store.removeCurrentDocument());
   }
 
-  async function flushPendingSave(): Promise<void> {
+  async function flushPendingSave(): Promise<Project> {
     commitInspectorTransaction();
-    await onSaveNow(store.getSnapshot().project);
+    const current = store.getSnapshot().project;
+    await onSaveNow(current);
+    return current;
   }
 
   async function leaveProject(): Promise<void> {
     setBusy(true);
     try {
-      await flushPendingSave();
       await onBack();
     } catch (reason) {
       reportError(reason);

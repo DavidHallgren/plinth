@@ -1,4 +1,10 @@
+import type { Project } from "./schema";
+
 export type SerializedAssetMutation = <T>(flushCurrentProject: () => Promise<void>, mutation: () => Promise<T>) => Promise<T>;
+
+export function mergeAssetMutationProject(latestProject: Project, serverProject: Project, preserveLocalChanges: boolean): Project {
+  return preserveLocalChanges ? { ...latestProject, assets: serverProject.assets } : serverProject;
+}
 
 /**
  * Asset endpoints reload project.json before changing files. Serialize each

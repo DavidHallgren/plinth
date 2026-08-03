@@ -13,6 +13,21 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const projectRef = useRef<Project | null>(null);
+  const dirtyRef = useRef(false);
+
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   const refreshProjects = useCallback(async () => {
     const result = await apiFetch<{ projects: ProjectMetadata[] }>("/api/projects");
@@ -33,6 +48,7 @@ export function App() {
       projectRef.current = result.project;
       setProject(result.project);
       setDirty(false);
+      dirtyRef.current = false;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not open project.");
     }
@@ -45,6 +61,7 @@ export function App() {
       projectRef.current = result.project;
       setProject(result.project);
       setDirty(false);
+      dirtyRef.current = false;
       await refreshProjects();
     } catch (reason) {
       const message = reason instanceof ApiClientError && reason.code === "PROJECT_EXISTS" ? "That project slug already exists." : reason instanceof Error ? reason.message : "Could not create project.";
@@ -53,7 +70,7 @@ export function App() {
     }
   }, [refreshProjects]);
 
-  const saveProject = useCallback(async (nextProject: Project) => {
+  const saveProject = useCallback(async (nextProject: Project): Promise<Project> => {
     setError(null);
     try {
       const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(nextProject.slug)}`, {
@@ -61,12 +78,14 @@ export function App() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(nextProject),
       });
-      if (projectRef.current === nextProject || projectRef.current?.id !== nextProject.id) {
+      if (projectRef.current === nextProject) {
         projectRef.current = result.project;
         setProject(result.project);
         setDirty(false);
+        dirtyRef.current = false;
       }
       await refreshProjects();
+      return result.project;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save the project.");
       throw reason;
@@ -84,54 +103,66 @@ export function App() {
     projectRef.current = nextProject;
     setProject(nextProject);
     setDirty(true);
+    dirtyRef.current = true;
   }, []);
 
   const syncProject = useCallback(async (nextProject: Project) => {
     projectRef.current = nextProject;
     setProject(nextProject);
     setDirty(false);
+    dirtyRef.current = false;
     await refreshProjects();
   }, [refreshProjects]);
 
+  const saveLatestProject = useCallback(async () => {
+    const latest = projectRef.current;
+    if (latest && dirtyRef.current) await autosave.saveNow(latest);
+  }, [autosave.saveNow]);
+
   const renameProject = useCallback(async (name: string, slug?: string) => {
-    if (!project) return;
+    const current = projectRef.current;
+    if (!current) return;
     setError(null);
     try {
-      if (dirty) await autosave.saveNow(project);
-      const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(project.slug)}/rename`, jsonRequest({ name, slug }));
+      await saveLatestProject();
+      const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(current.slug)}/rename`, jsonRequest({ name, slug }));
       projectRef.current = result.project;
       setProject(result.project);
       setDirty(false);
+      dirtyRef.current = false;
       await refreshProjects();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not rename the project.");
       throw reason;
     }
-  }, [autosave, dirty, project, refreshProjects]);
+  }, [refreshProjects, saveLatestProject]);
 
   const deleteProject = useCallback(async () => {
-    if (!project) return;
+    const current = projectRef.current;
+    if (!current) return;
     setError(null);
     try {
-      if (dirty) await autosave.saveNow(project);
-      await apiFetch<{ deleted: string }>(`/api/projects/${encodeURIComponent(project.slug)}`, { method: "DELETE" });
+      await saveLatestProject();
+      await apiFetch<{ deleted: string }>(`/api/projects/${encodeURIComponent(current.slug)}`, { method: "DELETE" });
       projectRef.current = null;
       setProject(null);
       setDirty(false);
+      dirtyRef.current = false;
       await refreshProjects();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not delete the project.");
       throw reason;
     }
-  }, [autosave, dirty, project, refreshProjects]);
+  }, [refreshProjects, saveLatestProject]);
 
   const leaveProject = useCallback(async () => {
-    if (project && dirty) await autosave.saveNow(project);
+    await saveLatestProject();
     projectRef.current = null;
     setProject(null);
     setDirty(false);
+    dirtyRef.current = false;
     setError(null);
-  }, [autosave, dirty, project]);
+  }, [saveLatestProject]);
 
   if (!project) {
     return <ProjectPicker error={error} loading={loading} onCreate={createProject} onOpen={openProject} projects={projects} />;

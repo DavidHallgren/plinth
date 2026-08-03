@@ -6,7 +6,7 @@ type AutosaveOptions<T> = {
   value: T | null;
   enabled: boolean;
   delayMs: number;
-  save: (value: T) => Promise<void>;
+  save: (value: T) => Promise<T>;
 };
 
 export function useDebouncedAutosave<T>({ value, enabled, delayMs, save }: AutosaveOptions<T>) {
@@ -19,19 +19,20 @@ export function useDebouncedAutosave<T>({ value, enabled, delayMs, save }: Autos
     saveRef.current = save;
   }, [save]);
 
-  const saveValue = useCallback(async (snapshot: T): Promise<void> => {
+  const saveValue = useCallback(async (snapshot: T): Promise<T> => {
     const operation = saveQueueRef.current.then(async () => {
       setState("saving");
       try {
-        await saveRef.current(snapshot);
+        const saved = await saveRef.current(snapshot);
         setState("saved");
+        return saved;
       } catch (error) {
         setState("error");
         throw error;
       }
     });
     saveQueueRef.current = operation.then(() => undefined, () => undefined);
-    await operation;
+    return operation;
   }, []);
 
   useEffect(() => {
@@ -59,16 +60,16 @@ export function useDebouncedAutosave<T>({ value, enabled, delayMs, save }: Autos
     };
   }, [delayMs, enabled, saveValue, value]);
 
-  const saveNow = useCallback(async (snapshot?: T): Promise<void> => {
+  const saveNow = useCallback(async (snapshot?: T): Promise<T> => {
     const nextValue = snapshot ?? value;
     if (!nextValue) {
-      return;
+      throw new Error("Cannot save without a project snapshot.");
     }
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    await saveValue(nextValue);
+    return saveValue(nextValue);
   }, [saveValue, value]);
 
   return { state, saveNow };
