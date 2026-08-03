@@ -1,6 +1,12 @@
 # Plinth
 
-Plinth is a local-first editor for composing and exporting App Store screenshots. Projects remain editable as human-readable JSON with assets stored alongside them.
+Like we needed another screenshot tool. Well, what I wanted was a bit different from what I could find.
+
+Plinth is a local-first editor for composing App Store screenshots. Your scenes stay editable. Projects are stored as human-readable JSON. Assets live beside them. Exports are ordinary PNGs. Your work lives on your machine and does not require relying on any cloud services.
+
+This also makes Plinth a particularly willing accomplice for ChatGPT Work and Codex. Because the entire project is made of legible files rather than an inscrutable design format, an agent can inspect scenes, rewrite copy, rearrange layouts, manage assets, and drive exports. The result is a workflow you can review, version, and automate instead of a tiny artisanal clicking ritual performed anew for every release.
+
+In short: Plinth makes polished screenshots without taking your files hostage or turning “move this text three pixels left” into a recurring subscription.
 
 ## Setup
 
