@@ -1,5 +1,5 @@
 import type Konva from "konva";
-import { Download, FileOutput, LoaderCircle } from "lucide-react";
+import { Download, FileOutput, FolderOutput, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Stage } from "react-konva";
 import type { Document, Project } from "../../lib/schema";
@@ -9,6 +9,7 @@ import { waitForSceneReady } from "../../canvas/export-readiness";
 import { SceneRenderer } from "../../canvas/scene-renderer";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { Input } from "../ui/input";
 
 type ExportDialogProps = {
   open: boolean;
@@ -17,6 +18,7 @@ type ExportDialogProps = {
   onOpenChange: (open: boolean) => void;
   onError?: (message: string) => void;
   onBeforeExport?: () => Promise<Project>;
+  onExportDirectoryChange?: (directory: string | null) => void;
   onRenderingChange?: (rendering: boolean) => void;
 };
 
@@ -69,9 +71,12 @@ function planForProject(sourceProject: Project): Array<{ document: Document; fil
   });
 }
 
-export function ExportDialog({ open, project, activeDocumentId, onOpenChange, onError, onBeforeExport, onRenderingChange }: ExportDialogProps) {
+export function ExportDialog({ open, project, activeDocumentId, onOpenChange, onError, onBeforeExport, onExportDirectoryChange, onRenderingChange }: ExportDialogProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [mode, setMode] = useState<"current" | "all">("current");
+  const [destination, setDestination] = useState<"download" | "folder">("download");
+  const [exportDirectory, setExportDirectory] = useState(project.settings.exportDirectory ?? "");
+  const [destinationError, setDestinationError] = useState<string | null>(null);
   const [rows, setRows] = useState<ExportRow[]>([]);
   const [renderDocument, setRenderDocument] = useState<Document | null>(null);
   const [renderProject, setRenderProject] = useState<Project | null>(null);
@@ -92,6 +97,11 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
     }
   }, [project.documents]);
   const { plan, error: planError } = planResult;
+  const configuredExportDirectory = exportDirectory.trim();
+
+  useEffect(() => {
+    setExportDirectory(project.settings.exportDirectory ?? "");
+  }, [project.settings.exportDirectory]);
 
   useEffect(() => {
     if (planError) onError?.(planError);
@@ -127,9 +137,12 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
   }
 
   async function runExport(): Promise<void> {
+    if (destination === "folder" && !configuredExportDirectory) return;
     setExporting(true);
+    setDestinationError(null);
     onRenderingChange?.(true);
     try {
+      onExportDirectoryChange?.(configuredExportDirectory || null);
       let sourceProject = project;
       try {
         sourceProject = (await onBeforeExport?.()) ?? project;
@@ -150,6 +163,17 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
         onError?.("There is no document available to export.");
         return;
       }
+      let exportRun: { id: string; absolutePath: string } | null = null;
+      if (destination === "folder") {
+        try {
+          const result = await apiFetch<{ exportRun: { id: string; absolutePath: string } }>(`/api/projects/${encodeURIComponent(sourceProject.slug)}/export-runs`, { method: "POST" });
+          exportRun = result.exportRun;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "The server could not create the timestamped export directory.";
+          setDestinationError(`Could not export to the configured folder. ${message}`);
+          return;
+        }
+      }
       const initialRows = selected.map(({ document, fileName }) => ({ document, fileName, status: "pending" as const }));
       setRows(initialRows);
       for (const item of initialRows) {
@@ -163,14 +187,15 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
             fileName: item.fileName,
             width: item.document.width,
             height: item.document.height,
+            ...(exportRun ? { exportRunId: exportRun.id } : {}),
           }));
           formData.append("file", new File([blob], item.fileName, { type: "image/png" }), item.fileName);
           const result = await apiFetch<{ export: { relativePath: string; absolutePath?: string } }>(`/api/projects/${encodeURIComponent(sourceProject.slug)}/exports`, {
             method: "POST",
             body: formData,
           });
-          downloadBlob(blob, item.fileName);
-          updateRow(item.document.id, { status: "done", path: result.export.absolutePath ?? result.export.relativePath, downloaded: true });
+          if (destination === "download") downloadBlob(blob, item.fileName);
+          updateRow(item.document.id, { status: "done", path: result.export.absolutePath ?? result.export.relativePath, downloaded: destination === "download" });
         } catch (error) {
           const message = error instanceof Error ? error.message : "The document could not be exported.";
           updateRow(item.document.id, { status: "error", error: message });
@@ -198,25 +223,51 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
       <Dialog
         footer={(
           <>
-            <Button disabled={exporting} onClick={() => onOpenChange(false)} variant="ghost">Close</Button>
-            <Button disabled={exporting || !currentDocument} onClick={() => void runExport()} variant="primary">
+            <Button disabled={exporting} onClick={() => { onExportDirectoryChange?.(configuredExportDirectory || null); onOpenChange(false); }} variant="ghost">Close</Button>
+            <Button disabled={exporting || !currentDocument || (destination === "folder" && !configuredExportDirectory)} onClick={() => void runExport()} variant="primary">
               {exporting ? <LoaderCircle className="animate-spin" size={14} /> : <FileOutput size={14} />}
               {mode === "all" ? "Export all" : "Export current"}
             </Button>
           </>
         )}
-        onOpenChange={(nextOpen) => { if (!exporting) onOpenChange(nextOpen); }}
+        onOpenChange={(nextOpen) => {
+          if (exporting) return;
+          if (!nextOpen) onExportDirectoryChange?.(configuredExportDirectory || null);
+          onOpenChange(nextOpen);
+        }}
         open={open}
         title="Export PNG"
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-black/15 p-1">
             {(["current", "all"] as const).map((value) => (
-              <button className={`h-8 rounded-lg text-xs font-medium ${mode === value ? "bg-violet/[0.16] text-violet-soft" : "text-muted hover:text-ink"}`} key={value} onClick={() => setMode(value)} type="button">
+              <button className={`h-8 rounded-lg text-xs font-medium ${mode === value ? "bg-accent/[0.16] text-accent-soft" : "text-muted hover:text-ink"}`} key={value} onClick={() => setMode(value)} type="button">
                 {value === "current" ? "Current document" : "All documents"}
               </button>
             ))}
           </div>
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-black/15 p-1">
+            <button className={`flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium ${destination === "download" ? "bg-accent/[0.16] text-accent-soft" : "text-muted hover:text-ink"}`} onClick={() => { onExportDirectoryChange?.(configuredExportDirectory || null); setDestination("download"); setDestinationError(null); }} type="button">
+              <Download size={13} /> Download
+            </button>
+            <button className={`flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium ${destination === "folder" ? "bg-accent/[0.16] text-accent-soft" : "text-muted hover:text-ink"}`} onClick={() => { setDestination("folder"); setDestinationError(null); }} type="button">
+              <FolderOutput size={13} /> Configured folder
+            </button>
+          </div>
+          {destination === "folder" ? (
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-muted" htmlFor="project-export-directory">Project export folder</label>
+              <Input
+                id="project-export-directory"
+                onBlur={() => onExportDirectoryChange?.(configuredExportDirectory || null)}
+                onChange={(event) => { setExportDirectory(event.target.value); setDestinationError(null); }}
+                placeholder="/absolute/path/to/exports"
+                value={exportDirectory}
+              />
+              <p className="text-[10px] leading-4 text-muted">Folder exports create one timestamped directory for the selected documents. The server requires an existing absolute directory.</p>
+            </div>
+          ) : null}
+          {destinationError ? <p className="rounded-xl border border-red-300/20 bg-red-400/[0.08] px-3 py-2 text-[11px] leading-5 text-red-200" role="alert">{destinationError}</p> : null}
           <div className="space-y-2" aria-live="polite">
             {(mode === "all" ? plan : plan.filter(({ document }) => document.id === currentDocument?.id)).map(({ document, fileName }) => {
               const row = rows.find((candidate) => candidate.document.id === document.id);
@@ -228,9 +279,9 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
                       <p className="mt-0.5 truncate text-[10px] text-muted">{fileName} · {document.width} × {document.height}</p>
                     </div>
                     <span className={`shrink-0 text-[10px] ${row?.status === "error" ? "text-red-200" : row?.status === "done" ? "text-emerald-200" : "text-muted"}`}>{statusText(row?.status ?? "pending")}</span>
-                    {row?.status === "done" ? <a aria-label={`Download ${fileName}`} className="text-violet-soft hover:text-ink" download={fileName} href={`/api/projects/${encodeURIComponent(project.slug)}/exports/${encodeURIComponent(fileName)}`}><Download size={14} /></a> : null}
+                    {row?.status === "done" && destination === "download" ? <a aria-label={`Download ${fileName}`} className="text-accent-soft hover:text-ink" download={fileName} href={`/api/projects/${encodeURIComponent(project.slug)}/exports/${encodeURIComponent(fileName)}`}><Download size={14} /></a> : null}
                   </div>
-                  {row?.path ? <p className="mt-1 text-[10px] text-emerald-200/75">Saved{row.downloaded ? " · download started" : ""}</p> : null}
+                  {row?.path ? <p className="mt-1 truncate text-[10px] text-emerald-200/75" title={row.path}>{row.downloaded ? "Download started" : `Saved to ${row.path}`}</p> : null}
                   {row?.error ? <p className="mt-1 text-[10px] leading-4 text-red-200" role="alert">{row.error}</p> : null}
                 </div>
               );

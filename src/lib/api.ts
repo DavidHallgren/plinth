@@ -17,6 +17,7 @@ const RenameProjectRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
     slug: z.string().trim().min(1).max(64).optional(),
+    exportDirectory: z.string().trim().max(4096).nullable().optional(),
   })
   .strict();
 
@@ -42,6 +43,7 @@ const ExportMetadataSchema = z
     fileName: z.string().min(1).max(180),
     width: z.number().int().positive().max(100_000),
     height: z.number().int().positive().max(100_000),
+    exportRunId: z.string().min(1).max(64).optional(),
   })
   .strict();
 
@@ -172,7 +174,7 @@ export async function handleDeleteProject(request: Request, storage: ProjectStor
 export async function handleRenameProject(request: Request, storage: ProjectStorage): Promise<Response> {
   const slug = pathSegment(request, 3);
   const body = parseBody(RenameProjectRequestSchema, await jsonBody(request));
-  const project = await storage.renameProject(slug, body.name, body.slug);
+  const project = await storage.renameProject(slug, body.name, body.slug, body.exportDirectory);
   return success({ project });
 }
 
@@ -304,6 +306,11 @@ export async function handleCreateExport(request: Request, storage: ProjectStora
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await storage.writeExport(pathSegment(request, 3), { ...metadata, bytes });
   return success({ export: result }, 201);
+}
+
+export async function handleCreateExportRun(request: Request, storage: ProjectStorage): Promise<Response> {
+  const result = await storage.createExportRun(pathSegment(request, 3));
+  return success({ exportRun: result }, 201);
 }
 
 export async function handleGetExport(request: Request, storage: ProjectStorage): Promise<Response> {

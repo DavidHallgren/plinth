@@ -1,5 +1,5 @@
-import { cp, mkdir, readdir, readFile, rename as fsRename, rm, stat, unlink } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { cp, mkdir, readdir, readFile, realpath, rename as fsRename, rm, stat, unlink } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createDocumentPreset, createDefaultProject } from "./defaults";
 import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
@@ -43,6 +43,12 @@ export type ExportWriteInput = {
   width: number;
   height: number;
   bytes: Uint8Array;
+  exportRunId?: string;
+};
+
+export type ExportRun = {
+  id: string;
+  absolutePath: string;
 };
 
 export type ExportWrite = {
@@ -60,6 +66,7 @@ export type ExportRead = ExportWrite & { bytes: Uint8Array };
 
 const PROJECT_FILE = "project.json";
 const PROJECT_SUBDIRECTORIES = ["assets", "exports"] as const;
+const EXPORT_RUN_ID_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}(?:-\d+)?$/;
 
 function errorCode(error: unknown): string | undefined {
   if (typeof error === "object" && error !== null && "code" in error) {
@@ -101,11 +108,23 @@ export function resolveWithin(rootPath: string, ...segments: string[]): string {
   const candidate = resolve(root, ...segments);
   const relation = relative(root, candidate);
 
-  if (relation.length === 0 || relation === ".." || relation.startsWith(`..${"/"}`) || isAbsolute(relation)) {
+  if (relation.length === 0 || relation === ".." || relation.startsWith(`..${sep}`) || isAbsolute(relation)) {
     throw new PlinthError("INVALID_PATH", 400, "Resolved path would leave its allowed root.");
   }
 
   return candidate;
+}
+
+function assertExportRunId(value: string): string {
+  if (!EXPORT_RUN_ID_PATTERN.test(value)) {
+    throw new PlinthError("EXPORT_RUN_INVALID", 400, "The export run identifier is invalid.", { exportRunId: value });
+  }
+  return value;
+}
+
+function timestampDirectoryName(date = new Date()): string {
+  const pad = (value: number, length = 2) => String(value).padStart(length, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}-${pad(date.getMilliseconds(), 3)}`;
 }
 
 export function assetPathFromRequestName(value: string): string {
@@ -169,6 +188,73 @@ export class ProjectStorage {
 
   exportFilePath(slug: string, fileName: string): string {
     return resolveWithin(this.projectSubdirectory(slug, "exports"), assertExportFileName(fileName));
+  }
+
+  private async configuredExportRoot(project: Project): Promise<string> {
+    const configuredPath = project.settings.exportDirectory?.trim();
+    if (!configuredPath) {
+      throw new PlinthError("EXPORT_DIRECTORY_NOT_CONFIGURED", 422, "Configure an export folder for this project before exporting to a folder.");
+    }
+    if (!isAbsolute(configuredPath)) {
+      throw new PlinthError("EXPORT_DIRECTORY_INVALID", 422, `The configured export folder must be an absolute path: "${configuredPath}".`, { path: configuredPath });
+    }
+
+    try {
+      const directoryStats = await stat(configuredPath);
+      if (!directoryStats.isDirectory()) {
+        throw new PlinthError("EXPORT_DIRECTORY_INVALID", 422, `The configured export folder is not a directory: "${configuredPath}".`, { path: configuredPath });
+      }
+      return await realpath(configuredPath);
+    } catch (error) {
+      if (isPlinthError(error)) throw error;
+      throw new PlinthError("EXPORT_DIRECTORY_UNAVAILABLE", 422, `The configured export folder is unavailable: "${configuredPath}".`, {
+        path: configuredPath,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  async createExportRun(slug: string): Promise<ExportRun> {
+    const project = await this.loadProject(slug);
+    const exportRoot = await this.configuredExportRoot(project);
+    const baseName = timestampDirectoryName();
+
+    for (let suffix = 0; suffix < 100; suffix += 1) {
+      const id = suffix === 0 ? baseName : `${baseName}-${suffix + 1}`;
+      const runDirectory = resolveWithin(exportRoot, id);
+      try {
+        await mkdir(runDirectory, { recursive: false });
+        return { id, absolutePath: runDirectory };
+      } catch (error) {
+        if (errorCode(error) === "EEXIST") continue;
+        throw new PlinthError("EXPORT_DIRECTORY_WRITE_FAILED", 422, `Plinth could not create an export directory inside "${exportRoot}".`, {
+          path: exportRoot,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    throw new PlinthError("EXPORT_DIRECTORY_WRITE_FAILED", 422, `Plinth could not create a unique timestamped export directory inside "${exportRoot}".`, { path: exportRoot });
+  }
+
+  private async exportRunDirectory(project: Project, exportRunId: string): Promise<string> {
+    const exportRoot = await this.configuredExportRoot(project);
+    const runDirectory = resolveWithin(exportRoot, assertExportRunId(exportRunId));
+    try {
+      const directoryStats = await stat(runDirectory);
+      if (!directoryStats.isDirectory()) throw new Error("The export run path is not a directory.");
+      const canonicalRunDirectory = await realpath(runDirectory);
+      const relation = relative(exportRoot, canonicalRunDirectory);
+      if (relation === "" || relation === ".." || relation.startsWith(`..${sep}`) || isAbsolute(relation)) {
+        throw new Error("The export run directory leaves the configured export folder.");
+      }
+      return canonicalRunDirectory;
+    } catch (error) {
+      throw new PlinthError("EXPORT_RUN_UNAVAILABLE", 422, "The timestamped export directory is no longer available. Start the export again.", {
+        exportRunId,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async ensureProjectDirectories(slug: string): Promise<void> {
@@ -425,14 +511,20 @@ export class ProjectStorage {
     const decoded = decodePngDimensions(input.bytes);
     assertExportDimensions(decoded, planned);
 
-    const filePath = this.exportFilePath(slug, fileName);
+    const exportRunDirectory = input.exportRunId ? await this.exportRunDirectory(project, input.exportRunId) : null;
+    const filePath = exportRunDirectory
+      ? resolveWithin(exportRunDirectory, fileName)
+      : this.exportFilePath(slug, fileName);
     try {
-      await this.ensureProjectDirectories(slug);
+      if (!exportRunDirectory) await this.ensureProjectDirectories(slug);
       await this.writeBinaryFileAtomic(filePath, input.bytes);
     } catch (error) {
-      throw new PlinthError("EXPORT_WRITE_FAILED", 500, `Could not write export "${fileName}".`, {
+      const configuredDestination = Boolean(exportRunDirectory);
+      throw new PlinthError(configuredDestination ? "EXPORT_DIRECTORY_WRITE_FAILED" : "EXPORT_WRITE_FAILED", 500, configuredDestination
+        ? `Could not write export "${fileName}" to the configured export folder.`
+        : `Could not write export "${fileName}".`, {
         fileName,
-        path: `exports/${fileName}`,
+        path: filePath,
         cause: error instanceof Error ? error.message : String(error),
       });
     }
@@ -441,7 +533,7 @@ export class ProjectStorage {
       documentId: planned.documentId,
       documentName: planned.documentName,
       fileName,
-      relativePath: `exports/${fileName}`,
+      relativePath: input.exportRunId ? `${input.exportRunId}/${fileName}` : `exports/${fileName}`,
       absolutePath: filePath,
       width: decoded.width,
       height: decoded.height,
@@ -528,7 +620,7 @@ export class ProjectStorage {
     return metadata.sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""));
   }
 
-  async renameProject(slug: string, name: string, newSlug = slugify(name)): Promise<Project> {
+  async renameProject(slug: string, name: string, newSlug = slugify(name), exportDirectory?: string | null): Promise<Project> {
     const oldSlug = assertProjectSlug(slug);
     const targetSlug = assertProjectSlug(newSlug);
     const current = await this.loadProject(oldSlug);
@@ -536,6 +628,9 @@ export class ProjectStorage {
       ...current,
       slug: targetSlug,
       name: name.trim() || current.name,
+      settings: exportDirectory === undefined
+        ? current.settings
+        : { ...current.settings, exportDirectory: exportDirectory?.trim() || null },
       updatedAt: nowIso(),
     };
 

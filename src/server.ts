@@ -14,6 +14,7 @@ import {
   handleListProjects,
   handleRenameProject,
   handleCreateExport,
+  handleCreateExportRun,
   handleListExports,
   handleSaveProject,
   handleUploadAsset,
@@ -56,6 +57,9 @@ const routes = {
   "/api/projects/:slug/exports": {
     GET: (request: Request) => apiAction(() => handleListExports(request, storage)),
     POST: (request: Request) => apiAction(() => handleCreateExport(request, storage)),
+  },
+  "/api/projects/:slug/export-runs": {
+    POST: (request: Request) => apiAction(() => handleCreateExportRun(request, storage)),
   },
   "/api/projects/:slug/exports/*": (request: Request) => apiAction(() => handleGetExport(request, storage)),
   "/api/*": () => handleApiNotFound(),

@@ -48,9 +48,9 @@ assets/       # validated binary image files
 exports/      # atomically written PNG copies
 ```
 
-`project.json` is pretty-printed and contains only normalized metadata and project-relative paths. It never contains base64 image data or embedded image bytes. Asset files are validated from their signatures, dimensions, size, and conservative SVG policy before ingestion and again when served.
+`project.json` is pretty-printed and contains normalized metadata, project-relative asset paths, and an optional absolute export-directory setting. It never contains base64 image data or embedded image bytes. Asset files are validated from their signatures, dimensions, size, and conservative SVG policy before ingestion and again when served.
 
-Schema v4 adds `document.exportSlug`, an editable export-safe stem separate from the display name and internal document `slug`. v0/v1/v2 projects migrate through the current schema; schema v3 projects gain an export stem from their existing slug. Future schema versions fail clearly instead of being silently discarded.
+Schema v5 adds the optional `settings.exportDirectory` absolute path for server-written export runs. Schema v4 added `document.exportSlug`, an editable export-safe stem separate from the display name and internal document `slug`. Older projects migrate through the current schema, and future schema versions fail clearly instead of being silently discarded.
 
 Writes use temporary files followed by rename. Project saves, asset mutations, export writes, project rename/delete, and navigation flush pending editor changes so stale autosaves do not resurrect deleted or renamed state.
 
@@ -60,25 +60,26 @@ Writes use temporary files followed by rename. Project saves, asset mutations, e
 - `src/scene/operations.ts` owns immutable scene/document operations, bounded transforms, normalized z-order, fresh IDs, document protection, and text auto-height normalization.
 - `src/scene/history.ts` provides bounded operation-level undo/redo. Pointer drags, transforms, and debounced inspector edits commit as one completed gesture.
 - `src/canvas/scene-renderer.tsx` is the only scene drawing implementation. It renders backgrounds, text, images, shapes, and data-driven device frames for the active editor, thumbnails, and export stage.
-- `src/canvas/image-loading.tsx`, `src/canvas/image-cache.ts`, and `src/canvas/export-readiness.ts` own asset readiness/error boundaries and preflight referenced images/fonts before capture.
-- `src/devices/` contains pure device presets and fit geometry. Frames are normalized vector shapes rather than duplicated artwork.
+- `src/canvas/image-loading.tsx`, `src/canvas/image-cache.ts`, and `src/canvas/export-readiness.ts` own asset readiness/error boundaries and preflight project images, bundled device frames, and fonts before capture.
+- `src/devices/` contains device presets, pure fit geometry, vector fallbacks, and bundled official transparent Apple frame overlays. Project JSON stores only the selected preset and finish color; it never duplicates the bundled frame bytes.
 - `src/lib/storage.ts` is the filesystem boundary. `src/lib/api.ts` is the structured request boundary. `src/components/ui/` contains reusable compact controls.
 
 Do not add a second canvas renderer, server-side substitute renderer, duplicated background/element drawing code, base64 asset storage, pointer-move saves, or permanent object URLs.
 
 ## Export workflow
 
-The editor’s Export dialog supports the current document or all documents. It lists display names, numbered safe filenames such as `01-home.png`, exact dimensions, per-document progress, failures, and saved project paths.
+The editor’s Export dialog supports the current document or all documents and a mutually exclusive destination: browser download or the project’s configured export folder. Selecting the folder destination reveals its path field and disables the export action until a non-empty path is configured. The same persisted path is editable from the pencil-icon project editor. The dialog lists display names, numbered safe filenames such as `01-home.png`, exact dimensions, per-document progress, failures, and saved paths.
 
 For each document, the browser:
 
 1. Flushes pending project changes.
 2. Verifies every referenced asset exists and decodes, and waits for the document’s usable font faces.
 3. Mounts one full-resolution `SceneRenderer` stage, captures it at pixel ratio 1 with image smoothing, and verifies the canvas dimensions.
-4. Posts the PNG bytes and metadata as multipart form data to `POST /api/projects/:slug/exports`.
-5. Lets the browser download the result and revokes the generated object URL.
+4. For configured-folder export, asks `POST /api/projects/:slug/export-runs` to validate the existing absolute folder and create a unique timestamped directory.
+5. Posts the PNG bytes and metadata as multipart form data to `POST /api/projects/:slug/exports`.
+6. For download export, lets the browser download the result and revokes the generated object URL. For folder export, the server writes every selected file into the same timestamped directory.
 
-The server independently validates project membership, safe numbered filename, payload limit, PNG signature/chunks/CRCs and IHDR dimensions, client metadata, and every path boundary before atomically writing only inside `exports/`. Stored files are available through `GET /api/projects/:slug/exports/:fileName`; `GET /api/projects/:slug/exports` returns the export plan.
+The server independently validates project membership, safe numbered filename, payload limit, PNG signature/chunks/CRCs and IHDR dimensions, client metadata, and every path boundary before atomically writing inside the project `exports/` directory or a server-created run beneath the configured folder. Project-local files are available through `GET /api/projects/:slug/exports/:fileName`; `GET /api/projects/:slug/exports` returns the export plan.
 
 All-document export is sequential so inactive documents remain lightweight thumbnails rather than mounted full-resolution stages.
 
@@ -109,6 +110,7 @@ bun run tool export <slug> [--json]
 - `GET/POST /api/projects/:slug/assets` lists or uploads validated local images.
 - `GET/DELETE /api/projects/:slug/assets/:fileName` serves or removes an asset; referenced deletion requires explicit force confirmation.
 - `GET/POST /api/projects/:slug/exports` plans or stores browser-rendered PNGs.
+- `POST /api/projects/:slug/export-runs` validates the configured export folder and creates a timestamped output directory.
 - `GET /api/projects/:slug/exports/:fileName` downloads a validated stored export.
 
 Uploads are limited to 25 MB. Exports are limited to 50 MB and must be PNGs whose decoded dimensions exactly match their document. SVG is intentionally conservative and rejects scripts, external references, linked images, unsafe styles, and event attributes. Fonts are local CSS/fallback families; arbitrary remote font fetching is not part of the local-first workflow.

@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDocumentPreset } from "../src/lib/defaults";
+import { handleRenameProject } from "../src/lib/api";
 import { resolveWithin, writePrettyJsonAtomic, ProjectStorage } from "../src/lib/storage";
 
 const temporaryDirectories: string[] = [];
@@ -73,6 +74,29 @@ describe("safe project storage", () => {
     const metadata = await storage.listProjectMetadata();
     expect(metadata[0]).toMatchObject({ slug: "listed-project", name: "Listed project", documentCount: 1, valid: true });
     await expect(storage.createProject({ name: "Same slug", slug: "listed-project", description: "No overwrite" })).rejects.toThrow(/already exists/);
+  });
+
+  test("persists and clears the configured export folder when editing a project", async () => {
+    const storage = await temporaryStorage();
+    await storage.createProject({ name: "Editable project", slug: "editable-project", description: "Project settings" });
+    const exportDirectory = join(storage.rootDir, "configured-exports");
+
+    const configuredResponse = await handleRenameProject(new Request("http://plinth.test/api/projects/editable-project/rename", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Editable project", slug: "editable-project", exportDirectory }),
+    }), storage);
+    expect(configuredResponse.status).toBe(200);
+    expect((await storage.loadProject("editable-project")).settings.exportDirectory).toBe(exportDirectory);
+    expect(JSON.parse(await readFile(storage.projectFile("editable-project"), "utf8")).settings.exportDirectory).toBe(exportDirectory);
+
+    const clearedResponse = await handleRenameProject(new Request("http://plinth.test/api/projects/editable-project/rename", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Editable project", slug: "editable-project", exportDirectory: null }),
+    }), storage);
+    expect(clearedResponse.status).toBe(200);
+    expect((await storage.loadProject("editable-project")).settings.exportDirectory).toBeNull();
   });
 
   test("duplicates project assets without overwriting the target", async () => {

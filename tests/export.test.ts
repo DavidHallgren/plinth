@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { deflateSync } from "node:zlib";
-import { apiAction, handleCreateExport, handleGetExport, handleListExports } from "../src/lib/api";
+import { apiAction, handleCreateExport, handleCreateExportRun, handleGetExport, handleListExports } from "../src/lib/api";
 import { createDocumentPreset } from "../src/lib/defaults";
 import { buildExportPlan, decodePngDimensions, exportFileName, assertExportFileName } from "../src/lib/export-validation";
 import { ProjectStorage } from "../src/lib/storage";
@@ -84,6 +84,55 @@ describe("export naming and PNG validation", () => {
 });
 
 describe("export API and storage", () => {
+  test("creates a timestamped configured-folder run and writes all output inside it", async () => {
+    const storage = await temporaryStorage();
+    const exportRoot = join(storage.rootDir, "configured-output");
+    await mkdir(exportRoot, { recursive: true });
+    const created = await storage.createProject({ name: "Configured export", slug: "configured-export", description: "Folder export" });
+    const document = createDocumentPreset("custom", {
+      id: "doc_configured",
+      name: "Configured document",
+      exportSlug: "configured",
+      width: 320,
+      height: 240,
+    });
+    await storage.saveProject({
+      ...created,
+      settings: { ...created.settings, exportDirectory: exportRoot },
+      documents: [document],
+    });
+
+    const runResponse = await handleCreateExportRun(new Request("http://plinth.test/api/projects/configured-export/export-runs", { method: "POST" }), storage);
+    expect(runResponse.status).toBe(201);
+    const runPayload = await runResponse.json() as { data: { exportRun: { id: string; absolutePath: string } } };
+    expect(runPayload.data.exportRun.id).toMatch(/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}/);
+    expect(runPayload.data.exportRun.absolutePath).toBe(join(await realpath(exportRoot), runPayload.data.exportRun.id));
+
+    const form = new FormData();
+    form.append("metadata", JSON.stringify({ documentId: document.id, fileName: "01-configured.png", width: 320, height: 240, exportRunId: runPayload.data.exportRun.id }));
+    form.append("file", fixtureFile(pngFixture(320, 240), "01-configured.png"), "01-configured.png");
+    const response = await handleCreateExport(new Request("http://plinth.test/api/projects/configured-export/exports", { method: "POST", body: form }), storage);
+    expect(response.status).toBe(201);
+    const payload = await response.json() as { data: { export: { absolutePath: string; relativePath: string } } };
+    expect(payload.data.export.relativePath).toBe(`${runPayload.data.exportRun.id}/01-configured.png`);
+    expect(payload.data.export.absolutePath).toBe(join(await realpath(exportRoot), runPayload.data.exportRun.id, "01-configured.png"));
+    expect(Array.from(await readFile(payload.data.export.absolutePath))).toEqual(Array.from(pngFixture(320, 240)));
+  });
+
+  test("returns clear errors when the configured folder is missing or unavailable", async () => {
+    const storage = await temporaryStorage();
+    const created = await storage.createProject({ name: "Missing export folder", slug: "missing-export-folder", description: "Folder export" });
+
+    const missingConfiguration = await apiAction(() => handleCreateExportRun(new Request("http://plinth.test/api/projects/missing-export-folder/export-runs", { method: "POST" }), storage));
+    expect(missingConfiguration.status).toBe(422);
+    expect(await missingConfiguration.json()).toMatchObject({ error: { code: "EXPORT_DIRECTORY_NOT_CONFIGURED", message: expect.stringContaining("Configure an export folder") } });
+
+    await storage.saveProject({ ...created, settings: { ...created.settings, exportDirectory: join(storage.rootDir, "does-not-exist") } });
+    const unavailable = await apiAction(() => handleCreateExportRun(new Request("http://plinth.test/api/projects/missing-export-folder/export-runs", { method: "POST" }), storage));
+    expect(unavailable.status).toBe(422);
+    expect(await unavailable.json()).toMatchObject({ error: { code: "EXPORT_DIRECTORY_UNAVAILABLE", message: expect.stringContaining("unavailable") } });
+  });
+
   test("validates membership, metadata, dimensions, signature, and atomic persistence", async () => {
     const storage = await temporaryStorage();
     const created = await storage.createProject({ name: "Export fixture", slug: "export-fixture", description: "PNG export" });
