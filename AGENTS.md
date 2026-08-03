@@ -35,6 +35,12 @@ Plinth is a local-first screenshot composition studio. Project JSON is the sourc
 - Use the image cache/readiness boundary for every image. Detect missing/failed/not-ready assets before export instead of capturing placeholders.
 - Revoke browser-generated object URLs after download. Do not introduce permanent URL caches or base64 data URLs in persisted state.
 
+## Generated image assets
+
+- Unless explicitly requested otherwise, generate standalone decorative assets intended for placement in a Plinth scene as tightly framed PNG cutouts with true transparency.
+- Do not bake in a background, floor, horizon, border, text, checkerboard pattern, or cast shadow. Preserve only shadows that are intrinsic to the subject.
+- Before importing the asset, verify that the PNG has an alpha channel and that background pixels are actually transparent—not black, white, or transparency-like artwork.
+
 ## Commands and generated files
 
 ```sh
