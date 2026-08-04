@@ -32,7 +32,7 @@ bun run tool help  # Show CLI commands
 
 Projects are stored under `data/projects/<slug>/` with a human-readable `project.json`, an `assets/` directory, and generated `exports/`. Image data is never embedded in project JSON.
 
-Each project contains ordered decks. A deck chooses its immutable pixel width and height at creation, and contains one or more ordered screens. A screen stores editable background, layers, notes, and export identity; its render and export dimensions are always resolved from the containing deck. The current editor can work on the active deck while the deck-level canvas and overflow-link workflow are developed in a later stage.
+Each project contains ordered decks. A deck chooses its immutable pixel width and height at creation, and contains one or more ordered screens. A screen stores editable background, an ordered `layers` array, notes, and export identity; its render and export dimensions are always resolved from the containing deck. Owned layers contain the canonical element data once and an `overflow` flag. When overflow is enabled, target screens store compact links containing only the canonical element ID and owner screen ID. Links resolve from owner-local coordinates through deck-global coordinates into each target screen, while each screen keeps its own background crop and layer ordering.
 
 ## Export
 

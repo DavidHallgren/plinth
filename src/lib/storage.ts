@@ -6,7 +6,7 @@ import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject } from "./migrations";
 import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, deriveAssetFileName, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
 import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, MAX_EXPORT_BYTES } from "./export-validation";
-import type { AssetMetadata, Project, ProjectInput, SceneElement, ScreenPreset } from "./schema";
+import type { AssetMetadata, Project, ProjectInput, ScreenPreset } from "./schema";
 import { selectAssetReferences, selectAssetUsages, type AssetUsage } from "../scene/selectors";
 import { addDeck as addSceneDeck, addScreen as addSceneScreen, type AddDeckOptions, type AddScreenOptions } from "../scene/operations";
 
@@ -674,31 +674,52 @@ export class ProjectStorage {
     const source = await this.loadProject(slug);
     const targetSlug = assertProjectSlug(newSlug);
     const now = nowIso();
+    const usedIds = new Set([
+      source.id,
+      ...source.assets.map((asset) => asset.id),
+      ...source.decks.flatMap((deck) => [deck.id, ...deck.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])]),
+    ]);
+    const freshId = (prefix: string): string => {
+      let id = createId(prefix);
+      while (usedIds.has(id)) id = createId(prefix);
+      usedIds.add(id);
+      return id;
+    };
+    const screenIds = new Map(source.decks.flatMap((deck) => deck.screens.map((screen) => [screen.id, freshId("screen")] as const)));
+    const elementIds = new Map(source.decks.flatMap((deck) => deck.screens.flatMap((screen) => screen.layers
+      .filter((layer) => layer.kind === "owned")
+      .map((layer) => [layer.element.id, freshId(layer.element.type)] as const))));
     const decks = source.decks.map((deck, deckIndex) => ({
       ...deck,
-      id: createId("deck"),
+      id: freshId("deck"),
       slug: `${slugify(deck.name)}-${deckIndex + 1}`,
       screens: deck.screens.map((screen, screenIndex) => ({
         ...screen,
-        id: createId("screen"),
+        id: screenIds.get(screen.id) ?? freshId("screen"),
         slug: `${slugify(screen.name)}-${deckIndex + 1}-${screenIndex + 1}`,
         exportSlug: `${slugify(screen.name)}-${deckIndex + 1}-${screenIndex + 1}`,
-        elements: screen.elements.map((element: SceneElement) => ({ ...element, id: createId(element.type) })),
+        layers: screen.layers.map((layer) => layer.kind === "owned"
+          ? { ...layer, element: { ...layer.element, id: elementIds.get(layer.element.id) ?? freshId(layer.element.type) } }
+          : {
+            ...layer,
+            elementId: elementIds.get(layer.elementId) ?? layer.elementId,
+            ownerScreenId: screenIds.get(layer.ownerScreenId) ?? layer.ownerScreenId,
+          }),
         createdAt: now,
         updatedAt: now,
       })),
       createdAt: now,
       updatedAt: now,
     }));
-    const duplicate: Project = {
+    const duplicate = parseProject({
       ...source,
-      id: createId("project"),
+      id: freshId("project"),
       slug: targetSlug,
       name: name?.trim() || `${source.name} copy`,
       decks,
       createdAt: now,
       updatedAt: now,
-    };
+    });
 
     const created = await this.createProjectFromValue(duplicate);
     try {

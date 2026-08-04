@@ -568,7 +568,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           </div>
         </main>
         {!previewMode ? <aside className="flex min-h-0 w-[256px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
-          <Inspector document={activeDocument} onUpdateDocument={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
+          <Inspector document={activeDocument} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateDocument={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
         </aside> : null}
       </div>
 

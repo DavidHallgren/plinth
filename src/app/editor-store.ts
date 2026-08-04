@@ -15,12 +15,14 @@ import {
   reorderElements,
   reorderScreens,
   resizeElement,
+  toggleElementOverflow,
   updateElement,
   updateElements,
   updateScreen,
 } from "../scene/operations";
 import type { AddDeckOptions, AddScreenOptions, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput, ScreenPatch } from "../scene/operations";
 import { ProjectHistory, type ProjectOperation } from "../scene/history";
+import { resolveScreen } from "../scene/selectors";
 
 export type EditorSnapshot = {
   project: Project;
@@ -121,7 +123,7 @@ export class EditorStore {
   }
 
   selectAll(): void {
-    this.setSelection(this.activeScreen()?.elements.map((element) => element.id) ?? []);
+    this.setSelection(resolveScreen(this.history.project, this.snapshot.activeScreenId).elements.map((element) => element.id));
   }
 
   setZoom(zoom: number): void {
@@ -179,9 +181,18 @@ export class EditorStore {
   }
 
   copy(): void {
-    const screen = this.activeScreen();
+    const screen = resolveScreen(this.history.project, this.snapshot.activeScreenId);
     const selected = screen?.elements.filter((element) => this.snapshot.selectedElementIds.includes(element.id)) ?? [];
-    this.clipboard = selected.map((element) => ({ ...element }));
+    this.clipboard = selected.map((element) => {
+      const {
+        zIndex: _zIndex,
+        ownerScreenId: _ownerScreenId,
+        targetScreenId: _targetScreenId,
+        isOverflowLink: _isOverflowLink,
+        ...canonicalElement
+      } = element;
+      return canonicalElement;
+    });
     this.updateSnapshot({ clipboardCount: this.clipboard.length });
   }
 
@@ -208,23 +219,23 @@ export class EditorStore {
     const ids = this.snapshot.selectedElementIds;
     if (ids.length === 0) return;
     const screenId = this.snapshot.activeScreenId;
-    const beforeIds = new Set(this.activeScreen()?.elements.map((element) => element.id) ?? []);
+    const beforeIds = new Set(resolveScreen(this.history.project, screenId).elements.map((element) => element.id));
     this.apply("Duplicate selection", (project) => duplicateElements(project, screenId, ids));
-    this.setSelection(this.activeScreen()?.elements.filter((element) => !beforeIds.has(element.id)).map((element) => element.id) ?? []);
+    this.setSelection(resolveScreen(this.history.project, screenId).elements.filter((element) => !beforeIds.has(element.id)).map((element) => element.id));
   }
 
   duplicateElement(elementId: string): void {
     const screenId = this.snapshot.activeScreenId;
-    const beforeIds = new Set(this.activeScreen()?.elements.map((element) => element.id) ?? []);
+    const beforeIds = new Set(resolveScreen(this.history.project, screenId).elements.map((element) => element.id));
     this.apply("Duplicate layer", (project) => duplicateElements(project, screenId, [elementId]));
-    const duplicate = this.activeScreen()?.elements.find((element) => !beforeIds.has(element.id));
+    const duplicate = resolveScreen(this.history.project, screenId).elements.find((element) => !beforeIds.has(element.id));
     if (duplicate) this.setSelection([duplicate.id]);
   }
 
   reorderElementByDirection(elementId: string, direction: -1 | 1): void {
     const screen = this.activeScreen();
     if (!screen) return;
-    const ordered = [...screen.elements].sort((left, right) => left.zIndex - right.zIndex);
+    const ordered = [...resolveScreen(this.history.project, screen.id).elements].sort((left, right) => left.zIndex - right.zIndex);
     const index = ordered.findIndex((element) => element.id === elementId);
     if (index < 0) return;
     this.apply("Reorder layer", (project) => reorderElements(project, screen.id, [elementId], index + direction));
@@ -264,6 +275,10 @@ export class EditorStore {
 
   resizeElement(elementId: string, input: ResizeElementInput): void {
     this.apply("Resize element", (project) => resizeElement(project, this.snapshot.activeScreenId, elementId, input));
+  }
+
+  toggleElementOverflow(elementId: string, enabled?: boolean): void {
+    this.apply("Toggle overflow", (project) => toggleElementOverflow(project, this.snapshot.activeScreenId, elementId, enabled));
   }
 
   updateCurrentScreen(patch: ScreenPatch): void {
@@ -340,7 +355,7 @@ export class EditorStore {
   private reorderSelection(direction: number, label: string): void {
     const screen = this.activeScreen();
     if (!screen || this.snapshot.selectedElementIds.length === 0) return;
-    const ordered = [...screen.elements].sort((left, right) => left.zIndex - right.zIndex);
+    const ordered = [...resolveScreen(this.history.project, screen.id).elements].sort((left, right) => left.zIndex - right.zIndex);
     const selected = new Set(this.snapshot.selectedElementIds);
     const currentIndex = Math.min(...ordered.filter((element) => selected.has(element.id)).map((element) => element.zIndex));
     const target = direction === 9999 ? ordered.length : direction === 0 ? 0 : currentIndex + direction;
@@ -353,12 +368,12 @@ export class EditorStore {
 
   private editableSelectedIds(): string[] {
     const selected = new Set(this.snapshot.selectedElementIds);
-    return this.activeScreen()?.elements.filter((element) => selected.has(element.id) && !element.locked).map((element) => element.id) ?? [];
+    return resolveScreen(this.history.project, this.snapshot.activeScreenId).elements.filter((element) => selected.has(element.id) && !element.locked).map((element) => element.id);
   }
 
   private validSelection(project: Project, screenId: string, ids: readonly string[]): string[] {
     const screen = project.decks.flatMap((deck) => deck.screens).find((candidate) => candidate.id === screenId);
-    const available = new Set(screen?.elements.map((element) => element.id) ?? []);
+    const available = new Set(screen ? resolveScreen(project, screen.id).elements.map((element) => element.id) : []);
     return ids.filter((id) => available.has(id));
   }
 

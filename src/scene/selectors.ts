@@ -1,18 +1,21 @@
 import type { Deck, Project, SceneElement, Screen } from "../lib/schema";
+import { resolveDeckScreen, type ResolvedElement } from "./overflow";
 
-export type ResolvedScreen = Screen & {
+export type ResolvedScreen = Omit<Screen, "elements"> & {
   deckId: string;
   deckName: string;
   width: number;
   height: number;
+  elements: ResolvedElement[];
 };
 
 export function sortLayerElements(elements: SceneElement[]): SceneElement[] {
   return elements
-    .map((element, index) => ({ element, index }))
-    .sort((left, right) => left.element.zIndex - right.element.zIndex || left.index - right.index)
+    .map((element, index) => ({ element, index, zIndex: (element as SceneElement & { zIndex?: number }).zIndex ?? index }))
+    .sort((left, right) => left.zIndex - right.zIndex || left.index - right.index)
     .map(({ element }) => element);
 }
+
 export function selectActiveDeck(project: Project, deckId: string | null | undefined): Deck {
   return project.decks.find((deck) => deck.id === deckId) ?? project.decks[0] as Deck;
 }
@@ -42,29 +45,35 @@ export function resolveScreen(project: Project, screenId: string | null | undefi
     deckName: selected.deck.name,
     width: selected.deck.width,
     height: selected.deck.height,
+    elements: resolveDeckScreen(selected.deck, selected.screen.id),
   };
 }
 
-export function selectSelectedElements(screen: Screen, selectedIds: readonly string[]): SceneElement[] {
+export function selectSelectedElements(screen: { elements: readonly SceneElement[] }, selectedIds: readonly string[]): SceneElement[] {
   const selected = new Set(selectedIds);
   return screen.elements.filter((element) => selected.has(element.id));
 }
 
-export function selectSortedLayers(screen: Screen): SceneElement[] {
-  return sortLayerElements(screen.elements);
+export function selectSortedLayers(screen: { elements: readonly SceneElement[] }): SceneElement[] {
+  return [...screen.elements].sort((left, right) => {
+    const leftZ = (left as SceneElement & { zIndex?: number }).zIndex ?? 0;
+    const rightZ = (right as SceneElement & { zIndex?: number }).zIndex ?? 0;
+    return leftZ - rightZ;
+  });
 }
 
+/** Compatibility helper for legacy callers; persisted order is `screen.layers`. */
 export function normalizeLayerOrder(elements: SceneElement[]): SceneElement[] {
   return sortLayerElements(elements).map((element, index) => ({ ...element, zIndex: index }));
 }
 
 export function selectAssetReferences(project: Project, screenId?: string): Map<string, number> {
   const screens = screenId
-    ? project.decks.flatMap((deck) => deck.screens.filter((screen) => screen.id === screenId))
-    : project.decks.flatMap((deck) => deck.screens);
+    ? project.decks.flatMap((deck) => deck.screens.filter((screen) => screen.id === screenId).map((screen) => ({ deck, screen })))
+    : project.decks.flatMap((deck) => deck.screens.map((screen) => ({ deck, screen })));
   const references = new Map<string, number>();
-  for (const screen of screens) {
-    for (const element of screen.elements) {
+  for (const { deck, screen } of screens) {
+    for (const element of resolveDeckScreen(deck, screen.id)) {
       const assetPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
       if (!assetPath) continue;
       references.set(assetPath, (references.get(assetPath) ?? 0) + 1);
@@ -81,13 +90,14 @@ export type AssetUsage = {
   elementId: string;
   elementName: string;
   elementType: "image" | "device";
+  linked: boolean;
 };
 
 export function selectAssetUsages(project: Project, assetPath: string): AssetUsage[] {
   const usages: AssetUsage[] = [];
   for (const deck of project.decks) {
     for (const screen of deck.screens) {
-      for (const element of screen.elements) {
+      for (const element of resolveDeckScreen(deck, screen.id)) {
         const referencedPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
         if (referencedPath !== assetPath || (element.type !== "image" && element.type !== "device")) continue;
         usages.push({
@@ -98,6 +108,7 @@ export function selectAssetUsages(project: Project, assetPath: string): AssetUsa
           elementId: element.id,
           elementName: element.name,
           elementType: element.type,
+          linked: element.isOverflowLink,
         });
       }
     }
@@ -105,6 +116,16 @@ export function selectAssetUsages(project: Project, assetPath: string): AssetUsa
   return usages;
 }
 
-export function selectElementById(screen: Screen, elementId: string | null | undefined): SceneElement | undefined {
+export function selectElementById(screen: { elements: readonly SceneElement[] }, elementId: string | null | undefined): SceneElement | undefined {
   return elementId ? screen.elements.find((element) => element.id === elementId) : undefined;
+}
+
+export function selectElementOverflow(project: Project, screenId: string, elementId: string): boolean {
+  const context = selectScreenWithDeck(project, screenId);
+  if (!context) return false;
+  for (const screen of context.deck.screens) {
+    const layer = screen.layers.find((candidate) => candidate.kind === "owned" && candidate.element.id === elementId);
+    if (layer?.kind === "owned") return layer.overflow;
+  }
+  return false;
 }

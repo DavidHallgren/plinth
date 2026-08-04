@@ -1,4 +1,4 @@
-import type { AssetMetadata, Project, Screen } from "../lib/schema";
+import type { AssetMetadata, Project, SceneElement } from "../lib/schema";
 import { deviceFrameSource } from "../devices/frame-assets";
 import { assetUrl } from "./image-loading";
 import { imageResourceState, loadImageResource } from "./image-cache";
@@ -10,7 +10,9 @@ export type SceneReadiness = {
   fontSpecs: string[];
 };
 
-function referencedAssetPaths(sceneScreen: Screen): string[] {
+type RenderableScene = { elements: readonly SceneElement[] };
+
+function referencedAssetPaths(sceneScreen: RenderableScene): string[] {
   const paths = new Set<string>();
   for (const element of sceneScreen.elements) {
     if (element.type === "image") paths.add(element.assetPath);
@@ -19,7 +21,7 @@ function referencedAssetPaths(sceneScreen: Screen): string[] {
   return [...paths];
 }
 
-function referencedFontFamilies(sceneScreen: Screen): string[] {
+function referencedFontFamilies(sceneScreen: RenderableScene): string[] {
   const families = new Set<string>();
   for (const element of sceneScreen.elements) {
     if (element.type === "text") families.add(element.style.fontFamily);
@@ -28,7 +30,7 @@ function referencedFontFamilies(sceneScreen: Screen): string[] {
   return [...families];
 }
 
-function referencedBuiltInImageSources(sceneScreen: Screen): string[] {
+function referencedBuiltInImageSources(sceneScreen: RenderableScene): string[] {
   const sources = new Set<string>();
   for (const element of sceneScreen.elements) {
     if (element.type !== "device" || !element.showCamera) continue;
@@ -38,7 +40,7 @@ function referencedBuiltInImageSources(sceneScreen: Screen): string[] {
   return [...sources];
 }
 
-function referencedFontSpecs(sceneScreen: Screen): string[] {
+function referencedFontSpecs(sceneScreen: RenderableScene): string[] {
   const specs = new Set<string>(["400 16px Inter, ui-sans-serif, system-ui, sans-serif"]);
   for (const element of sceneScreen.elements) {
     if (element.type !== "text") continue;
@@ -47,7 +49,7 @@ function referencedFontSpecs(sceneScreen: Screen): string[] {
   return [...specs];
 }
 
-export function sceneReadiness(sceneScreen: Screen): SceneReadiness {
+export function sceneReadiness(sceneScreen: RenderableScene): SceneReadiness {
   return {
     assetPaths: referencedAssetPaths(sceneScreen),
     builtInImageSources: referencedBuiltInImageSources(sceneScreen),
@@ -56,7 +58,7 @@ export function sceneReadiness(sceneScreen: Screen): SceneReadiness {
   };
 }
 
-export async function waitForSceneReady(project: Pick<Project, "slug">, sceneScreen: Screen, assets: readonly AssetMetadata[]): Promise<void> {
+export async function waitForSceneReady(project: Pick<Project, "slug">, sceneScreen: RenderableScene, assets: readonly AssetMetadata[]): Promise<void> {
   const readiness = sceneReadiness(sceneScreen);
   const missing = readiness.assetPaths.filter((path) => !assets.some((asset) => asset.path === path));
   if (missing.length > 0) {

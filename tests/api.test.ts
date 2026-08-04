@@ -57,7 +57,7 @@ describe("deck and screen API", () => {
 
     const loadedResponse = await handleGetProject(new Request("http://plinth.test/api/projects/deck-api"), storage);
     expect(loadedResponse.status).toBe(200);
-    expect((await loadedResponse.json() as { data: { project: { schemaVersion: number } } }).data.project.schemaVersion).toBe(6);
+    expect((await loadedResponse.json() as { data: { project: { schemaVersion: number } } }).data.project.schemaVersion).toBe(7);
   });
 
   test("requires fixed dimensions when creating a deck", async () => {

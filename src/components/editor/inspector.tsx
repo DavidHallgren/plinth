@@ -1,7 +1,7 @@
-import { ChevronDown, Lock, Unlock, Eye, EyeOff, Trash2 } from "lucide-react";
+import { ChevronDown, Lock, Unlock, Eye, EyeOff, Link2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EDITABLE_DEVICE_PRESETS, getDevicePreset } from "../../devices/presets";
-import type { Background, SceneElement, Shadow, TextElement } from "../../lib/schema";
+import type { Background, SceneElement, Shadow } from "../../lib/schema";
 import type { ResolvedScreen } from "../../scene/selectors";
 import type { ElementPatch, ElementUpdate, ScreenPatch } from "../../scene/operations";
 import { APP_STORE_PRESETS } from "../../scene/presets";
@@ -27,9 +27,10 @@ type InspectorProps = {
   onUpdateDocument: (patch: DocumentPatch) => void;
   onUpdateElement: (elementId: string, patch: ElementPatch) => void;
   onUpdateElements: (updates: ElementUpdate[]) => void;
+  onToggleOverflow: (elementId: string, enabled: boolean) => void;
 };
 
-export function Inspector({ document, selectedElements, onUpdateDocument, onUpdateElement, onUpdateElements }: InspectorProps) {
+export function Inspector({ document, selectedElements, onUpdateDocument, onUpdateElement, onUpdateElements, onToggleOverflow }: InspectorProps) {
   if (selectedElements.length === 0) {
     return <DocumentInspector document={document} onUpdate={onUpdateDocument} />;
   }
@@ -38,7 +39,8 @@ export function Inspector({ document, selectedElements, onUpdateDocument, onUpda
   }
   const element = selectedElements[0];
   if (!element) return null;
-  return <ElementInspector element={element} onUpdate={onUpdateElement} />;
+  const ownedLayer = document.layers.find((layer): layer is Extract<typeof layer, { kind: "owned" }> => layer.kind === "owned" && layer.element.id === element.id);
+  return <ElementInspector element={element} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} overflowEnabled={Boolean(ownedLayer?.overflow) || document.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} />;
 }
 
 function DocumentInspector({ document, onUpdate }: { document: Document; onUpdate: (patch: DocumentPatch) => void }) {
@@ -91,7 +93,7 @@ function MultiSelectionInspector({ elements, onUpdateElements }: { elements: Sce
   );
 }
 
-function ElementInspector({ element, onUpdate }: { element: SceneElement; onUpdate: (id: string, patch: ElementPatch) => void }) {
+function ElementInspector({ element, onUpdate, overflowEnabled, onToggleOverflow }: { element: SceneElement; onUpdate: (id: string, patch: ElementPatch) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void }) {
   const update = (patch: ElementPatch) => onUpdate(element.id, patch);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -109,6 +111,7 @@ function ElementInspector({ element, onUpdate }: { element: SceneElement; onUpda
         <div className="grid grid-cols-2 gap-2">
           <ToggleButton active={element.visible} icon={element.visible ? <Eye size={13} /> : <EyeOff size={13} />} label={element.visible ? "Visible" : "Hidden"} onClick={() => update({ visible: !element.visible })} />
           <ToggleButton active={!element.locked} icon={element.locked ? <Lock size={13} /> : <Unlock size={13} />} label={element.locked ? "Locked" : "Editable"} onClick={() => update({ locked: !element.locked })} />
+          <ToggleButton active={overflowEnabled} icon={<Link2 size={13} />} label="Overflow" onClick={() => onToggleOverflow(element.id, !overflowEnabled)} />
         </div>
       </Section>
       {element.type === "text" ? <TextControls element={element} onUpdate={update} /> : null}
@@ -119,9 +122,9 @@ function ElementInspector({ element, onUpdate }: { element: SceneElement; onUpda
   );
 }
 
-function TextControls({ element, onUpdate }: { element: TextElement; onUpdate: (patch: ElementPatch) => void }) {
+function TextControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "text" }>; onUpdate: (patch: ElementPatch) => void }) {
   const style = element.style;
-  function updateStyle(values: Partial<TextElement["style"]>) {
+  function updateStyle(values: Partial<typeof element.style>) {
     onUpdate({ style: { ...style, ...values } });
   }
   return (

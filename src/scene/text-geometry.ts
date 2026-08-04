@@ -1,4 +1,6 @@
-import type { TextElement, TextStyle } from "../lib/schema";
+import type { SceneElement, TextStyle } from "../lib/schema";
+
+type CanonicalTextElement = Extract<SceneElement, { type: "text" }>;
 
 /**
  * A deterministic, browser-independent text measurement used by operations
@@ -17,14 +19,14 @@ export function calculateTextAutoHeight(text: string, width: number, style: Pick
   return Math.max(1, Math.ceil(lineCount * style.fontSize * style.lineHeight + padding * 2));
 }
 
-export function normalizeTextElementGeometry(element: TextElement, documentWidth: number, documentHeight: number): TextElement {
+export function normalizeTextElementGeometry(element: CanonicalTextElement, documentWidth: number, documentHeight: number, maxWidth = documentWidth): CanonicalTextElement {
   if (element.style.autoHeight === false) return element;
-  const width = Math.min(Math.max(1, element.width), documentWidth);
+  const width = Math.min(Math.max(1, element.width), Math.max(documentWidth, maxWidth));
   const height = Math.min(documentHeight, calculateTextAutoHeight(element.text, width, element.style));
   return {
     ...element,
-    x: Math.min(Math.max(0, element.x), Math.max(0, documentWidth - width)),
-    y: Math.min(Math.max(0, element.y), Math.max(0, documentHeight - height)),
+    x: Math.min(Math.max(1 - width, element.x), documentWidth - 1),
+    y: Math.min(Math.max(1 - height, element.y), documentHeight - 1),
     width,
     height,
   };

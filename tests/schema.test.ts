@@ -27,7 +27,8 @@ describe("project schema", () => {
     expect(DeckSchema.parse(deck)).toEqual(deck);
     expect(ScreenSchema.parse(screen)).toEqual(screen);
     for (const element of screen.elements) {
-      expect(SceneElementSchema.parse(element)).toEqual(element);
+      const { zIndex: _zIndex, ...canonicalElement } = element;
+      expect(SceneElementSchema.parse(element)).toEqual(canonicalElement);
     }
   });
 
@@ -153,12 +154,20 @@ describe("project schema", () => {
 
     const duplicateElement = ProjectSchema.safeParse({
       ...project,
-      decks: [deck, { ...secondDeck, screens: [{ ...secondScreen, elements: [{ ...secondElement, id: firstElement.id }, ...secondScreen.elements.slice(1)] }] }],
+      decks: [deck, {
+        ...secondDeck,
+        screens: [{
+          ...secondScreen,
+          layers: secondScreen.layers.map((layer) => layer.kind === "owned" && layer.element.id === secondElement.id
+            ? { ...layer, element: { ...layer.element, id: firstElement.id } }
+            : layer),
+        }, ...secondDeck.screens.slice(1)],
+      }],
     });
     expect(duplicateElement.success).toBe(false);
     if (!duplicateElement.success) {
       expect(duplicateElement.error.issues[0]?.message).toContain("Duplicate scene element id");
-      expect(duplicateElement.error.issues[0]?.path).toEqual(["decks", 1, "screens", 0, "elements", 0, "id"]);
+      expect(duplicateElement.error.issues[0]?.path).toEqual(["decks", 1, "screens", 0, "layers", 0, "element", "id"]);
     }
   });
 });

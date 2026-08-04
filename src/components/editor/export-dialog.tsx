@@ -3,7 +3,7 @@ import { Download, FileOutput, FolderOutput, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Stage } from "react-konva";
 import type { Project } from "../../lib/schema";
-import type { ResolvedScreen } from "../../scene/selectors";
+import { resolveScreen, type ResolvedScreen } from "../../scene/selectors";
 import { apiFetch } from "../../lib/client-api";
 import { buildExportPlan } from "../../lib/export-validation";
 import { waitForSceneReady } from "../../canvas/export-readiness";
@@ -73,7 +73,7 @@ function planForProject(sourceProject: Project): Array<{ document: Document; fil
     if (!document) throw new Error(`Export screen "${item.screenId}" is missing from the project.`);
     const deck = sourceProject.decks.find((candidate) => candidate.id === item.deckId);
     if (!deck) throw new Error(`Export deck "${item.deckId}" is missing from the project.`);
-    return { document: { ...document, deckId: deck.id, deckName: deck.name, width: deck.width, height: deck.height }, fileName: item.exportName };
+    return { document: resolveScreen(sourceProject, document.id), fileName: item.exportName };
   });
 }
 
@@ -90,9 +90,7 @@ export function ExportDialog({ open, project, activeScreenId, onOpenChange, onEr
 
   const currentScreen = project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === activeScreenId) ?? project.decks[0]?.screens[0];
   const currentDeck = project.decks.find((deck) => deck.screens.some((screen) => screen.id === currentScreen?.id));
-  const currentDocument = currentScreen && currentDeck
-    ? { ...currentScreen, deckId: currentDeck.id, deckName: currentDeck.name, width: currentDeck.width, height: currentDeck.height }
-    : undefined;
+  const currentDocument = currentScreen && currentDeck ? resolveScreen(project, currentScreen.id) : undefined;
   const planResult = useMemo(() => {
     try {
       return {

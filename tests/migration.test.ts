@@ -24,7 +24,7 @@ function legacyDocument(overrides: Record<string, unknown> = {}) {
 }
 
 describe("project migrations", () => {
-  test("upgrades an unversioned legacy project to schema v6", () => {
+  test("upgrades an unversioned legacy project to schema v7", () => {
     const migrated = parseProject({
       version: 0,
       id: "legacy_project",
@@ -197,7 +197,7 @@ describe("project migrations", () => {
     expect(migratedV4.settings.exportDirectory).toBeNull();
   });
 
-  test("canonicalizes persisted layer order and text geometry in schema v6", () => {
+  test("canonicalizes persisted layer order and text geometry in schema v7", () => {
     const project = createDefaultProject("Layer order project", { now: timestamp });
     const deck = project.decks[0];
     const screen = deck?.screens[0];

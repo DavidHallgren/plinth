@@ -12,7 +12,7 @@ import type {
   ShapeElement,
   TextElement,
 } from "./schema";
-import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
+import { CURRENT_SCHEMA_VERSION, ProjectSchema, SceneElementSchema, ScreenSchema } from "./schema";
 import { getPresetDefinition, isAppStorePreset } from "../scene/presets";
 import { getDevicePreset } from "../devices/presets";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
@@ -43,6 +43,8 @@ export const DEFAULT_SHADOW = {
   opacity: 0.24,
 } as const;
 
+type ElementFrameValues = Pick<SceneElement, "x" | "y" | "width" | "height"> & { zIndex: number };
+
 export type CreateScreenOptions = {
   id?: string;
   name?: string;
@@ -56,7 +58,7 @@ export type CreateScreenOptions = {
 function frame(
   id: string,
   name: string,
-  values: Pick<SceneElement, "x" | "y" | "width" | "height" | "zIndex">,
+  values: ElementFrameValues,
 ) {
   return {
     id,
@@ -76,7 +78,7 @@ function frame(
 
 function deviceElement(
   frameKind: "browser" | "phone" | "tablet",
-  values: Pick<SceneElement, "x" | "y" | "width" | "height" | "zIndex">,
+  values: ElementFrameValues,
   id = createId("device"),
 ): DeviceElement {
   const isPhone = frameKind === "phone";
@@ -107,7 +109,7 @@ function deviceElement(
 
 function textElement(
   text: string,
-  values: Pick<SceneElement, "x" | "y" | "width" | "height" | "zIndex">,
+  values: ElementFrameValues,
   style: TextElement["style"],
   id = createId("text"),
   name = text.slice(0, 32),
@@ -130,7 +132,7 @@ function textElement(
 }
 
 function shapeElement(
-  values: Pick<SceneElement, "x" | "y" | "width" | "height" | "zIndex">,
+  values: ElementFrameValues,
   overrides: Pick<ShapeElement, "shape" | "fill" | "stroke" | "strokeWidth" | "radius"> & Partial<Pick<ShapeElement, "shadow">>,
   id = createId("shape"),
   name = "Decorative shape",
@@ -371,7 +373,7 @@ export function createScreenPreset(
     ? createAppStoreElements(preset, width, height)
     : createLegacyElements(isLegacy ? preset : "blank");
   const normalizedElements = elements.map((element) => element.type === "text" ? normalizeTextElementGeometry(element, width, height) : element);
-  const screen: Screen = {
+  const screen = {
     id,
     slug: options.slug ?? slugify(name, "composition"),
     exportSlug: options.exportSlug ?? slugify(name, "composition"),
@@ -383,13 +385,17 @@ export function createScreenPreset(
       start: { x: 0, y: 1 },
       end: { x: 1, y: 0 },
     } : DEFAULT_BACKGROUND,
-    elements: normalizeLayerOrder(normalizedElements),
+    layers: normalizeLayerOrder(normalizedElements).map((element) => ({
+      kind: "owned" as const,
+      element: SceneElementSchema.parse(element),
+      overflow: false,
+    })),
     notes: "",
     createdAt: now,
     updatedAt: now,
   };
 
-  return screen;
+  return ScreenSchema.parse(screen);
 }
 
 export type CreateDeckOptions = {

@@ -1,10 +1,20 @@
 import { createScreenPreset } from "../lib/defaults";
 import { createId, nowIso, slugify } from "../lib/ids";
-import { DeckSchema, SceneElementSchema, ScreenSchema } from "../lib/schema";
-import type { Deck, DeviceElement, ImageFit, Point, Project, SceneElement, Screen, ScreenPreset, Shadow, TextStyle } from "../lib/schema";
+import { DeckSchema, LayerEntrySchema, ProjectSchema, SceneElementSchema, ScreenSchema } from "../lib/schema";
+import type { Deck, DeviceElement, ImageFit, LayerEntry, OwnedLayer, Point, Project, SceneElement, Screen, ScreenPreset, Shadow, TextStyle } from "../lib/schema";
 import type { ShapeElement } from "../lib/schema";
 import { calculateTextAutoHeight } from "./text-geometry";
-import { normalizeLayerOrder, sortLayerElements } from "./selectors";
+import {
+  boundsIntersectScreen,
+  elementDeckBounds,
+  elementForOwnedLayer,
+  ownerOfElement,
+  overflowTargetScreenIds,
+  screenContainingElementCenter,
+  screenOrigin,
+} from "./overflow";
+import { resolveDeckScreen } from "./overflow";
+import { sortLayerElements } from "./selectors";
 
 export const MIN_DIMENSION = 1;
 
@@ -17,6 +27,7 @@ export class SceneOperationError extends Error {
     this.code = code;
   }
 }
+
 export type ElementPatch = {
   id?: string;
   type?: SceneElement["type"];
@@ -26,6 +37,7 @@ export type ElementPatch = {
   height?: number;
   rotation?: number;
   opacity?: number;
+  /** @deprecated Layer array position is the persisted z-order. */
   zIndex?: number;
   locked?: boolean;
   visible?: boolean;
@@ -123,14 +135,8 @@ function screenContextFor(project: Project, screenId: string, expectedDeckId?: s
   throw new SceneOperationError("SCREEN_NOT_FOUND", `Screen "${screenId}" was not found.`);
 }
 
-function elementFor(screen: Screen, elementId: string): SceneElement {
-  const element = screen.elements.find((candidate) => candidate.id === elementId);
-  if (!element) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in screen "${screen.id}".`);
-  return element;
-}
-
 function touchProject(project: Project, decks: Project["decks"]): Project {
-  return { ...project, decks, updatedAt: nowIso() };
+  return ProjectSchema.parse({ ...project, decks, updatedAt: nowIso() });
 }
 
 function touchDeck(deck: Deck, values: Partial<Deck>): Deck {
@@ -156,21 +162,17 @@ function withScreen(project: Project, screenId: string, update: (screen: Screen,
   });
 }
 
-function sortedByLayer(elements: SceneElement[]): SceneElement[] {
-  return sortLayerElements(elements);
-}
-
 export function normalizeElementOrder(elements: SceneElement[]): SceneElement[] {
-  return elements.map((element, index) => ({ ...element, zIndex: index }));
+  return sortLayerElements(elements).map((element, index) => ({ ...element, zIndex: index }));
 }
 
 function clampElementToDeck(deck: Deck, element: SceneElement): SceneElement {
-  const width = clamp(Math.round(Math.abs(finite(element.width, MIN_DIMENSION))), MIN_DIMENSION, deck.width);
+  const width = clamp(Math.round(Math.abs(finite(element.width, MIN_DIMENSION))), MIN_DIMENSION, deck.width * Math.max(1, deck.screens.length));
   const requestedHeight = element.type === "text" && element.style.autoHeight !== false
     ? calculateTextAutoHeight(element.text, width, element.style)
     : Math.abs(finite(element.height, MIN_DIMENSION));
   const height = clamp(Math.round(requestedHeight), MIN_DIMENSION, deck.height);
-  return {
+  return SceneElementSchema.parse({
     ...element,
     x: clamp(Math.round(finite(element.x, 0)), MIN_DIMENSION - width, deck.width - MIN_DIMENSION),
     y: clamp(Math.round(finite(element.y, 0)), MIN_DIMENSION - height, deck.height - MIN_DIMENSION),
@@ -178,19 +180,22 @@ function clampElementToDeck(deck: Deck, element: SceneElement): SceneElement {
     height,
     rotation: roundToTenth(finite(element.rotation, 0)),
     opacity: clamp(finite(element.opacity, 1), 0, 1),
-  } as SceneElement;
+  });
 }
 
-function updateScreenElements(deck: Deck, screen: Screen, elements: SceneElement[]): Screen {
-  const bounded = elements.map((element) => clampElementToDeck(deck, element));
-  return touchScreen(screen, { elements: normalizeElementOrder(sortedByLayer(bounded)) });
+function ownedLayer(element: SceneElement, overflow = false): OwnedLayer {
+  return { kind: "owned", element: SceneElementSchema.parse(element), overflow };
+}
+
+function layerElementId(layer: LayerEntry): string {
+  return layer.kind === "owned" ? layer.element.id : layer.elementId;
 }
 
 function projectIds(project: Project): Set<string> {
   return new Set([
     project.id,
     ...project.assets.map((asset) => asset.id),
-    ...project.decks.flatMap((deck) => [deck.id, ...deck.screens.flatMap((screen) => [screen.id, ...screen.elements.map((element) => element.id)])]),
+    ...project.decks.flatMap((deck) => [deck.id, ...deck.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])]),
   ]);
 }
 
@@ -245,144 +250,319 @@ function uniqueScreenExportSlug(project: Project, proposed: string, ignoredId?: 
   return candidate;
 }
 
-function patchElement(deck: Deck, element: SceneElement, patch: ElementPatch): SceneElement {
+function patchElement(deck: Deck, element: SceneElement, patch: ElementPatch, coordinateScreenId: string, ownerScreenId: string): SceneElement {
   if (patch.id && patch.id !== element.id) throw new SceneOperationError("INVALID_OPERATION", "Element ids cannot be changed by an update.");
   if (patch.type && patch.type !== element.type) throw new SceneOperationError("INVALID_OPERATION", "Element types cannot be changed by an update.");
   const effectivePatch = element.locked
     ? Object.fromEntries(Object.entries(patch).filter(([key]) => !["x", "y", "width", "height", "rotation"].includes(key))) as ElementPatch
     : patch;
+  const ownerOrigin = screenOrigin(deck, ownerScreenId);
+  const coordinateOrigin = screenOrigin(deck, coordinateScreenId);
+  const translatedPatch = ownerOrigin && coordinateOrigin
+    ? {
+      ...effectivePatch,
+      ...(effectivePatch.x === undefined ? {} : { x: effectivePatch.x + coordinateOrigin.x - ownerOrigin.x }),
+    }
+    : effectivePatch;
   const next = {
     ...element,
-    ...effectivePatch,
-    ...(element.type === "text" && effectivePatch.style ? { style: { ...element.style, ...effectivePatch.style } } : {}),
+    ...translatedPatch,
+    ...(element.type === "text" && translatedPatch.style ? { style: { ...element.style, ...translatedPatch.style } } : {}),
     id: element.id,
     type: element.type,
   } as SceneElement;
   return SceneElementSchema.parse(clampElementToDeck(deck, next));
 }
 
+type ElementContext = {
+  deck: Deck;
+  targetScreen: Screen;
+  ownerScreen: Screen;
+  ownerLayer: OwnedLayer;
+};
+
+function elementContextFor(project: Project, targetScreenId: string, elementId: string): ElementContext {
+  const { deck, screen: targetScreen } = screenContextFor(project, targetScreenId);
+  const owner = ownerOfElement(deck, elementId);
+  if (!owner) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in deck "${deck.id}".`);
+  if (owner.screen.id !== targetScreen.id) {
+    const linked = targetScreen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === elementId && layer.ownerScreenId === owner.screen.id);
+    if (!linked) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in screen "${targetScreen.id}".`);
+  }
+  return { deck, targetScreen, ownerScreen: owner.screen, ownerLayer: owner.layer };
+}
+
+function replaceOwnedElement(project: Project, deckId: string, ownerScreenId: string, elementId: string, nextElement: SceneElement): Project {
+  return withDeck(project, deckId, (deck) => touchDeck(deck, {
+    screens: deck.screens.map((screen) => screen.id !== ownerScreenId ? screen : touchScreen(screen, {
+      layers: screen.layers.map((layer) => layer.kind === "owned" && layer.element.id === elementId ? ownedLayer(nextElement, layer.overflow) : layer),
+    })),
+  }));
+}
+
+function transferElementOwnershipInDeck(deck: Deck, elementId: string, targetScreenId: string): Deck {
+  const owner = ownerOfElement(deck, elementId);
+  const target = deck.screens.find((screen) => screen.id === targetScreenId);
+  if (!owner) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in deck "${deck.id}".`);
+  if (!target) throw new SceneOperationError("SCREEN_NOT_FOUND", `Screen "${targetScreenId}" was not found in deck "${deck.id}".`);
+  if (owner.screen.id === target.id) return deck;
+  const ownerOrigin = screenOrigin(deck, owner.screen.id);
+  const targetOrigin = screenOrigin(deck, target.id);
+  if (!ownerOrigin || !targetOrigin) throw new SceneOperationError("INVALID_OPERATION", "Could not resolve screen coordinates for ownership transfer.");
+
+  const translated = SceneElementSchema.parse({
+    ...owner.layer.element,
+    x: owner.layer.element.x + ownerOrigin.x - targetOrigin.x,
+  });
+  const existingTargetLinkIndex = target.layers.findIndex((layer) => layer.kind === "overflow-link" && layer.elementId === elementId);
+  const targetLayersWithoutElement = target.layers.filter((layer) => !(layer.kind === "overflow-link" && layer.elementId === elementId));
+  const nextTargetLayers = [...targetLayersWithoutElement];
+  const nextOwned = ownedLayer(translated, owner.layer.overflow);
+  if (existingTargetLinkIndex >= 0) {
+    nextTargetLayers.splice(Math.min(existingTargetLinkIndex, nextTargetLayers.length), 0, nextOwned);
+  } else {
+    nextTargetLayers.push(nextOwned);
+  }
+
+  const nextScreens = deck.screens.map((screen) => {
+    if (screen.id === owner.screen.id) {
+      return touchScreen(screen, { layers: screen.layers.filter((layer) => !(layer.kind === "owned" && layer.element.id === elementId)) });
+    }
+    if (screen.id === target.id) return touchScreen(screen, { layers: nextTargetLayers });
+    return touchScreen(screen, { layers: screen.layers.filter((layer) => !(layer.kind === "overflow-link" && layer.elementId === elementId)) });
+  });
+  return touchDeck(deck, { screens: nextScreens });
+}
+
+/** Explicitly move a canonical element to another screen while preserving deck coordinates. */
+export function transferElementOwnership(project: Project, elementId: string, targetScreenId: string): Project;
+export function transferElementOwnership(project: Project, ownerScreenId: string, elementId: string, targetScreenId: string): Project;
+export function transferElementOwnership(project: Project, first: string, second: string, third?: string): Project {
+  const elementId = third === undefined ? first : second;
+  const targetScreenId = third === undefined ? second : third;
+  const context = screenContextFor(project, targetScreenId);
+  const expectedOwner = third === undefined ? undefined : context.deck.screens.find((screen) => screen.id === first);
+  const actualOwner = ownerOfElement(context.deck, elementId);
+  if (third !== undefined && (!expectedOwner || !elementForOwnedLayer(expectedOwner, elementId) || actualOwner?.screen.id !== first)) {
+    throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in owner screen "${first}".`);
+  }
+  if (!actualOwner) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in deck "${context.deck.id}".`);
+  if (actualOwner.screen.id === targetScreenId) return project;
+  const nextDeck = transferElementOwnershipInDeck(context.deck, elementId, targetScreenId);
+  return reconcileOverflowLinks(touchProject(project, project.decks.map((deck) => deck.id === context.deck.id ? nextDeck : deck)), { transferOwnership: false });
+}
+
+function reconcileDeckOverflowLinks(inputDeck: Deck, transferOwnership: boolean): Deck {
+  let deck = inputDeck;
+  // Ownership follows the element until its visible geometry no longer
+  // intersects the owner. At that point center containment chooses the new
+  // owner and the transfer preserves the element's deck-global position.
+  for (let pass = 0; transferOwnership && pass < deck.screens.length + 1; pass += 1) {
+    let transferred = false;
+    for (const screen of [...deck.screens]) {
+      for (const layer of screen.layers) {
+        if (layer.kind !== "owned") continue;
+        const bounds = elementDeckBounds(deck, screen.id, layer.element);
+        const centerOwner = screenContainingElementCenter(deck, screen.id, layer.element);
+        if (bounds && !boundsIntersectScreen(deck, screen.id, bounds) && centerOwner && centerOwner !== screen.id) {
+          deck = transferElementOwnershipInDeck(deck, layer.element.id, centerOwner);
+          transferred = true;
+          break;
+        }
+      }
+      if (transferred) break;
+    }
+    if (!transferred) break;
+  }
+
+  const expectedByTarget = new Map<string, Array<{ elementId: string; ownerScreenId: string }>>();
+  for (const ownerScreen of deck.screens) {
+    for (const layer of ownerScreen.layers) {
+      if (layer.kind !== "owned" || !layer.overflow) continue;
+      for (const targetScreenId of overflowTargetScreenIds(deck, ownerScreen.id, layer.element)) {
+        const values = expectedByTarget.get(targetScreenId) ?? [];
+        values.push({ elementId: layer.element.id, ownerScreenId: ownerScreen.id });
+        expectedByTarget.set(targetScreenId, values);
+      }
+    }
+  }
+
+  const nextScreens = deck.screens.map((screen) => {
+    const expected = expectedByTarget.get(screen.id) ?? [];
+    const expectedKeys = new Set(expected.map((value) => `${value.ownerScreenId}:${value.elementId}`));
+    const retainedKeys = new Set<string>();
+    const layers = screen.layers.filter((layer) => {
+      if (layer.kind === "owned") return true;
+      const key = `${layer.ownerScreenId}:${layer.elementId}`;
+      if (!expectedKeys.has(key) || retainedKeys.has(key)) return false;
+      retainedKeys.add(key);
+      return true;
+    });
+    for (const value of expected) {
+      const key = `${value.ownerScreenId}:${value.elementId}`;
+      if (retainedKeys.has(key)) continue;
+      layers.push({ kind: "overflow-link", elementId: value.elementId, ownerScreenId: value.ownerScreenId });
+    }
+    const changed = layers.length !== screen.layers.length || layers.some((layer, index) => JSON.stringify(layer) !== JSON.stringify(screen.layers[index]));
+    return changed ? touchScreen(screen, { layers }) : screen;
+  });
+  return nextScreens.some((screen, index) => screen !== deck.screens[index])
+    ? touchDeck(deck, { screens: nextScreens })
+    : deck;
+}
+
+/** Reconcile all overflow links after a geometry, visibility, or deck-order change. */
+export function reconcileOverflowLinks(project: Project, options: { transferOwnership?: boolean } = {}): Project {
+  const decks = project.decks.map((deck) => reconcileDeckOverflowLinks(deck, options.transferOwnership !== false));
+  if (decks.every((deck, index) => deck === project.decks[index])) return project;
+  return touchProject(project, decks);
+}
+
+export function toggleElementOverflow(project: Project, screenId: string, elementId: string, enabled?: boolean): Project {
+  const context = elementContextFor(project, screenId, elementId);
+  const nextOverflow = enabled ?? !context.ownerLayer.overflow;
+  const next = replaceOwnedElement(project, context.deck.id, context.ownerScreen.id, elementId, context.ownerLayer.element);
+  const withFlag = {
+    ...next,
+    decks: next.decks.map((deck) => deck.id !== context.deck.id ? deck : touchDeck(deck, {
+      screens: deck.screens.map((screen) => {
+        const layers = screen.layers
+          .filter((layer) => nextOverflow || layer.kind !== "overflow-link" || layer.elementId !== elementId)
+          .map((layer) => layer.kind === "owned" && screen.id === context.ownerScreen.id && layer.element.id === elementId
+            ? { ...layer, overflow: nextOverflow }
+            : layer);
+        return screen.id === context.ownerScreen.id || layers.length !== screen.layers.length
+          ? touchScreen(screen, { layers })
+          : screen;
+      }),
+    })),
+  };
+  return reconcileOverflowLinks(ProjectSchema.parse(withFlag));
+}
+
+export const setElementOverflow = toggleElementOverflow;
+
 export function addElement(project: Project, screenId: string, element: SceneElement): Project {
-  const { deck, screen } = screenContextFor(project, screenId);
+  const { deck } = screenContextFor(project, screenId);
   if (projectIds(project).has(element.id)) throw new SceneOperationError("INVALID_OPERATION", `Element id "${element.id}" is already in use.`);
-  const nextElement = clampElementToDeck(deck, { ...SceneElementSchema.parse(element), zIndex: screen.elements.length });
-  return withScreen(project, screenId, (current, currentDeck) => updateScreenElements(currentDeck, current, [...current.elements, nextElement]));
+  const nextElement = clampElementToDeck(deck, SceneElementSchema.parse(element));
+  const next = withScreen(project, screenId, (current) => touchScreen(current, { layers: [...current.layers, ownedLayer(nextElement)] }));
+  return reconcileOverflowLinks(next);
 }
 
 export function removeElements(project: Project, screenId: string, elementIds: string[]): Project {
-  const { screen } = screenContextFor(project, screenId);
+  const { deck } = screenContextFor(project, screenId);
   const ids = new Set(elementIds);
   if (ids.size === 0) return project;
-  for (const id of ids) elementFor(screen, id);
-  return withScreen(project, screenId, (current, deck) => updateScreenElements(deck, current, current.elements.filter((element) => !ids.has(element.id))));
+  for (const id of ids) elementContextFor(project, screenId, id);
+  const nextDeck = touchDeck(deck, {
+    screens: deck.screens.map((screen) => touchScreen(screen, {
+      layers: screen.layers.filter((layer) => !ids.has(layerElementId(layer))),
+    })),
+  });
+  return touchProject(project, project.decks.map((candidate) => candidate.id === deck.id ? nextDeck : candidate));
 }
 
 export function updateElement(project: Project, screenId: string, elementId: string, patch: ElementPatch): Project {
-  const { screen } = screenContextFor(project, screenId);
-  const current = elementFor(screen, elementId);
-  return withScreen(project, screenId, (currentScreen, deck) => updateScreenElements(
-    deck,
-    currentScreen,
-    currentScreen.elements.map((element) => element.id === elementId ? patchElement(deck, current, patch) : element),
-  ));
+  const context = elementContextFor(project, screenId, elementId);
+  const nextElement = patchElement(context.deck, context.ownerLayer.element, patch, screenId, context.ownerScreen.id);
+  return reconcileOverflowLinks(replaceOwnedElement(project, context.deck.id, context.ownerScreen.id, elementId, nextElement));
 }
 
 export function updateElements(project: Project, screenId: string, updates: ElementUpdate[] | Record<string, ElementPatch>): Project {
   const normalizedUpdates = Array.isArray(updates) ? updates : Object.entries(updates).map(([id, patch]) => ({ id, patch }));
-  if (normalizedUpdates.length === 0) return project;
-  const { screen } = screenContextFor(project, screenId);
-  const updateMap = new Map(normalizedUpdates.map((update) => [update.id, update.patch]));
-  for (const id of updateMap.keys()) elementFor(screen, id);
-  return withScreen(project, screenId, (currentScreen, deck) => updateScreenElements(
-    deck,
-    currentScreen,
-    currentScreen.elements.map((element) => {
-      const patch = updateMap.get(element.id);
-      return patch ? patchElement(deck, element, patch) : element;
-    }),
-  ));
+  return normalizedUpdates.reduce((current, update) => updateElement(current, screenId, update.id, update.patch), project);
 }
 
 export function moveElements(project: Project, screenId: string, elementIds: string[], delta: MoveDelta): Project {
-  const { deck, screen } = screenContextFor(project, screenId);
+  const { deck } = screenContextFor(project, screenId);
   const ids = new Set(elementIds);
-  const requested = screen.elements.filter((element) => ids.has(element.id));
-  if (requested.length !== ids.size) {
-    const missing = elementIds.find((id) => !requested.some((element) => element.id === id));
-    if (missing) elementFor(screen, missing);
-  }
-  const selected = requested.filter((element) => !element.locked);
+  if (ids.size === 0) return project;
+  const contexts = elementIds.map((id) => elementContextFor(project, screenId, id));
+  const selected = contexts.filter((context, index) => !context.ownerLayer.element.locked && elementIds.indexOf(context.ownerLayer.element.id) === index);
   if (selected.length === 0) return project;
-  const requestedX = finite(delta.x, 0);
-  const requestedY = finite(delta.y, 0);
-  const minX = Math.min(...selected.map((element) => element.x));
-  const minY = Math.min(...selected.map((element) => element.y));
-  const maxRight = Math.max(...selected.map((element) => element.x + element.width));
-  const maxBottom = Math.max(...selected.map((element) => element.y + element.height));
-  const dx = clamp(requestedX, MIN_DIMENSION - maxRight, deck.width - MIN_DIMENSION - minX);
-  const dy = clamp(requestedY, MIN_DIMENSION - maxBottom, deck.height - MIN_DIMENSION - minY);
-  return withScreen(project, screenId, (current, currentDeck) => updateScreenElements(
-    currentDeck,
-    current,
-    current.elements.map((element) => ids.has(element.id) && !element.locked ? { ...element, x: element.x + dx, y: element.y + dy } : element),
-  ));
+  const origins = selected.map((context) => screenOrigin(deck, context.ownerScreen.id)).filter((origin): origin is NonNullable<typeof origin> => Boolean(origin));
+  const minX = Math.min(...selected.map((context, index) => context.ownerLayer.element.x + (origins[index]?.x ?? 0)));
+  const minY = Math.min(...selected.map((context) => context.ownerLayer.element.y));
+  const maxRight = Math.max(...selected.map((context, index) => context.ownerLayer.element.x + context.ownerLayer.element.width + (origins[index]?.x ?? 0)));
+  const maxBottom = Math.max(...selected.map((context) => context.ownerLayer.element.y + context.ownerLayer.element.height));
+  const totalWidth = deck.width * deck.screens.length;
+  const dx = clamp(finite(delta.x, 0), MIN_DIMENSION - maxRight, totalWidth - MIN_DIMENSION - minX);
+  const dy = clamp(finite(delta.y, 0), MIN_DIMENSION - maxBottom, deck.height - MIN_DIMENSION - minY);
+  let next = project;
+  for (const context of selected) {
+    next = replaceOwnedElement(next, context.deck.id, context.ownerScreen.id, context.ownerLayer.element.id, {
+      ...context.ownerLayer.element,
+      x: context.ownerLayer.element.x + dx,
+      y: context.ownerLayer.element.y + dy,
+    });
+  }
+  return reconcileOverflowLinks(next);
 }
 
 export function resizeElement(project: Project, screenId: string, elementId: string, input: ResizeElementInput): Project {
-  const { screen } = screenContextFor(project, screenId);
-  const element = elementFor(screen, elementId);
+  const context = elementContextFor(project, screenId, elementId);
+  const element = context.ownerLayer.element;
   if (element.locked) return project;
-  const widthValue = finite(input.width, element.width);
-  const heightValue = finite(input.height, element.height);
+  const targetOrigin = screenOrigin(context.deck, screenId);
+  const ownerOrigin = screenOrigin(context.deck, context.ownerScreen.id);
+  const requestedX = finite(input.x, element.x);
+  const requestedY = finite(input.y, element.y);
   const next = {
     ...element,
-    x: finite(input.x, element.x) + (widthValue < 0 ? widthValue : 0),
-    y: finite(input.y, element.y) + (heightValue < 0 ? heightValue : 0),
-    width: Math.abs(widthValue),
-    height: Math.abs(heightValue),
+    x: (targetOrigin && ownerOrigin ? requestedX + targetOrigin.x - ownerOrigin.x : requestedX) + (finite(input.width, element.width) < 0 ? finite(input.width, element.width) : 0),
+    y: requestedY + (finite(input.height, element.height) < 0 ? finite(input.height, element.height) : 0),
+    width: Math.abs(finite(input.width, element.width)),
+    height: Math.abs(finite(input.height, element.height)),
     rotation: finite(input.rotation, element.rotation),
   } as SceneElement;
-  return withScreen(project, screenId, (current, deck) => updateScreenElements(
-    deck,
-    current,
-    current.elements.map((candidate) => candidate.id === elementId ? next : candidate),
-  ));
+  return reconcileOverflowLinks(replaceOwnedElement(project, context.deck.id, context.ownerScreen.id, elementId, clampElementToDeck(context.deck, next)));
+}
+
+function targetLayerEntry(screen: Screen, elementId: string): LayerEntry | undefined {
+  return screen.layers.find((layer) => layerElementId(layer) === elementId);
 }
 
 export function reorderElements(project: Project, screenId: string, elementIds: string[], targetIndex: number): Project {
   const { screen } = screenContextFor(project, screenId);
   const selectedIds = new Set(elementIds);
-  for (const id of selectedIds) elementFor(screen, id);
+  for (const id of selectedIds) {
+    if (!targetLayerEntry(screen, id)) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${id}" was not found in screen "${screenId}".`);
+  }
   if (selectedIds.size === 0) return project;
-  const ordered = sortedByLayer(screen.elements);
-  const selected = ordered.filter((element) => selectedIds.has(element.id));
-  const remaining = ordered.filter((element) => !selectedIds.has(element.id));
+  const selected = screen.layers.filter((layer) => selectedIds.has(layerElementId(layer)));
+  const remaining = screen.layers.filter((layer) => !selectedIds.has(layerElementId(layer)));
   const insertionIndex = clamp(Math.round(targetIndex), 0, remaining.length);
   remaining.splice(insertionIndex, 0, ...selected);
-  return withScreen(project, screenId, (current, deck) => updateScreenElements(deck, current, normalizeElementOrder(remaining)));
+  return withScreen(project, screenId, (current) => touchScreen(current, { layers: remaining.map((layer) => LayerEntrySchema.parse(layer)) }));
 }
 
 export const reorderElement = reorderElements;
 
 export function duplicateElements(project: Project, screenId: string, elementIds: string[], offset: MoveDelta = { x: 24, y: 24 }): Project {
-  const { deck, screen } = screenContextFor(project, screenId);
+  const context = screenContextFor(project, screenId);
+  const resolved = resolveDeckScreen(context.deck, screenId);
   const ids = new Set(elementIds);
-  const selected = sortedByLayer(screen.elements).filter((element) => ids.has(element.id));
+  const selected = resolved.filter((element) => ids.has(element.id));
   if (selected.length !== ids.size) {
     const missing = elementIds.find((id) => !selected.some((element) => element.id === id));
-    if (missing) elementFor(screen, missing);
+    if (missing) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${missing}" was not found in screen "${screenId}".`);
   }
   if (selected.length === 0) return project;
   const usedIds = projectIds(project);
-  let nextZIndex = screen.elements.length;
-  const duplicates = selected.map((element) => clampElementToDeck(deck, {
-    ...element,
-    id: uniqueId(element.type, usedIds),
-    name: `${element.name} copy`,
-    x: element.x + finite(offset.x, 24),
-    y: element.y + finite(offset.y, 24),
-    zIndex: nextZIndex++,
-  } as SceneElement));
-  return withScreen(project, screenId, (current, currentDeck) => updateScreenElements(currentDeck, current, [...current.elements, ...duplicates]));
+  const duplicates = selected.map((element) => {
+    const { ownerScreenId: _ownerScreenId, targetScreenId: _targetScreenId, isOverflowLink: _isOverflowLink, zIndex: _zIndex, ...canonicalElement } = element;
+    const duplicate = SceneElementSchema.parse({
+      ...canonicalElement,
+      id: uniqueId(element.type, usedIds),
+      name: `${element.name} copy`,
+      x: element.x + finite(offset.x, 24),
+      y: element.y + finite(offset.y, 24),
+    });
+    return ownedLayer(clampElementToDeck(context.deck, duplicate));
+  });
+  const next = withScreen(project, screenId, (current) => touchScreen(current, { layers: [...current.layers, ...duplicates] }));
+  return reconcileOverflowLinks(next);
 }
 
 export function addDeck(project: Project, options: AddDeckOptions): Project {
@@ -417,7 +597,7 @@ export function addDeck(project: Project, options: AddDeckOptions): Project {
     createdAt: now,
     updatedAt: now,
   };
-  assertNoIdentityCollision(project, [deck.id, ...deck.screens.flatMap((candidate) => [candidate.id, ...candidate.elements.map((element) => element.id)])], "Deck or screen");
+  assertNoIdentityCollision(project, [deck.id, ...deck.screens.flatMap((candidate) => [candidate.id, ...candidate.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])], "Deck or screen");
   return touchProject(project, [...project.decks, DeckSchema.parse(deck)]);
 }
 
@@ -425,16 +605,29 @@ export function duplicateDeck(project: Project, deckId: string, overrides: Pick<
   const source = deckFor(project, deckId);
   const now = nowIso();
   const usedIds = projectIds(project);
-  const screens = source.screens.map((screen, index) => ({
-    ...screen,
-    id: uniqueId("screen", usedIds),
-    name: index === 0 ? `${screen.name} copy` : screen.name,
-    slug: uniqueScreenSlug(project, `${screen.slug}-copy`),
-    exportSlug: uniqueScreenExportSlug(project, `${screen.exportSlug}-copy`),
-    elements: normalizeLayerOrder(screen.elements.map((element) => ({ ...element, id: uniqueId(element.type, usedIds) }))),
-    createdAt: now,
-    updatedAt: now,
-  }));
+  const screenIds = new Map(source.screens.map((screen) => [screen.id, uniqueId("screen", usedIds)]));
+  const elementIds = new Map(source.screens.flatMap((screen) => screen.layers
+    .filter((layer): layer is OwnedLayer => layer.kind === "owned")
+    .map((layer) => [layer.element.id, uniqueId(layer.element.type, usedIds)] as const)));
+  const screens = source.screens.map((screen, index) => {
+    const layers: LayerEntry[] = screen.layers.map((layer): LayerEntry => layer.kind === "owned"
+      ? ownedLayer({ ...layer.element, id: elementIds.get(layer.element.id) ?? uniqueId(layer.element.type, usedIds) }, layer.overflow)
+      : {
+        kind: "overflow-link" as const,
+        elementId: elementIds.get(layer.elementId) ?? layer.elementId,
+        ownerScreenId: screenIds.get(layer.ownerScreenId) ?? layer.ownerScreenId,
+      });
+    return ScreenSchema.parse({
+      ...screen,
+      id: screenIds.get(screen.id) ?? uniqueId("screen", usedIds),
+      name: index === 0 ? `${screen.name} copy` : screen.name,
+      slug: uniqueScreenSlug(project, `${screen.slug}-copy`),
+      exportSlug: uniqueScreenExportSlug(project, `${screen.exportSlug}-copy`),
+      layers,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
   const duplicate: Deck = {
     ...source,
     id: uniqueId("deck", usedIds),
@@ -444,7 +637,7 @@ export function duplicateDeck(project: Project, deckId: string, overrides: Pick<
     createdAt: now,
     updatedAt: now,
   };
-  assertNoIdentityCollision(project, [duplicate.id, ...duplicate.screens.flatMap((screen) => [screen.id, ...screen.elements.map((element) => element.id)])], "Deck or screen");
+  assertNoIdentityCollision(project, [duplicate.id, ...duplicate.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])], "Deck or screen");
   return touchProject(project, [...project.decks, duplicate]);
 }
 
@@ -469,18 +662,23 @@ export function addScreen(project: Project, deckId: string, presetOrScreen: Scre
   const deck = deckFor(project, deckId);
   const now = options.now ?? nowIso();
   const usedIds = projectIds(project);
-  const screen = typeof presetOrScreen === "string"
+  const sourceScreen = typeof presetOrScreen === "string"
     ? createScreenPreset(presetOrScreen, { ...options, id: options.id ?? uniqueId("screen", usedIds), width: deck.width, height: deck.height, now })
-    : ScreenSchema.parse({ ...presetOrScreen, id: options.id ?? presetOrScreen.id, createdAt: now, updatedAt: now });
+    : ScreenSchema.parse(presetOrScreen);
+  const layers = sourceScreen.layers
+    .filter((layer): layer is OwnedLayer => layer.kind === "owned")
+    .map((layer) => ownedLayer(clampElementToDeck(deck, layer.element), layer.overflow));
   const nextScreen = ScreenSchema.parse({
-    ...screen,
-    id: screen.id || uniqueId("screen", usedIds),
-    slug: uniqueScreenSlug(project, options.slug ?? screen.slug),
-    exportSlug: uniqueScreenExportSlug(project, options.exportSlug ?? screen.exportSlug),
-    elements: normalizeLayerOrder(screen.elements.map((element) => clampElementToDeck(deck, element))),
+    ...sourceScreen,
+    id: options.id ?? (sourceScreen.id || uniqueId("screen", usedIds)),
+    slug: uniqueScreenSlug(project, options.slug ?? sourceScreen.slug),
+    exportSlug: uniqueScreenExportSlug(project, options.exportSlug ?? sourceScreen.exportSlug),
+    layers,
+    createdAt: now,
+    updatedAt: now,
   });
-  assertNoIdentityCollision(project, [nextScreen.id, ...nextScreen.elements.map((element) => element.id)], "Screen or element");
-  return withDeck(project, deckId, (current) => touchDeck(current, { screens: [...current.screens, nextScreen] }));
+  assertNoIdentityCollision(project, [nextScreen.id, ...nextScreen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])], "Screen or element");
+  return reconcileOverflowLinks(withDeck(project, deckId, (current) => touchDeck(current, { screens: [...current.screens, nextScreen] })));
 }
 
 export function duplicateScreen(project: Project, deckIdOrScreenId: string, screenIdOrOverrides?: string | Pick<AddScreenOptions, "name" | "slug">, overrides: Pick<AddScreenOptions, "name" | "slug"> = {}): Project {
@@ -490,24 +688,34 @@ export function duplicateScreen(project: Project, deckIdOrScreenId: string, scre
   const values = typeof screenIdOrOverrides === "string" ? overrides : screenIdOrOverrides ?? {};
   const now = nowIso();
   const usedIds = projectIds(project);
-  const duplicate: Screen = {
+  const duplicate = ScreenSchema.parse({
     ...context.screen,
     id: uniqueId("screen", usedIds),
     name: values.name?.trim() || `${context.screen.name} copy`,
     slug: uniqueScreenSlug(project, values.slug ?? `${context.screen.slug}-copy`),
     exportSlug: uniqueScreenExportSlug(project, `${context.screen.exportSlug}-copy`),
-    elements: normalizeLayerOrder(context.screen.elements.map((element) => ({ ...element, id: uniqueId(element.type, usedIds) }))),
+    layers: context.screen.layers.flatMap((layer) => layer.kind === "owned"
+      ? [ownedLayer({ ...layer.element, id: uniqueId(layer.element.type, usedIds) }, layer.overflow)]
+      : []),
     createdAt: now,
     updatedAt: now,
-  };
-  assertNoIdentityCollision(project, [duplicate.id, ...duplicate.elements.map((element) => element.id)], "Screen or element");
-  return withDeck(project, context.deck.id, (deck) => touchDeck(deck, { screens: [...deck.screens, duplicate] }));
+  });
+  assertNoIdentityCollision(project, [duplicate.id, ...duplicate.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])], "Screen or element");
+  return reconcileOverflowLinks(withDeck(project, context.deck.id, (deck) => touchDeck(deck, { screens: [...deck.screens, duplicate] })));
 }
 
 export function removeScreen(project: Project, deckIdOrScreenId: string, screenId?: string): Project {
   const context = screenContextFor(project, screenId ?? deckIdOrScreenId, screenId ? deckIdOrScreenId : undefined);
   if (context.deck.screens.length <= 1) throw new SceneOperationError("INVALID_OPERATION", "A deck must keep at least one screen.");
-  return withDeck(project, context.deck.id, (deck) => touchDeck(deck, { screens: deck.screens.filter((candidate) => candidate.id !== context.screen.id) }));
+  const remaining = context.deck.screens.filter((candidate) => candidate.id !== context.screen.id);
+  const receiver = remaining[Math.min(context.deck.screens.findIndex((candidate) => candidate.id === context.screen.id), remaining.length - 1)];
+  if (!receiver) throw new SceneOperationError("INVALID_OPERATION", "A deck must keep a screen to receive transferred elements.");
+  let nextDeck = context.deck;
+  for (const layer of context.screen.layers) {
+    if (layer.kind === "owned") nextDeck = transferElementOwnershipInDeck(nextDeck, layer.element.id, receiver.id);
+  }
+  nextDeck = touchDeck(nextDeck, { screens: nextDeck.screens.filter((candidate) => candidate.id !== context.screen.id) });
+  return reconcileOverflowLinks(touchProject(project, project.decks.map((deck) => deck.id === context.deck.id ? nextDeck : deck)));
 }
 
 export function reorderScreens(project: Project, deckId: string, screenIds: string[], targetIndex: number): Project {
@@ -519,7 +727,7 @@ export function reorderScreens(project: Project, deckId: string, screenIds: stri
   const remaining = deck.screens.filter((screen) => !selectedIds.has(screen.id));
   const insertionIndex = clamp(Math.round(targetIndex), 0, remaining.length);
   remaining.splice(insertionIndex, 0, ...selected);
-  return withDeck(project, deckId, (current) => touchDeck(current, { screens: remaining }));
+  return reconcileOverflowLinks(withDeck(project, deckId, (current) => touchDeck(current, { screens: remaining })));
 }
 
 export function updateScreen(project: Project, screenId: string, patch: ScreenPatch): Project {
@@ -534,8 +742,8 @@ export function updateScreen(project: Project, screenId: string, patch: ScreenPa
     slug: patch.slug === undefined ? context.screen.slug : uniqueScreenSlug(project, patch.slug, screenId),
     exportSlug: patch.exportSlug === undefined ? context.screen.exportSlug : uniqueScreenExportSlug(project, patch.exportSlug, screenId),
   });
-  const boundedElements = candidate.elements.map((element) => clampElementToDeck(context.deck, element));
-  return withDeck(project, context.deck.id, (deck) => touchDeck(deck, {
-    screens: deck.screens.map((screen) => screen.id === screenId ? ScreenSchema.parse({ ...candidate, elements: normalizeElementOrder(sortedByLayer(boundedElements)) }) : screen),
-  }));
+  const layers = candidate.layers.map((layer) => layer.kind === "owned" ? ownedLayer(clampElementToDeck(context.deck, layer.element), layer.overflow) : layer);
+  return reconcileOverflowLinks(withDeck(project, context.deck.id, (deck) => touchDeck(deck, {
+    screens: deck.screens.map((screen) => screen.id === screenId ? touchScreen(screen, { ...candidate, layers }) : screen),
+  })));
 }

@@ -1,13 +1,13 @@
 import { createDefaultProject, DEFAULT_BACKGROUND } from "./defaults";
 import { PlinthError } from "./errors";
 import { createId, slugify } from "./ids";
-import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
-import type { AssetMetadata, Background, Deck, Project, SceneElement, Screen, Shadow } from "./schema";
+import { CURRENT_SCHEMA_VERSION, ProjectSchema, decorateScreen } from "./schema";
+import type { AssetMetadata, Background, LayerEntry, OwnedLayer, Project, SceneElement, Screen, Shadow } from "./schema";
+import { SceneElementSchema } from "./schema";
 import { isAppStorePreset } from "../scene/presets";
 import { isDevicePreset, getDevicePreset } from "../devices/presets";
 import { sanitizeAssetStem } from "./asset-validation";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
-import { normalizeLayerOrder } from "../scene/selectors";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -256,7 +256,7 @@ function migrateElement(value: unknown, index: number, assets: AssetMetadata[]):
   return null;
 }
 
-type LegacyDocument = Omit<Screen, "createdAt" | "updatedAt"> & {
+type LegacyDocument = Omit<Screen, "createdAt" | "updatedAt" | "elements"> & {
   width: number;
   height: number;
   createdAt: string;
@@ -268,11 +268,20 @@ function legacyDocument(value: unknown, index: number, now: string, assets: Asse
   const name = asString(source.name, asString(source.title, `Composition ${index + 1}`));
   const width = Math.round(asPositiveNumber(source.width, 1320));
   const height = Math.round(asPositiveNumber(source.height, 2868));
-  const rawElements = Array.isArray(source.elements) ? source.elements : [];
+  const rawElements = Array.isArray(source.elements)
+    ? source.elements
+    : Array.isArray(source.layers)
+      ? source.layers.filter((layer): layer is Record<string, unknown> => isRecord(layer) && layer.kind === "owned").map((layer) => layer.element)
+      : [];
   const elements = rawElements
     .map((element, elementIndex) => migrateElement(element, elementIndex, assets))
     .filter((element): element is SceneElement => element !== null)
-    .map((element, elementIndex) => ({ ...element, zIndex: elementIndex }));
+    .sort((left, right) => ((left as SceneElement & { zIndex?: number }).zIndex ?? 0) - ((right as SceneElement & { zIndex?: number }).zIndex ?? 0));
+  const layers: OwnedLayer[] = elements.map((element) => ({
+    kind: "owned",
+    element: SceneElementSchema.parse(element),
+    overflow: false,
+  }));
 
   return {
     id: asString(source.id, createId("doc")),
@@ -283,7 +292,7 @@ function legacyDocument(value: unknown, index: number, now: string, assets: Asse
     width,
     height,
     background: migrateBackground(source.background),
-    elements,
+    layers,
     notes: typeof source.notes === "string" ? source.notes : "",
     createdAt: asString(source.createdAt, now),
     updatedAt: asString(source.updatedAt, now),
@@ -435,7 +444,7 @@ function migrateVersionFive(source: Record<string, unknown>): Record<string, unk
   const deckSlugs = new Set<string>();
   const screenSlugs = new Set<string>();
   const screenExportSlugs = new Set<string>();
-  const decks: Deck[] = [...groups.values()].map((group, groupIndex) => {
+  const decks = [...groups.values()].map((group, groupIndex) => {
     const first = group.documents[0];
     if (!first) throw new Error("A migrated deck did not contain a screen.");
     const deckName = groups.size === 1 ? `${name} deck` : `${name} ${group.width}×${group.height}`;
@@ -446,7 +455,7 @@ function migrateVersionFive(source: Record<string, unknown>): Record<string, unk
         ...screen,
         slug: uniqueMigrationSlug(screen.slug, screenSlugs, `screen-${screenIndex + 1}`),
         exportSlug: uniqueMigrationSlug(screen.exportSlug, screenExportSlugs, `screen-${screenIndex + 1}`),
-      } satisfies Screen;
+      };
     });
     const createdAt = first.createdAt;
     const updatedAt = group.documents.reduce((latest, document) => document.updatedAt > latest ? document.updatedAt : latest, first.updatedAt);
@@ -476,6 +485,34 @@ function migrateVersionFive(source: Record<string, unknown>): Record<string, unk
   };
 }
 
+function migrateVersionSix(source: Record<string, unknown>): Record<string, unknown> {
+  const assets = normalizeAssets(source.assets);
+  const rawDecks = Array.isArray(source.decks) ? source.decks : [];
+  const decks = rawDecks.map((deckValue) => {
+    if (!isRecord(deckValue)) return deckValue;
+    const rawScreens = Array.isArray(deckValue.screens) ? deckValue.screens : [];
+    return {
+      ...deckValue,
+      screens: rawScreens.map((screenValue) => {
+        if (!isRecord(screenValue)) return screenValue;
+        const rawElements = Array.isArray(screenValue.elements) ? screenValue.elements : [];
+        const elements = rawElements
+          .map((element, elementIndex) => migrateElement(element, elementIndex, assets))
+          .filter((element): element is SceneElement => element !== null)
+          .sort((left, right) => ((left as SceneElement & { zIndex?: number }).zIndex ?? 0) - ((right as SceneElement & { zIndex?: number }).zIndex ?? 0))
+          .map((element) => ({
+            kind: "owned" as const,
+            element: SceneElementSchema.parse(element),
+            overflow: false,
+          } satisfies OwnedLayer));
+        const { elements: _elements, ...screenWithoutElements } = screenValue;
+        return { ...screenWithoutElements, layers: elements };
+      }),
+    };
+  });
+  return { ...source, schemaVersion: CURRENT_SCHEMA_VERSION, assets, decks };
+}
+
 export function migrateProject(input: unknown): unknown {
   if (!isRecord(input)) {
     throw new PlinthError("SCHEMA_INVALID", 422, "Project data must be a JSON object.");
@@ -501,6 +538,7 @@ export function migrateProject(input: unknown): unknown {
   if (versionValue === 3) return migrateVersionFive(migrateVersionThree(input));
   if (versionValue === 4) return migrateVersionFive(migrateVersionFour(input));
   if (versionValue === 5) return migrateVersionFive(input);
+  if (versionValue === 6) return migrateVersionSix(input);
   return input;
 }
 
@@ -522,11 +560,16 @@ export function parseProject(input: unknown): Project {
     ...result.data,
     decks: result.data.decks.map((deck) => ({
       ...deck,
-      screens: deck.screens.map((screen) => ({
+      screens: deck.screens.map((screen) => decorateScreen({
         ...screen,
-        elements: normalizeLayerOrder(screen.elements.map((element) => element.type === "text"
-          ? normalizeTextElementGeometry(element, deck.width, deck.height)
-          : element)),
+        layers: screen.layers.map((layer): LayerEntry => layer.kind === "owned"
+          ? {
+            ...layer,
+            element: layer.element.type === "text"
+              ? normalizeTextElementGeometry(layer.element, deck.width, deck.height, deck.width * deck.screens.length)
+              : layer.element,
+          }
+          : layer),
       })),
     })),
   };
