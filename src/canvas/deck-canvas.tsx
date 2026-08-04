@@ -203,8 +203,8 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
     <div className="relative flex min-h-0 flex-1 overflow-auto bg-[#101010]" onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} ref={viewportRef}>
       <div className="plinth-grid pointer-events-none absolute inset-0 opacity-40" />
       <div className="relative z-10 flex min-h-full min-w-full">
-        <div className="relative m-auto shrink-0" style={{ height: scaledHeight + 2 + CANVAS_PADDING * 2, width: scaledWidth + 2 + CANVAS_PADDING * 2 }}>
-          <div className="absolute border border-white/15 bg-[#1a1a1a] shadow-2xl shadow-black/50" ref={frameRef} style={{ height: scaledHeight + 2, left: CANVAS_PADDING, top: CANVAS_PADDING, width: scaledWidth + 2 }}>
+        <div className="relative m-auto shrink-0" style={{ height: scaledHeight + CANVAS_PADDING * 2, width: scaledWidth + CANVAS_PADDING * 2 }}>
+          <div className="absolute" ref={frameRef} style={{ height: scaledHeight, left: CANVAS_PADDING, top: CANVAS_PADDING, width: scaledWidth }}>
             <Stage
               height={scaledHeight}
               onMouseDown={(event) => {
