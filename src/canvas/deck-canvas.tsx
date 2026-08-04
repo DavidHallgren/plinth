@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Layer, Rect, Stage, Transformer } from "react-konva";
+import { Stage, Transformer } from "react-konva";
 import type { AssetMetadata, Deck } from "../lib/schema";
 import type { ResolvedScreen } from "../scene/selectors";
 import { projectionKey } from "../scene/overflow";
@@ -237,23 +237,20 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
                   {screen.id === focusedScreenId ? transformer : null}
                 </SceneRenderer>
               ))}
-              <Layer listening={false}>
-                {screens.map((screen, index) => {
-                  const focused = screen.id === focusedScreenId;
-                  return <Rect
-                    fill="transparent"
-                    height={deck.height}
-                    key={`screen-outline-${screen.id}`}
-                    listening={false}
-                    stroke={focused ? "#ffffff" : "#ffffff40"}
-                    strokeWidth={1 / Math.max(0.01, zoom)}
-                    width={deck.width}
-                    x={index * (deck.width + SCREEN_GAP / zoom)}
-                    y={0}
-                  />;
-                })}
-              </Layer>
             </Stage>
+            <div className="pointer-events-none absolute inset-0">
+              {screens.map((screen, index) => (
+                <div
+                  className={`absolute border ${screen.id === focusedScreenId ? "border-white" : "border-white/25"}`}
+                  key={`screen-outline-${screen.id}`}
+                  style={{
+                    height: scaledHeight,
+                    left: index * (deck.width * zoom + SCREEN_GAP),
+                    width: deck.width * zoom,
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
