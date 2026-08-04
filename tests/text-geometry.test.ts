@@ -25,6 +25,22 @@ describe("text auto-height geometry", () => {
     expect(calculateTextAutoHeight("a".repeat(40), 120, style)).toBeGreaterThan(calculateTextAutoHeight("short", 120, style));
   });
 
+  test("uses measured font width instead of a character-count boundary", () => {
+    const style = {
+      fontFamily: "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+      fontSize: 96,
+      fontWeight: 820,
+      italic: false,
+      lineHeight: 0.96,
+      letterSpacing: -5,
+      padding: 0,
+      autoHeight: true,
+    };
+    const measuredFont = (value: string) => value.length * 40;
+
+    expect(calculateTextAutoHeight("Your training stays yours.", 1096, style, measuredFont)).toBe(93);
+  });
+
   test("normalizes screen text geometry using the containing deck", () => {
     const seed = createDefaultProject("Text geometry", { now: timestamp });
     const deck = createDeckPreset("custom", {
