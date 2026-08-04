@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { cn } from "../../lib/cn";
 import { Button } from "./button";
 
 type DialogProps = {
@@ -10,9 +11,12 @@ type DialogProps = {
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
   footer?: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
 };
 
-export function Dialog({ open, title, description, onOpenChange, children, footer }: DialogProps) {
+export function Dialog({ open, title, description, onOpenChange, children, footer, className, bodyClassName, footerClassName }: DialogProps) {
   useEffect(() => {
     if (!open) {
       return;
@@ -37,7 +41,7 @@ export function Dialog({ open, title, description, onOpenChange, children, foote
         aria-describedby={description ? "dialog-description" : undefined}
         aria-labelledby="dialog-title"
         aria-modal="true"
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1b1b1b] p-5 shadow-2xl shadow-black/50"
+        className={cn("w-full max-w-md rounded-2xl border border-white/10 bg-[#1b1b1b] p-5 shadow-2xl shadow-black/50", className)}
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
       >
@@ -56,8 +60,8 @@ export function Dialog({ open, title, description, onOpenChange, children, foote
             <X size={16} />
           </Button>
         </div>
-        <div className="mt-5">{children}</div>
-        {footer ? <div className="mt-5 flex justify-end gap-2">{footer}</div> : null}
+        <div className={cn("mt-5", bodyClassName)}>{children}</div>
+        {footer ? <div className={cn("mt-5 flex justify-end gap-2", footerClassName)}>{footer}</div> : null}
       </section>
     </div>
   );

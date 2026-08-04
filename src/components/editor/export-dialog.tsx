@@ -41,7 +41,7 @@ function statusText(status: ExportStatus): string {
   if (status === "uploading") return "Saving…";
   if (status === "done") return "Exported";
   if (status === "error") return "Failed";
-  return "Waiting";
+  return "Ready";
 }
 
 function nextFrame(): Promise<void> {
@@ -106,6 +106,25 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
   }, [activeDeckId, activeScreenId, mode, project]);
   const { plan, error: planError } = planResult;
   const configuredExportDirectory = exportDirectory.trim();
+  const groupedPlan = useMemo(() => {
+    const groups: Array<{ deckId: string; deckName: string; width: number; height: number; items: Array<{ screen: ResolvedScreen; fileName: string }> }> = [];
+    for (const item of plan) {
+      const group = groups.find((candidate) => candidate.deckId === item.screen.deckId);
+      if (group) {
+        group.items.push(item);
+      } else {
+        groups.push({
+          deckId: item.screen.deckId,
+          deckName: item.screen.deckName,
+          width: item.screen.width,
+          height: item.screen.height,
+          items: [item],
+        });
+      }
+    }
+    return groups;
+  }, [plan]);
+  const rowByScreenId = useMemo(() => new Map(rows.map((row) => [row.screen.id, row])), [rows]);
 
   useEffect(() => {
     setExportDirectory(project.settings.exportDirectory ?? "");
@@ -228,19 +247,47 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
 
   const completed = rows.filter((row) => row.status === "done").length;
   const failed = rows.filter((row) => row.status === "error").length;
+  const scopeLabels = {
+    screen: "Focused",
+    deck: "Current deck",
+    all: "All decks",
+  } as const;
+  const progressText = rows.length > 0
+    ? `${completed} of ${rows.length} complete${failed > 0 ? ` · ${failed} failed` : ""}`
+    : `${plan.length} screen${plan.length === 1 ? "" : "s"} ready`;
+
+  function selectMode(nextMode: typeof mode): void {
+    if (exporting || mode === nextMode) return;
+    setMode(nextMode);
+    setRows([]);
+    setDestinationError(null);
+  }
+
+  function selectDestination(nextDestination: typeof destination): void {
+    if (exporting || destination === nextDestination) return;
+    if (nextDestination === "download") onExportDirectoryChange?.(configuredExportDirectory || null);
+    setDestination(nextDestination);
+    setRows([]);
+    setDestinationError(null);
+  }
 
   return (
     <>
       <Dialog
+        bodyClassName="flex min-h-0 flex-1 flex-col"
+        className="flex h-[min(44rem,calc(100dvh-2rem))] max-w-xl flex-col overflow-hidden"
+        description="Choose the screens and destination, then review the files before exporting."
         footer={(
           <>
+            <p aria-live="polite" className="mr-auto hidden truncate text-[11px] text-muted sm:block">{progressText}</p>
             <Button disabled={exporting} onClick={() => { onExportDirectoryChange?.(configuredExportDirectory || null); onOpenChange(false); }} variant="ghost">Close</Button>
-            <Button disabled={exporting || !currentRenderScreen || (destination === "folder" && !configuredExportDirectory)} onClick={() => void runExport()} variant="primary">
+            <Button className="min-w-40" disabled={exporting || !currentRenderScreen || (destination === "folder" && !configuredExportDirectory)} onClick={() => void runExport()} variant="primary">
               {exporting ? <LoaderCircle className="animate-spin" size={14} /> : <FileOutput size={14} />}
-              {mode === "all" ? "Export all decks" : mode === "deck" ? "Export current deck" : "Export focused screen"}
+              {exporting ? "Exporting…" : `Export ${plan.length} screen${plan.length === 1 ? "" : "s"}`}
             </Button>
           </>
         )}
+        footerClassName="shrink-0 items-center border-t border-line pt-4"
         onOpenChange={(nextOpen) => {
           if (exporting) return;
           if (!nextOpen) onExportDirectoryChange?.(configuredExportDirectory || null);
@@ -249,63 +296,105 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
         open={open}
         title="Export PNG"
       >
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-black/15 p-1">
-            {(["screen", "deck", "all"] as const).map((value) => (
-              <button className={`h-8 rounded-lg text-xs font-medium ${mode === value ? "bg-accent/[0.16] text-accent-soft" : "text-muted hover:text-ink"}`} key={value} onClick={() => setMode(value)} type="button">
-                {value === "screen" ? "Focused screen" : value === "deck" ? "Current deck" : "All decks"}
-              </button>
-            ))}
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="grid shrink-0 gap-3 sm:grid-cols-2">
+            <fieldset>
+              <legend className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.13em] text-muted">Screens</legend>
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-line bg-black/15 p-1">
+                {(["screen", "deck", "all"] as const).map((value) => (
+                  <button
+                    aria-pressed={mode === value}
+                    className={`plinth-focus-ring h-9 whitespace-nowrap rounded-lg text-[11px] font-medium transition-colors ${mode === value ? "bg-white/10 text-ink shadow" : "text-muted hover:bg-white/[0.04] hover:text-ink"}`}
+                    disabled={exporting}
+                    key={value}
+                    onClick={() => selectMode(value)}
+                    type="button"
+                  >
+                    {scopeLabels[value]}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.13em] text-muted">Destination</legend>
+              <div className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-black/15 p-1">
+                <button aria-pressed={destination === "download"} className={`plinth-focus-ring flex h-9 items-center justify-center gap-1.5 rounded-lg text-[11px] font-medium transition-colors ${destination === "download" ? "bg-white/10 text-ink shadow" : "text-muted hover:bg-white/[0.04] hover:text-ink"}`} disabled={exporting} onClick={() => selectDestination("download")} type="button">
+                  <Download size={13} /> Download
+                </button>
+                <button aria-pressed={destination === "folder"} className={`plinth-focus-ring flex h-9 items-center justify-center gap-1.5 rounded-lg text-[11px] font-medium transition-colors ${destination === "folder" ? "bg-white/10 text-ink shadow" : "text-muted hover:bg-white/[0.04] hover:text-ink"}`} disabled={exporting} onClick={() => selectDestination("folder")} type="button">
+                  <FolderOutput size={13} /> Folder
+                </button>
+              </div>
+            </fieldset>
           </div>
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-black/15 p-1">
-            <button className={`flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium ${destination === "download" ? "bg-accent/[0.16] text-accent-soft" : "text-muted hover:text-ink"}`} onClick={() => { onExportDirectoryChange?.(configuredExportDirectory || null); setDestination("download"); setDestinationError(null); }} type="button">
-              <Download size={13} /> Download
-            </button>
-            <button className={`flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium ${destination === "folder" ? "bg-accent/[0.16] text-accent-soft" : "text-muted hover:text-ink"}`} onClick={() => { setDestination("folder"); setDestinationError(null); }} type="button">
-              <FolderOutput size={13} /> Configured folder
-            </button>
-          </div>
-          {destination === "folder" ? (
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-muted" htmlFor="project-export-directory">Project export folder</label>
-              <Input
-                id="project-export-directory"
-                onBlur={() => onExportDirectoryChange?.(configuredExportDirectory || null)}
-                onChange={(event) => { setExportDirectory(event.target.value); setDestinationError(null); }}
-                placeholder="/absolute/path/to/exports"
-                value={exportDirectory}
-              />
-              <p className="text-[10px] leading-4 text-muted">Folder exports create one timestamped directory for the selected screens. The server requires an existing absolute directory.</p>
-            </div>
-          ) : null}
-          {destinationError ? <p className="rounded-xl border border-red-300/20 bg-red-400/[0.08] px-3 py-2 text-[11px] leading-5 text-red-200" role="alert">{destinationError}</p> : null}
-          <div className="space-y-2" aria-live="polite">
-            {plan.map(({ screen, fileName }) => {
-              const row = rows.find((candidate) => candidate.screen.id === screen.id);
-              return (
-                <div className="rounded-xl border border-line bg-white/[0.025] px-3 py-2.5" key={screen.id}>
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium text-ink">{screen.name}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-muted">{fileName} · {screen.width} × {screen.height}</p>
-                    </div>
-                    <span className={`shrink-0 text-[10px] ${row?.status === "error" ? "text-red-200" : row?.status === "done" ? "text-emerald-200" : "text-muted"}`}>{statusText(row?.status ?? "pending")}</span>
-                    {row?.status === "done" && destination === "download" ? (
-                      <Tooltip>
-                        <TooltipTrigger render={<a aria-label={`Download ${fileName}`} className="text-accent-soft hover:text-ink" download={fileName} href={`/api/projects/${encodeURIComponent(project.slug)}/exports/${encodeURIComponent(fileName)}`} />}>
-                          <Download size={14} />
-                        </TooltipTrigger>
-                        <TooltipContent>Download {fileName}</TooltipContent>
-                      </Tooltip>
-                    ) : null}
-                  </div>
-                  {row?.path ? <p className="mt-1 truncate text-[10px] text-emerald-200/75" title={row.path}>{row.downloaded ? "Download started" : `Saved to ${row.path}`}</p> : null}
-                  {row?.error ? <p className="mt-1 text-[10px] leading-4 text-red-200" role="alert">{row.error}</p> : null}
+          <div className="h-[5.25rem] shrink-0 rounded-xl border border-line bg-white/[0.025] p-2.5">
+            {destination === "folder" ? (
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-medium text-muted" htmlFor="project-export-directory">Project export folder</label>
+                <Input
+                  className="h-9 text-xs"
+                  id="project-export-directory"
+                  onBlur={() => onExportDirectoryChange?.(configuredExportDirectory || null)}
+                  onChange={(event) => { setExportDirectory(event.target.value); setDestinationError(null); }}
+                  placeholder="Existing absolute directory"
+                  value={exportDirectory}
+                />
+              </div>
+            ) : (
+              <div className="flex h-full items-center gap-3 px-1">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.05] text-accent-soft"><Download size={15} /></span>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-ink">Download {plan.length} PNG{plan.length === 1 ? "" : "s"}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted">Your browser will save each completed screen separately.</p>
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
-          {rows.length > 0 ? <p className="text-[11px] text-muted">{completed} of {rows.length} complete{failed > 0 ? ` · ${failed} failed` : ""}.</p> : null}
+          {destinationError ? <p className="rounded-xl border border-red-300/20 bg-red-400/[0.08] px-3 py-2 text-[11px] leading-5 text-red-200" role="alert">{destinationError}</p> : null}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-black/10">
+            <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-2">
+              <p className="text-[10px] font-medium uppercase tracking-[0.13em] text-muted">Export queue</p>
+              <p className="text-[10px] text-muted">{plan.length} screen{plan.length === 1 ? "" : "s"} · {groupedPlan.length} deck{groupedPlan.length === 1 ? "" : "s"}</p>
+            </div>
+            <div aria-label="Screens to export" className="min-h-0 flex-1 overflow-y-auto" role="list">
+              {groupedPlan.map((group) => (
+                <div key={group.deckId}>
+                  <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-[#202020] px-3 py-1.5">
+                    <p className="truncate text-[10px] font-medium text-ink/80">{group.deckName}</p>
+                    <p className="shrink-0 text-[10px] text-muted">{group.items.length} · {group.width} × {group.height}</p>
+                  </div>
+                  <div className="divide-y divide-white/[0.06]">
+                    {group.items.map(({ screen, fileName }) => {
+                      const row = rowByScreenId.get(screen.id);
+                      return (
+                        <div className="px-3 py-2.5" key={screen.id} role="listitem">
+                          <div className="flex items-center gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-ink">{screen.name}</p>
+                              <p className="mt-0.5 truncate text-[10px] text-muted">{fileName}</p>
+                            </div>
+                            <span className={`w-[4.5rem] shrink-0 text-right text-[10px] ${row?.status === "error" ? "text-red-200" : row?.status === "done" ? "text-emerald-200" : "text-muted"}`}>{statusText(row?.status ?? "pending")}</span>
+                            <span className="grid h-5 w-5 shrink-0 place-items-center">
+                              {row?.status === "done" && destination === "download" ? (
+                                <Tooltip>
+                                  <TooltipTrigger render={<a aria-label={`Download ${fileName}`} className="text-accent-soft hover:text-ink" download={fileName} href={`/api/projects/${encodeURIComponent(project.slug)}/exports/${encodeURIComponent(fileName)}`} />}>
+                                    <Download size={14} />
+                                  </TooltipTrigger>
+                                  <TooltipContent>Download {fileName}</TooltipContent>
+                                </Tooltip>
+                              ) : null}
+                            </span>
+                          </div>
+                          {row?.path ? <p className="mt-1 truncate text-[10px] text-emerald-200/75" title={row.path}>{row.downloaded ? "Download started" : `Saved to ${row.path}`}</p> : null}
+                          {row?.error ? <p className="mt-1 text-[10px] leading-4 text-red-200" role="alert">{row.error}</p> : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Dialog>
       {renderScreen ? (
