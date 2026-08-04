@@ -15,7 +15,7 @@ import {
   updateElement,
 } from "../src/scene/operations";
 import { elementLocalBounds, overflowTargetScreenIds } from "../src/scene/overflow";
-import { resolveScreen } from "../src/scene/selectors";
+import { resolveScreen, selectSelectedElements } from "../src/scene/selectors";
 import { EditorStore } from "../src/app/editor-store";
 
 const timestamp = "2026-08-02T00:00:00.000Z";
@@ -149,6 +149,19 @@ describe("screen overflow model", () => {
     const owner = store.getSnapshot().project.decks[0]?.screens[0];
     const canonical = owner && owner.layers.find((layer) => layer.kind === "owned" && layer.element.id === "dragged");
     expect(canonical?.kind === "owned" && canonical.element.x).toBe(360);
+  });
+
+  test("keeps linked inspector geometry in target-screen coordinates", () => {
+    let project = fixture(2);
+    project = addElement(project, "screen_1", shape("inspected", { x: 350, width: 120 }));
+    project = toggleElementOverflow(project, "screen_1", "inspected", true);
+    const screen = resolveScreen(project, "screen_2");
+    const inspected = selectSelectedElements(screen, ["inspected"])[0];
+    expect(inspected).toMatchObject({ x: -50, ownerScreenId: "screen_1", targetScreenId: "screen_2" });
+
+    const updated = updateElement(project, "screen_2", "inspected", { x: inspected?.x });
+    const ownerLayer = updated.decks[0]?.screens[0]?.layers.find((layer) => layer.kind === "owned" && layer.element.id === "inspected");
+    expect(ownerLayer?.kind === "owned" && ownerLayer.element.x).toBe(350);
   });
 
   test("allows a linked transform to cross the seam before ownership reconciliation", () => {

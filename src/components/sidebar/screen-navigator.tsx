@@ -20,7 +20,7 @@ import {
   Type,
   Unlock,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { AssetMetadata, Deck, Project, SceneElement } from "../../lib/schema";
 import { resolveDeckScreen } from "../../scene/overflow";
 import { ScreenThumbnail } from "../editor/screen-thumbnail";
@@ -120,9 +120,86 @@ function LayerRow({ element, isLink, linkOwner, selected, actualIndex, total, dr
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [draftName, setDraftName] = useState(element.name);
+  const cancelingNameRef = useRef(false);
   const icon = element.type === "text" ? <Type size={13} /> : element.type === "image" ? <Image size={13} /> : element.type === "device" ? <MonitorSmartphone size={13} /> : <RectangleHorizontal size={13} />;
-  const commitName = () => { const name = draftName.trim(); if (name && name !== element.name) onRename(element.id, name); setEditing(false); };
-  return <div className={`group relative flex items-center gap-1 rounded-md border px-1 py-0.5 transition-opacity ${dragging ? "opacity-40" : ""} ${selected ? "border-accent/30 bg-accent/[0.12]" : "border-transparent hover:border-white/[0.07] hover:bg-white/[0.035]"}`} onDragOver={(event) => { if (!event.dataTransfer.types.includes(LAYER_DRAG_TYPE)) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; onDropTarget(dropEdgeForEvent(event)); }} onDrop={(event) => { event.preventDefault(); const dragged = event.dataTransfer.getData(LAYER_DRAG_TYPE); const edge = dropEdgeForEvent(event); onDragFinished(); if (dragged && dragged !== element.id) onReorder(dragged, actualIndex + (edge === "before" ? 1 : 0)); }}>{dropEdge ? <DropIndicator edge={dropEdge} /> : null}<button aria-label={`Drag to reorder ${element.name}`} className="plinth-focus-ring grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-muted/60 hover:bg-white/[0.06] hover:text-muted active:cursor-grabbing" draggable onDragEnd={() => { setDragging(false); onDragFinished(); }} onDragStart={(event) => { setDragging(true); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(LAYER_DRAG_TYPE, element.id); }} onKeyDown={(event) => { if (event.key === "ArrowUp" && actualIndex < total - 1) { event.preventDefault(); onMove(element.id, 1); } else if (event.key === "ArrowDown" && actualIndex > 0) { event.preventDefault(); onMove(element.id, -1); } }} title="Drag to reorder; use arrow keys for keyboard reordering" type="button"><GripVertical size={14} /></button><button className="grid h-7 w-7 shrink-0 place-items-center text-muted" onClick={() => onSelect(element.id, false)} type="button">{isLink ? <Link2 size={13} /> : icon}</button><button className="min-w-0 flex-1 text-left" onClick={(event) => onSelect(element.id, event.shiftKey)} type="button">{editing ? <input autoFocus className="h-6 w-full rounded border border-accent/40 bg-black/20 px-1 text-xs text-ink outline-none" onBlur={commitName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") commitName(); if (event.key === "Escape") setEditing(false); }} value={draftName} /> : <span className="block truncate text-xs text-ink/85">{element.name}</span>}</button>{isLink ? <Button aria-label={`Go to owner of ${element.name}`} onClick={() => linkOwner && onGoToOwner(linkOwner.id, element.id)} size="icon" tooltip="Go to owner" variant="ghost"><Link2 size={12} /></Button> : <OverflowMenu ariaLabel={`More actions for ${element.name}`} widthClass="w-32"><MenuAction icon={<Pencil size={12} />} label="Rename" onClick={() => setEditing(true)} /><MenuAction icon={element.visible ? <EyeOff size={12} /> : <Eye size={12} />} label={element.visible ? "Hide" : "Show"} onClick={() => onToggleVisible(element)} /><MenuAction icon={element.locked ? <Unlock size={12} /> : <Lock size={12} />} label={element.locked ? "Unlock" : "Lock"} onClick={() => onToggleLocked(element)} /><MenuAction icon={<Copy size={12} />} label="Duplicate" onClick={() => onDuplicate(element.id)} /><MenuAction danger icon={<Trash2 size={12} />} label="Delete" onClick={() => onDelete(element.id)} /></OverflowMenu>}</div>;
+  const commitName = () => {
+    if (cancelingNameRef.current) {
+      cancelingNameRef.current = false;
+      return;
+    }
+    const name = draftName.trim();
+    if (name && name !== element.name) onRename(element.id, name);
+    setEditing(false);
+  };
+  const cancelName = () => {
+    cancelingNameRef.current = true;
+    setDraftName(element.name);
+    setEditing(false);
+  };
+  return (
+    <div
+      className={`group relative flex items-center gap-1 rounded-md border px-1 py-0.5 transition-opacity ${dragging ? "opacity-40" : ""} ${selected ? "border-accent/30 bg-accent/[0.12]" : "border-transparent hover:border-white/[0.07] hover:bg-white/[0.035]"}`}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(LAYER_DRAG_TYPE)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        onDropTarget(dropEdgeForEvent(event));
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const dragged = event.dataTransfer.getData(LAYER_DRAG_TYPE);
+        const edge = dropEdgeForEvent(event);
+        onDragFinished();
+        if (dragged && dragged !== element.id) onReorder(dragged, actualIndex + (edge === "before" ? 1 : 0));
+      }}
+    >
+      {dropEdge ? <DropIndicator edge={dropEdge} /> : null}
+      <button
+        aria-label={`Drag to reorder ${element.name}`}
+        className="plinth-focus-ring grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-muted/60 hover:bg-white/[0.06] hover:text-muted active:cursor-grabbing"
+        draggable
+        onDragEnd={() => { setDragging(false); onDragFinished(); }}
+        onDragStart={(event) => { setDragging(true); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(LAYER_DRAG_TYPE, element.id); }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp" && actualIndex < total - 1) { event.preventDefault(); onMove(element.id, 1); }
+          else if (event.key === "ArrowDown" && actualIndex > 0) { event.preventDefault(); onMove(element.id, -1); }
+        }}
+        title="Drag to reorder; use arrow keys for keyboard reordering"
+        type="button"
+      ><GripVertical size={14} /></button>
+      <button className="grid h-7 w-7 shrink-0 place-items-center text-muted" onClick={() => onSelect(element.id, false)} type="button">{isLink ? <Link2 size={13} /> : icon}</button>
+      {editing ? (
+        <input
+          aria-label={`Rename ${element.name}`}
+          autoFocus
+          className="h-6 min-w-0 flex-1 rounded border border-accent/40 bg-black/20 px-1 text-xs text-ink outline-none"
+          onBlur={commitName}
+          onChange={(event) => setDraftName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+            else if (event.key === "Escape") cancelName();
+          }}
+          value={draftName}
+        />
+      ) : (
+        <button className="min-w-0 flex-1 text-left" onClick={(event) => onSelect(element.id, event.shiftKey)} type="button"><span className="block truncate text-xs text-ink/85">{element.name}</span></button>
+      )}
+      {isLink ? (
+        <Button aria-label={`Go to owner of ${element.name}`} onClick={() => linkOwner && onGoToOwner(linkOwner.id, element.id)} size="icon" tooltip="Go to owner" variant="ghost"><Link2 size={12} /></Button>
+      ) : (
+        <OverflowMenu ariaLabel={`More actions for ${element.name}`} widthClass="w-32">
+          <MenuAction icon={<Pencil size={12} />} label="Rename" onClick={() => { cancelingNameRef.current = false; setDraftName(element.name); setEditing(true); }} />
+          <MenuAction icon={element.visible ? <EyeOff size={12} /> : <Eye size={12} />} label={element.visible ? "Hide" : "Show"} onClick={() => onToggleVisible(element)} />
+          <MenuAction icon={element.locked ? <Unlock size={12} /> : <Lock size={12} />} label={element.locked ? "Unlock" : "Lock"} onClick={() => onToggleLocked(element)} />
+          <MenuAction icon={<Copy size={12} />} label="Duplicate" onClick={() => onDuplicate(element.id)} />
+          <MenuAction danger icon={<Trash2 size={12} />} label="Delete" onClick={() => onDelete(element.id)} />
+        </OverflowMenu>
+      )}
+    </div>
+  );
 }
 
 function OverflowMenu({ ariaLabel, widthClass, children }: { ariaLabel: string; widthClass: "w-32" | "w-36"; children: ReactNode }) {

@@ -98,6 +98,11 @@ export class ProjectHistory {
     this.transaction = null;
   }
 
+  resetProject(project: Project): void {
+    this.currentProject = project;
+    this.clear();
+  }
+
   clear(): void {
     this.pastEntries = [];
     this.futureEntries = [];

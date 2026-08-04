@@ -32,6 +32,10 @@ export function shouldRevealScreenHorizontally(screenLeft: number, screenWidth: 
   return horizontalVisibilityRatio(screenLeft, screenWidth, viewportLeft, viewportWidth) < SCREEN_REVEAL_THRESHOLD;
 }
 
+export function shouldBeginCanvasPan(button: number, modifiers: { altKey: boolean; shiftKey: boolean }): boolean {
+  return button === 1 || modifiers.altKey;
+}
+
 export function fitDeckZoom(deckWidth: number, deckHeight: number, screenCount: number, viewportWidth: number, viewportHeight: number): number {
   const gapWidth = Math.max(0, screenCount - 1) * SCREEN_GAP;
   const availableWidth = Math.max(120, viewportWidth - CANVAS_PADDING * 2 - gapWidth);
@@ -143,7 +147,7 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
   }, [focusedScreenId, focusedElements, lockedElementIds, selectedElementIds]);
 
   const beginPan = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 1 && !event.shiftKey && !event.altKey) return;
+    if (!shouldBeginCanvasPan(event.button, event)) return;
     const viewport = viewportRef.current;
     if (!viewport) return;
     panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop };

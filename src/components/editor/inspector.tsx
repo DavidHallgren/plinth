@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { EDITABLE_DEVICE_PRESETS, getDevicePreset } from "../../devices/presets";
 import type { Background, SceneElement, Shadow } from "../../lib/schema";
 import type { ResolvedScreen } from "../../scene/selectors";
-import type { ElementPatch, ElementUpdate, ScreenPatch } from "../../scene/operations";
+import type { ElementPatch, ElementUpdate } from "../../scene/element-operations";
+import type { ScreenPatch } from "../../scene/structure-operations";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 

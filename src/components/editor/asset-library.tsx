@@ -4,11 +4,7 @@ import type { AssetMetadata } from "../../lib/schema";
 import { assetUrl } from "../../canvas/image-loading";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
-
-export type AssetUploadState = {
-  status: "uploading" | "error" | "done";
-  message?: string;
-};
+import type { AssetUploadState } from "../../hooks/use-asset-mutations";
 
 type AssetLibraryProps = {
   open: boolean;

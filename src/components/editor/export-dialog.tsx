@@ -333,6 +333,7 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
                 <label className="block text-[10px] font-medium text-muted" htmlFor="project-export-directory">Project export folder</label>
                 <Input
                   className="h-9 text-xs"
+                  disabled={exporting}
                   id="project-export-directory"
                   onBlur={() => onExportDirectoryChange?.(configuredExportDirectory || null)}
                   onChange={(event) => { setExportDirectory(event.target.value); setDestinationError(null); }}

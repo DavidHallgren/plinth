@@ -1,28 +1,19 @@
 import { createId } from "../lib/ids";
 import type { Project, SceneElement, Screen, ScreenPreset } from "../lib/schema";
 import {
-  addDeck,
   addElement,
-  addScreen,
-  duplicateDeck,
   duplicateElements,
-  duplicateScreen,
   moveElements,
-  removeDeck,
   removeElements,
-  removeScreen,
-  reorderDecks,
   reorderElements,
-  reorderScreens,
   resizeElement,
-  toggleElementOverflow,
-  transferElementOwnership,
-  updateDeck,
   updateElement,
   updateElements,
-  updateScreen,
-} from "../scene/operations";
-import type { AddDeckOptions, AddScreenOptions, DeckPatch, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput, ScreenPatch } from "../scene/operations";
+} from "../scene/element-operations";
+import type { ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput } from "../scene/element-operations";
+import { addDeck, addScreen, duplicateDeck, duplicateScreen, removeDeck, removeScreen, reorderDecks, reorderScreens, updateDeck, updateScreen } from "../scene/structure-operations";
+import type { AddDeckOptions, AddScreenOptions, DeckPatch, ScreenPatch } from "../scene/structure-operations";
+import { toggleElementOverflow, transferElementOwnership } from "../scene/overflow-operations";
 import { ProjectHistory, type ProjectOperation } from "../scene/history";
 import { resolveScreen } from "../scene/selectors";
 
@@ -79,6 +70,15 @@ export class EditorStore {
   replaceProject(project: Project): void {
     if (project === this.history.project) return;
     this.history.replaceProject(project);
+    this.replaceSnapshotProject(project);
+  }
+
+  replaceExternalProject(project: Project): void {
+    this.history.resetProject(project);
+    this.replaceSnapshotProject(project);
+  }
+
+  private replaceSnapshotProject(project: Project): void {
     this.transactionBefore = null;
     const deck = project.decks.some((candidate) => candidate.id === this.snapshot.activeDeckId)
       ? project.decks.find((candidate) => candidate.id === this.snapshot.activeDeckId)

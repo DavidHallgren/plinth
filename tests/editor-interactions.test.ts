@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
-import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom, horizontalVisibilityRatio, shouldRevealScreenHorizontally } from "../src/canvas/deck-canvas";
+import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom, horizontalVisibilityRatio, shouldBeginCanvasPan, shouldRevealScreenHorizontally } from "../src/canvas/deck-canvas";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
 import { addElement, reorderElements } from "../src/scene/operations";
 import { ownedElements } from "./helpers";
 import { projectionKey } from "../src/scene/overflow";
+import { rebaseProjectAfterRename } from "../src/hooks/use-project-persistence";
 
 describe("editor interaction guards and geometry", () => {
   test("does not intercept typing targets, including contenteditable descendants", () => {
@@ -22,6 +23,24 @@ describe("editor interaction guards and geometry", () => {
   test("keeps projection node identities distinct while preserving the canonical id", () => {
     expect(projectionKey("screen-a", "element-1")).toBe("screen-a:element-1");
     expect(projectionKey("screen-b", "element-1")).not.toBe(projectionKey("screen-a", "element-1"));
+  });
+
+  test("reserves Shift-click for selection instead of starting a pan", () => {
+    expect(shouldBeginCanvasPan(0, { altKey: false, shiftKey: true })).toBe(false);
+    expect(shouldBeginCanvasPan(0, { altKey: true, shiftKey: false })).toBe(true);
+    expect(shouldBeginCanvasPan(1, { altKey: false, shiftKey: false })).toBe(true);
+  });
+
+  test("rebases edits made during rename onto the renamed project identity", () => {
+    const initial = createDefaultProject("Initial");
+    const latest = { ...initial, description: "Edited during save" };
+    const renamed = { ...initial, slug: "renamed", name: "Renamed", settings: { ...initial.settings, exportDirectory: "/tmp/exports" }, assets: [] };
+    expect(rebaseProjectAfterRename(latest, renamed)).toMatchObject({
+      slug: "renamed",
+      name: "Renamed",
+      description: "Edited during save",
+      settings: { exportDirectory: "/tmp/exports" },
+    });
   });
 
   test("computes multiline auto-height while preserving fixed-height text", () => {

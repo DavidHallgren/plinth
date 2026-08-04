@@ -262,6 +262,19 @@ describe("operation history", () => {
     expect(store.getSnapshot()).toMatchObject({ activeDeckId: nextDeck.id, activeScreenId: nextScreen.id, zoom: 0.72 });
   });
 
+  test("clears undo and redo when an external asset snapshot replaces the project", () => {
+    const initial = fixture();
+    const store = new EditorStore(initial, () => undefined);
+    store.apply("Add local shape", (project) => addElement(project, "screen_operations", shape("local", 10, 10)));
+    expect(store.getSnapshot().canUndo).toBe(true);
+
+    const external = { ...store.getSnapshot().project, assets: [] };
+    store.replaceExternalProject(external);
+    expect(store.getSnapshot()).toMatchObject({ project: external, canUndo: false, canRedo: false, isInTransaction: false });
+    store.undo();
+    expect(store.getSnapshot().project).toBe(external);
+  });
+
   test("coalesces a gesture and supports bounded undo/redo", () => {
     const initial = fixture();
     const history = new ProjectHistory(initial, 100);

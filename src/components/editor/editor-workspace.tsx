@@ -1,24 +1,23 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AssetMetadata, DeviceElement, Project, ScreenPreset, ImageElement, ShapeElement, TextElement } from "../../lib/schema";
 import { createId, nowIso } from "../../lib/ids";
-import { apiFetch, ApiClientError } from "../../lib/client-api";
 import { EditorStore } from "../../app/editor-store";
-import { resolveScreen, selectActiveDeck, selectCanonicalElement, selectSelectedElements } from "../../scene/selectors";
+import { resolveScreen, selectActiveDeck, selectSelectedElements } from "../../scene/selectors";
 import { selectAssetReferences } from "../../scene/selectors";
-import { addElement, updateDeck } from "../../scene/operations";
+import { addElement } from "../../scene/element-operations";
+import { updateDeck } from "../../scene/structure-operations";
 import { DeckCanvas, type DeckFitMode } from "../../canvas/deck-canvas";
 import { ScreenNavigator } from "../sidebar/screen-navigator";
 import { EditorToolbar } from "../toolbar/editor-toolbar";
 import { Inspector } from "./inspector";
-import { AssetLibrary, type AssetUploadState } from "./asset-library";
+import { AssetLibrary } from "./asset-library";
 import { ExportDialog } from "./export-dialog";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { APP_STORE_PRESETS, getPresetDefinition } from "../../scene/presets";
 import { getDevicePreset } from "../../devices/presets";
-import { createAssetMutationQueue, mergeAssetMutationProject } from "../../lib/asset-mutations";
-import { assetUrl, clearImageCache } from "../../canvas/image-loading";
+import { useAssetMutations } from "../../hooks/use-asset-mutations";
 
 type EditorWorkspaceProps = {
   project: Project;
@@ -28,6 +27,7 @@ type EditorWorkspaceProps = {
   onSaveNow: (project?: Project) => Promise<Project>;
   onBack: () => Promise<void>;
   onRenameProject: (name: string, slug?: string, exportDirectory?: string | null) => Promise<void>;
+  readOnly?: boolean;
 };
 
 export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): boolean {
@@ -38,7 +38,7 @@ export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): bo
   return Boolean(candidate.closest("input, textarea, select, [contenteditable]"));
 }
 
-export function EditorWorkspace({ project, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject }: EditorWorkspaceProps) {
+export function EditorWorkspace({ project, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject, readOnly = false }: EditorWorkspaceProps) {
   const storeRef = useRef<EditorStore | null>(null);
   const localCommitRevisionRef = useRef(0);
   const handleProjectCommit = useCallback((nextProject: Project) => {
@@ -70,10 +70,16 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportRendering, setExportRendering] = useState(false);
-  const [uploadStates, setUploadStates] = useState<Map<string, AssetUploadState>>(new Map());
   const [dropActive, setDropActive] = useState(false);
-  const assetMutationQueueRef = useRef(createAssetMutationQueue());
   const inspectorCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { uploadStates, uploadFiles, deleteAsset } = useAssetMutations({
+    project,
+    store,
+    currentLocalRevision: () => localCommitRevisionRef.current,
+    flushPendingSave,
+    commitProject: handleProjectCommit,
+    syncProject: onProjectSynced,
+  });
 
   useEffect(() => {
     store.replaceProject(project);
@@ -87,8 +93,8 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
 
   const activeDeck = selectActiveDeck(snapshot.project, snapshot.activeDeckId);
   const activeScreen = resolveScreen(snapshot.project, snapshot.activeScreenId);
-  const selectedElements = selectSelectedElements(activeScreen, snapshot.selectedElementIds).map((element) => selectCanonicalElement(snapshot.project, element.id)).filter((element): element is NonNullable<typeof element> => Boolean(element));
-  const focusedOwnerScreen = activeScreen.elements.find((element) => snapshot.selectedElementIds.includes(element.id))?.ownerScreenId;
+  const selectedElements = selectSelectedElements(activeScreen, snapshot.selectedElementIds);
+  const focusedOwnerScreen = selectedElements[0]?.ownerScreenId;
   const reportError = useCallback((reason: unknown) => {
     setLocalError(reason instanceof Error ? reason.message : "The editor could not apply that change.");
   }, []);
@@ -131,6 +137,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (readOnly) return;
       if (shouldIgnoreEditorShortcutTarget(event.target)) return;
       const command = event.metaKey || event.ctrlKey;
       if (command && event.key.toLowerCase() === "z") {
@@ -194,7 +201,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [requestActiveScreenReveal, run, store]);
+  }, [readOnly, requestActiveScreenReveal, run, store]);
 
   function addText() {
     const element: TextElement = {
@@ -294,7 +301,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   }
 
   function placeAssetInDevice(asset: AssetMetadata) {
-    const selectedDevice = selectedElements.find((element): element is DeviceElement => element.type === "device");
+    const selectedDevice = selectedElements.find((element) => element.type === "device");
     if (selectedDevice) {
       run(() => store.updateElement(selectedDevice.id, { screenshotPath: asset.path }));
       return;
@@ -338,79 +345,10 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     });
   }
 
-  async function uploadFiles(files: File[]): Promise<AssetMetadata[]> {
-    const uploaded: AssetMetadata[] = [];
-    for (const file of files) {
-      setUploadStates((current) => new Map(current).set(file.name, { status: "uploading" }));
-      try {
-        let flushedRevision = localCommitRevisionRef.current;
-        const result = await assetMutationQueueRef.current(
-          async () => {
-            await flushPendingSave();
-            flushedRevision = localCommitRevisionRef.current;
-          },
-          async () => {
-            const formData = new FormData();
-            formData.append("file", file, file.name);
-            return apiFetch<{ asset: AssetMetadata; project: Project }>(`/api/projects/${encodeURIComponent(project.slug)}/assets`, { method: "POST", body: formData });
-          },
-        );
-        uploaded.push(result.asset);
-        clearImageCache(assetUrl(project.slug, result.asset.path));
-        applyAssetMutationProject(result.project, flushedRevision);
-        setUploadStates((current) => new Map(current).set(file.name, { status: "done", message: result.asset.fileName }));
-      } catch (reason) {
-        const message = reason instanceof Error ? reason.message : "Upload failed.";
-        setUploadStates((current) => new Map(current).set(file.name, { status: "error", message }));
-      }
-    }
-    return uploaded;
-  }
-
-  async function deleteAsset(asset: AssetMetadata): Promise<void> {
-    const path = `/api/projects/${encodeURIComponent(project.slug)}/assets/${encodeURIComponent(asset.fileName)}`;
-    try {
-      let flushedRevision = localCommitRevisionRef.current;
-      const result = await assetMutationQueueRef.current(
-        async () => {
-          await flushPendingSave();
-          flushedRevision = localCommitRevisionRef.current;
-        },
-        () => apiFetch<{ project: Project }>(path, { method: "DELETE" }),
-      );
-      clearImageCache(assetUrl(project.slug, asset.path));
-      applyAssetMutationProject(result.project, flushedRevision);
-    } catch (reason) {
-      if (!(reason instanceof ApiClientError) || reason.code !== "ASSET_IN_USE") throw reason;
-      const details = reason.details as { usages?: Array<{ screenName: string; deckName?: string; elementName: string }> } | undefined;
-      const usages = details?.usages?.map((usage) => `${usage.deckName ? `${usage.deckName} / ` : ""}${usage.screenName} / ${usage.elementName}`).join(", ") ?? "another element";
-      if (!window.confirm(`${asset.fileName} is used by ${usages}. Force delete it? References will show missing-asset errors.`)) throw reason;
-      let flushedRevision = localCommitRevisionRef.current;
-      const result = await assetMutationQueueRef.current(
-        async () => {
-          await flushPendingSave();
-          flushedRevision = localCommitRevisionRef.current;
-        },
-        () => apiFetch<{ project: Project }>(`${path}?force=true`, { method: "DELETE" }),
-      );
-      clearImageCache(assetUrl(project.slug, asset.path));
-      applyAssetMutationProject(result.project, flushedRevision);
-    }
-  }
-
   async function handleDroppedFiles(files: FileList | File[]) {
     setDropActive(false);
     const uploaded = await uploadFiles(Array.from(files));
     for (const asset of uploaded) addImage(asset);
-  }
-
-  function applyAssetMutationProject(serverProject: Project, flushedRevision: number): void {
-    const latest = store.getSnapshot();
-    const hasLocalChanges = localCommitRevisionRef.current !== flushedRevision || latest.isInTransaction;
-    const nextProject = mergeAssetMutationProject(latest.project, serverProject, hasLocalChanges);
-    store.replaceProject(nextProject);
-    if (hasLocalChanges) handleProjectCommit(nextProject);
-    else onProjectSynced(nextProject);
   }
 
   function addNewScreen() {
@@ -509,7 +447,8 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const visibleError = localError ?? error;
 
   return (
-    <div className="flex h-screen min-h-[620px] min-w-[960px] flex-col overflow-hidden bg-[#0d0d0d]">
+    <div aria-busy={readOnly} className="relative flex h-screen min-h-[620px] min-w-[960px] flex-col overflow-hidden bg-[#0d0d0d]">
+      {readOnly ? <div aria-hidden="true" className="absolute inset-0 z-[100] cursor-wait bg-black/10" /> : null}
       <EditorToolbar
         canRedo={snapshot.canRedo}
         canUndo={snapshot.canUndo}
