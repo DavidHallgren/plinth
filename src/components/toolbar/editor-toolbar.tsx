@@ -12,8 +12,6 @@ import {
   Undo2,
   ZoomIn,
   ZoomOut,
-  Maximize2,
-  Scan,
 } from "lucide-react";
 import { Button } from "../ui/button";
 
@@ -30,8 +28,9 @@ type EditorToolbarProps = {
   onOpenAssets: () => void;
   onAddShape: (shape: "rectangle" | "rounded-rectangle" | "ellipse" | "line") => void;
   onZoomChange: (zoom: number) => void;
+  onDefaultZoom: () => void;
   onFitDeck: () => void;
-  onFitScreen: () => void;
+  onFitScreenWidth: () => void;
   onExport: () => void;
 };
 
@@ -48,8 +47,9 @@ export function EditorToolbar({
   onOpenAssets,
   onAddShape,
   onZoomChange,
+  onDefaultZoom,
   onFitDeck,
-  onFitScreen,
+  onFitScreenWidth,
   onExport,
 }: EditorToolbarProps) {
   return (
@@ -79,13 +79,23 @@ export function EditorToolbar({
           </details>
         </div>
         <span className="mx-2 hidden h-5 w-px bg-white/10 lg:block" />
-        <div className="hidden items-center gap-0.5 rounded-lg border border-line bg-panel-strong p-0.5 lg:flex">
-          <Button aria-label="Zoom out" onClick={() => onZoomChange(zoom - 0.05)} size="icon" tooltip="Zoom out" variant="ghost"><ZoomOut size={14} /></Button>
-          <button aria-label="Fit focused screen" className="h-7 min-w-12 px-1 text-[11px] text-muted hover:text-ink" onClick={onFitScreen} title="Fit focused screen" type="button">{Math.round(zoom * 100)}%</button>
-          <Button aria-label="Zoom in" onClick={() => onZoomChange(zoom + 0.05)} size="icon" tooltip="Zoom in" variant="ghost"><ZoomIn size={14} /></Button>
+        <div className="hidden h-8 items-center gap-0.5 rounded-lg border border-line bg-panel-strong p-0.5 lg:flex">
+          <Button aria-label="Zoom out" className="h-7 w-7 rounded-md" onClick={() => onZoomChange(zoom - 0.05)} size="icon" tooltip="Zoom out" variant="ghost"><ZoomOut size={14} /></Button>
+          <details className="group relative">
+            <summary aria-label="Zoom options" className="plinth-focus-ring flex h-7 min-w-16 cursor-pointer list-none items-center justify-center gap-1 px-1 text-[11px] text-muted hover:text-ink">
+              {Math.round(zoom * 100)}% <ChevronDown className="transition group-open:rotate-180" size={12} />
+            </summary>
+            <div className="absolute left-1/2 top-9 z-30 w-40 -translate-x-1/2 rounded-xl border border-white/10 bg-[#212121] p-1.5 shadow-2xl shadow-black/40">
+              <ZoomMenuItem label="Fit screen (Default)" onClick={onDefaultZoom} />
+              <ZoomMenuItem label="Fit deck" onClick={onFitDeck} />
+              <ZoomMenuItem label="Fit screen width" onClick={onFitScreenWidth} />
+              <ZoomMenuItem label="25%" onClick={() => onZoomChange(0.25)} />
+              <ZoomMenuItem label="50%" onClick={() => onZoomChange(0.5)} />
+              <ZoomMenuItem label="100%" onClick={() => onZoomChange(1)} />
+            </div>
+          </details>
+          <Button aria-label="Zoom in" className="h-7 w-7 rounded-md" onClick={() => onZoomChange(zoom + 0.05)} size="icon" tooltip="Zoom in" variant="ghost"><ZoomIn size={14} /></Button>
         </div>
-        <Button aria-label="Fit deck" onClick={onFitDeck} size="sm" tooltip="Fit deck" variant="ghost"><Maximize2 size={14} /> Fit deck</Button>
-        <Button aria-label="Fit focused screen" onClick={onFitScreen} size="sm" tooltip="Fit focused screen" variant="ghost"><Scan size={14} /> Focused</Button>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 justify-self-end">
@@ -97,4 +107,8 @@ export function EditorToolbar({
 
 function ShapeMenuItem({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
   return <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-muted hover:bg-white/[0.07] hover:text-ink" onClick={onClick} type="button">{icon}{label}</button>;
+}
+
+function ZoomMenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-xs text-muted hover:bg-white/[0.07] hover:text-ink" onClick={(event) => { onClick(); event.currentTarget.closest("details")?.removeAttribute("open"); }} type="button">{label}</button>;
 }

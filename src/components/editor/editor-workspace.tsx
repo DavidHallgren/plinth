@@ -510,8 +510,9 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         onOpenAssets={() => setAssetLibraryOpen(true)}
         onExport={() => setExportOpen(true)}
         onBack={() => { commitInspectorTransaction(); void leaveProject(); }}
+        onDefaultZoom={() => { setFitMode("focused-screen"); setFitRequest((value) => value + 1); }}
         onFitDeck={() => { setFitMode("deck"); setFitRequest((value) => value + 1); }}
-        onFitScreen={() => { setFitMode("focused-screen"); setFitRequest((value) => value + 1); }}
+        onFitScreenWidth={() => { setFitMode("screen-width"); setFitRequest((value) => value + 1); }}
         onRedo={() => run(() => store.redo())}
         onRenameProject={() => setRenameOpen(true)}
         onUndo={() => run(() => store.undo())}

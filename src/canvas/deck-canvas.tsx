@@ -15,7 +15,7 @@ export type CanvasTransform = {
   rotation: number;
 };
 
-export type DeckFitMode = "deck" | "focused-screen";
+export type DeckFitMode = "deck" | "focused-screen" | "screen-width";
 
 const CANVAS_PADDING = 32;
 const SCREEN_GAP = 6;
@@ -31,6 +31,11 @@ export function fitFocusedScreenZoom(deckWidth: number, deckHeight: number, view
   const availableWidth = Math.max(120, viewportWidth - CANVAS_PADDING * 2);
   const availableHeight = Math.max(120, viewportHeight - CANVAS_PADDING * 2);
   return Math.min(1, availableWidth / Math.max(1, deckWidth), availableHeight / Math.max(1, deckHeight));
+}
+
+export function fitScreenWidthZoom(deckWidth: number, viewportWidth: number): number {
+  const availableWidth = Math.max(120, viewportWidth - CANVAS_PADDING * 2);
+  return Math.min(1, availableWidth / Math.max(1, deckWidth));
 }
 
 type DeckCanvasProps = {
@@ -82,11 +87,13 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
     if (!viewportSize.width || !viewportSize.height) return;
     const nextZoom = fitMode === "focused-screen"
       ? fitFocusedScreenZoom(deck.width, deck.height, viewportSize.width, viewportSize.height)
-      : fitDeckZoom(deck.width, deck.height, screens.length, viewportSize.width, viewportSize.height);
+      : fitMode === "screen-width"
+        ? fitScreenWidthZoom(deck.width, viewportSize.width)
+        : fitDeckZoom(deck.width, deck.height, screens.length, viewportSize.width, viewportSize.height);
     onFitZoom(nextZoom);
     requestAnimationFrame(() => {
       const viewport = viewportRef.current;
-      if (!viewport || fitMode !== "focused-screen") return;
+      if (!viewport || fitMode === "deck") return;
       const screenWidth = deck.width * nextZoom;
       const screenLeft = CANVAS_PADDING + focusedIndex * (screenWidth + SCREEN_GAP);
       viewport.scrollTo({ left: Math.max(0, screenLeft - (viewport.clientWidth - screenWidth) / 2), top: Math.max(0, (deck.height * nextZoom - viewport.clientHeight) / 2), behavior: "smooth" });

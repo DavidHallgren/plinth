@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
-import { fitDeckZoom, fitFocusedScreenZoom } from "../src/canvas/deck-canvas";
+import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom } from "../src/canvas/deck-canvas";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
@@ -41,6 +41,8 @@ describe("editor interaction guards and geometry", () => {
   test("fits the active deck or focused screen in the viewport", () => {
     expect(fitFocusedScreenZoom(1320, 2868, 900, 839)).toBeCloseTo(775 / 2868);
     expect(fitFocusedScreenZoom(600, 400, 839, 839)).toBe(1);
+    expect(fitScreenWidthZoom(1320, 900)).toBeCloseTo(836 / 1320);
+    expect(fitScreenWidthZoom(100, 250)).toBe(1);
     expect(fitDeckZoom(1320, 2868, 2, 900, 839)).toBeCloseTo(775 / 2868);
     expect(fitDeckZoom(100, 100, 2, 250, 500)).toBeCloseTo(0.9);
   });
