@@ -8,7 +8,7 @@ import { isAppStorePreset } from "../scene/presets";
 import { isDevicePreset, getDevicePreset } from "../devices/presets";
 import { sanitizeAssetStem } from "./asset-validation";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
-import { reconcileOverflowLinks } from "../scene/operations";
+import { reconcileOverflowLinks } from "../scene/overflow-operations";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

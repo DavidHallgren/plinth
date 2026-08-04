@@ -1,15 +1,22 @@
 import { cp, mkdir, readdir, readFile, realpath, rename as fsRename, rm, stat, unlink } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { createDefaultProject } from "./defaults";
 import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject } from "./migrations";
-import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, deriveAssetFileName, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
+import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
 import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, findExportPlanForFile, MAX_EXPORT_BYTES } from "./export-validation";
 import type { ExportScope } from "./export-validation";
 import type { AssetMetadata, Project, ProjectInput, ScreenPreset } from "./schema";
 import { selectAssetReferences, selectAssetUsages, type AssetUsage } from "../scene/selectors";
-import { addDeck as addSceneDeck, addScreen as addSceneScreen, type AddDeckOptions, type AddScreenOptions } from "../scene/operations";
+import { addDeck as addSceneDeck, addScreen as addSceneScreen, type AddDeckOptions, type AddScreenOptions } from "../scene/structure-operations";
+import { ProjectMutationLock } from "./project-mutation-lock";
+import { assertDirectoryContained, assertFileNotSymlink, resolveWithin } from "./path-policy";
+export { resolveWithin } from "./path-policy";
+import { createAssetMetadata } from "./asset-storage";
+import { ExportRunRegistry } from "./export-storage";
+import { filesystemErrorCode, writePrettyJsonAtomic } from "./project-storage";
+export { writePrettyJsonAtomic } from "./project-storage";
 
 export type ProjectMetadata = {
   slug: string;
@@ -73,14 +80,7 @@ const PROJECT_FILE = "project.json";
 const PROJECT_SUBDIRECTORIES = ["assets", "exports"] as const;
 const EXPORT_RUN_ID_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}(?:-\d+)?$/;
 
-function errorCode(error: unknown): string | undefined {
-  if (typeof error === "object" && error !== null && "code" in error) {
-    const value = (error as { code?: unknown }).code;
-    return typeof value === "string" ? value : undefined;
-  }
-
-  return undefined;
-}
+const errorCode = filesystemErrorCode;
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -92,32 +92,6 @@ async function pathExists(path: string): Promise<boolean> {
     }
     throw error;
   }
-}
-
-export function resolveWithin(rootPath: string, ...segments: string[]): string {
-  const root = resolve(rootPath);
-
-  for (const segment of segments) {
-    if (
-      segment.length === 0 ||
-      isAbsolute(segment) ||
-      segment.includes("/") ||
-      segment.includes("\\") ||
-      segment === "." ||
-      segment === ".."
-    ) {
-      throw new PlinthError("INVALID_PATH", 400, "Path segment is not safe.", { segment });
-    }
-  }
-
-  const candidate = resolve(root, ...segments);
-  const relation = relative(root, candidate);
-
-  if (relation.length === 0 || relation === ".." || relation.startsWith(`..${sep}`) || isAbsolute(relation)) {
-    throw new PlinthError("INVALID_PATH", 400, "Resolved path would leave its allowed root.");
-  }
-
-  return candidate;
 }
 
 function assertExportRunId(value: string): string {
@@ -143,28 +117,10 @@ export function assetPathFromRequestName(value: string): string {
   return assetPathForFileName(decoded);
 }
 
-export async function writePrettyJsonAtomic(filePath: string, value: unknown): Promise<void> {
-  const temporaryPath = join(
-    dirname(filePath),
-    `.${basename(filePath)}.tmp-${process.pid}-${crypto.randomUUID().replaceAll("-", "")}`,
-  );
-  const contents = `${JSON.stringify(value, null, 2)}\n`;
-
-  try {
-    await Bun.write(temporaryPath, contents);
-    await fsRename(temporaryPath, filePath);
-  } catch (error) {
-    try {
-      await unlink(temporaryPath);
-    } catch {
-      // Best effort cleanup. The original error is more useful to the caller.
-    }
-    throw error;
-  }
-}
-
 export class ProjectStorage {
   readonly rootDir: string;
+  private readonly mutationLock = new ProjectMutationLock();
+  private readonly exportRuns = new ExportRunRegistry();
 
   constructor(rootDir = Bun.env.PLINTH_DATA_ROOT ?? join(process.cwd(), "data", "projects")) {
     this.rootDir = resolve(rootDir);
@@ -172,6 +128,7 @@ export class ProjectStorage {
 
   async ensureRoot(): Promise<void> {
     await mkdir(this.rootDir, { recursive: true });
+    await assertDirectoryContained(this.rootDir, this.rootDir, true);
   }
 
   projectDirectory(slug: string): string {
@@ -229,6 +186,7 @@ export class ProjectStorage {
       const runDirectory = resolveWithin(exportRoot, id);
       try {
         await mkdir(runDirectory, { recursive: false });
+        this.exportRuns.register(project.id, id, runDirectory);
         return { id, absolutePath: runDirectory };
       } catch (error) {
         if (errorCode(error) === "EEXIST") continue;
@@ -243,36 +201,29 @@ export class ProjectStorage {
   }
 
   private async exportRunDirectory(project: Project, exportRunId: string): Promise<string> {
-    const exportRoot = await this.configuredExportRoot(project);
-    const runDirectory = resolveWithin(exportRoot, assertExportRunId(exportRunId));
-    try {
-      const directoryStats = await stat(runDirectory);
-      if (!directoryStats.isDirectory()) throw new Error("The export run path is not a directory.");
-      const canonicalRunDirectory = await realpath(runDirectory);
-      const relation = relative(exportRoot, canonicalRunDirectory);
-      if (relation === "" || relation === ".." || relation.startsWith(`..${sep}`) || isAbsolute(relation)) {
-        throw new Error("The export run directory leaves the configured export folder.");
-      }
-      return canonicalRunDirectory;
-    } catch (error) {
-      throw new PlinthError("EXPORT_RUN_UNAVAILABLE", 422, "The timestamped export directory is no longer available. Start the export again.", {
-        exportRunId,
-        cause: error instanceof Error ? error.message : String(error),
-      });
-    }
+    const id = assertExportRunId(exportRunId);
+    return this.exportRuns.resolve(project.id, id);
   }
 
   async ensureProjectDirectories(slug: string): Promise<void> {
+    await this.ensureRoot();
     const projectDirectory = this.projectDirectory(slug);
-    await mkdir(projectDirectory, { recursive: true });
+    if (!(await pathExists(projectDirectory))) await mkdir(projectDirectory, { recursive: false });
+    await assertDirectoryContained(this.rootDir, projectDirectory);
     for (const subdirectory of PROJECT_SUBDIRECTORIES) {
-      await mkdir(resolveWithin(projectDirectory, subdirectory), { recursive: true });
+      const directory = resolveWithin(projectDirectory, subdirectory);
+      if (!(await pathExists(directory))) await mkdir(directory, { recursive: false });
+      await assertDirectoryContained(projectDirectory, directory);
     }
   }
 
   async createProject(input: ProjectInput): Promise<Project> {
+    const project = createDefaultProject(input.name, input.slug === undefined ? input : { ...input, slug: assertProjectSlug(input.slug) });
+    return this.mutationLock.run(project.slug, () => this.createProjectUnlocked(project));
+  }
+
+  private async createProjectUnlocked(project: Project): Promise<Project> {
     await this.ensureRoot();
-    const project = createDefaultProject(input.name, input);
     const projectDirectory = this.projectDirectory(project.slug);
 
     try {
@@ -285,6 +236,7 @@ export class ProjectStorage {
     }
 
     try {
+      await assertDirectoryContained(this.rootDir, projectDirectory);
       for (const subdirectory of PROJECT_SUBDIRECTORIES) {
         await mkdir(resolveWithin(projectDirectory, subdirectory), { recursive: false });
       }
@@ -301,6 +253,8 @@ export class ProjectStorage {
     let contents: string;
 
     try {
+      await assertDirectoryContained(this.rootDir, this.projectDirectory(slug));
+      await assertFileNotSymlink(filePath);
       contents = await readFile(filePath, "utf8");
     } catch (error) {
       if (errorCode(error) === "ENOENT") {
@@ -333,6 +287,25 @@ export class ProjectStorage {
 
   async saveProject(project: Project): Promise<Project> {
     const validated = parseProject(project);
+    return this.mutationLock.run(validated.slug, () => this.saveProjectUnlocked(validated));
+  }
+
+  async saveProjectFromClient(project: Project): Promise<Project> {
+    const validated = parseProject(project);
+    return this.mutationLock.run(validated.slug, async () => {
+      const current = await this.loadProject(validated.slug);
+      if (current.id !== validated.id) {
+        throw new PlinthError("INVALID_REQUEST", 409, "The project identity does not match the stored project.", {
+          expectedProjectId: current.id,
+          projectId: validated.id,
+        });
+      }
+      return this.saveProjectUnlocked({ ...validated, assets: current.assets });
+    });
+  }
+
+  private async saveProjectUnlocked(project: Project): Promise<Project> {
+    const validated = parseProject(project);
     if (!(await pathExists(this.projectDirectory(validated.slug)))) {
       throw new PlinthError("PROJECT_NOT_FOUND", 404, `Project "${validated.slug}" was not found.`);
     }
@@ -355,7 +328,11 @@ export class ProjectStorage {
       throw new PlinthError("ASSET_NOT_FOUND", 404, `Asset "${safePath}" was not found in project "${slug}".`, { assetPath: safePath });
     }
     try {
-      const bytes = new Uint8Array(await readFile(this.assetFilePath(slug, safePath)));
+      const assetDirectory = this.projectSubdirectory(slug, "assets");
+      const assetFile = this.assetFilePath(slug, safePath);
+      await assertDirectoryContained(this.projectDirectory(slug), assetDirectory);
+      await assertFileNotSymlink(assetFile);
+      const bytes = new Uint8Array(await readFile(assetFile));
       let validated;
       try {
         validated = await validateImageBytes(bytes, asset.fileName, asset.mimeType);
@@ -395,12 +372,22 @@ export class ProjectStorage {
   }
 
   async ingestAsset(slug: string, file: Blob, originalName = "asset"): Promise<AssetMutation> {
-    const project = await this.loadProject(slug);
     if (file.size > MAX_ASSET_BYTES) {
       throw new PlinthError("ASSET_TOO_LARGE", 422, `Images must be ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} MB or smaller.`, { maxBytes: MAX_ASSET_BYTES, byteSize: file.size });
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     const validated = await validateImageBytes(bytes, originalName, file.type);
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, () => this.ingestAssetUnlocked(safeSlug, bytes, originalName, validated));
+  }
+
+  private async ingestAssetUnlocked(
+    slug: string,
+    bytes: Uint8Array,
+    originalName: string,
+    validated: Awaited<ReturnType<typeof validateImageBytes>>,
+  ): Promise<AssetMutation> {
+    const project = await this.loadProject(slug);
     let existing: AssetMetadata | undefined;
     for (const candidate of project.assets) {
       if (candidate.byteSize !== validated.byteSize) continue;
@@ -427,22 +414,11 @@ export class ProjectStorage {
       return { project, asset: existing, duplicate: true };
     }
 
-    const fileName = deriveAssetFileName(originalName, validated.extension, validated.contentHash, new Set(project.assets.map((asset) => asset.fileName)));
-    const asset: AssetMetadata = {
-      id: `asset_${validated.contentHash}`,
-      kind: "image",
-      path: assetPathForFileName(fileName),
-      fileName,
-      mimeType: validated.mimeType,
-      width: validated.width,
-      height: validated.height,
-      byteSize: validated.byteSize,
-      contentHash: validated.contentHash,
-    };
+    const asset = createAssetMetadata(originalName, validated, project.assets);
     const assetFile = this.assetFilePath(slug, asset.path);
     await this.writeAssetFileAtomic(slug, asset.path, bytes);
     try {
-      const nextProject = await this.saveProject({ ...project, assets: [...project.assets, asset], updatedAt: nowIso() });
+      const nextProject = await this.saveProjectUnlocked({ ...project, assets: [...project.assets, asset], updatedAt: nowIso() });
       return { project: nextProject, asset, duplicate: false };
     } catch (error) {
       await unlink(assetFile).catch(() => undefined);
@@ -451,6 +427,11 @@ export class ProjectStorage {
   }
 
   async deleteAsset(slug: string, assetPath: string, force = false): Promise<{ project: Project; deleted: AssetMetadata; usages: AssetUsage[] }> {
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, () => this.deleteAssetUnlocked(safeSlug, assetPath, force));
+  }
+
+  private async deleteAssetUnlocked(slug: string, assetPath: string, force: boolean): Promise<{ project: Project; deleted: AssetMetadata; usages: AssetUsage[] }> {
     const project = await this.loadProject(slug);
     const safePath = assertAssetPath(assetPath);
     const asset = project.assets.find((candidate) => candidate.path === safePath);
@@ -466,6 +447,8 @@ export class ProjectStorage {
     }
 
     const filePath = this.assetFilePath(slug, safePath);
+    await assertDirectoryContained(this.projectDirectory(slug), this.projectSubdirectory(slug, "assets"));
+    await assertFileNotSymlink(filePath);
     let originalBytes: Uint8Array | null = null;
     try {
       originalBytes = new Uint8Array(await readFile(filePath));
@@ -476,7 +459,7 @@ export class ProjectStorage {
       if (errorCode(error) !== "ENOENT") throw error;
     });
     try {
-      const nextProject = await this.saveProject({ ...project, assets: project.assets.filter((candidate) => candidate.path !== safePath), updatedAt: nowIso() });
+      const nextProject = await this.saveProjectUnlocked({ ...project, assets: project.assets.filter((candidate) => candidate.path !== safePath), updatedAt: nowIso() });
       return { project: nextProject, deleted: asset, usages };
     } catch (error) {
       if (originalBytes) await this.writeAssetFileAtomic(slug, safePath, originalBytes).catch(() => undefined);
@@ -557,6 +540,8 @@ export class ProjectStorage {
     const filePath = this.exportFilePath(slug, fileName);
     let bytes: Uint8Array;
     try {
+      await assertDirectoryContained(this.projectDirectory(slug), this.projectSubdirectory(slug, "exports"));
+      await assertFileNotSymlink(filePath);
       bytes = new Uint8Array(await readFile(filePath));
     } catch (error) {
       if (errorCode(error) === "ENOENT") {
@@ -634,6 +619,10 @@ export class ProjectStorage {
   async renameProject(slug: string, name: string, newSlug = slugify(name), exportDirectory?: string | null): Promise<Project> {
     const oldSlug = assertProjectSlug(slug);
     const targetSlug = assertProjectSlug(newSlug);
+    return this.mutationLock.runMany([oldSlug, targetSlug], () => this.renameProjectUnlocked(oldSlug, targetSlug, name, exportDirectory));
+  }
+
+  private async renameProjectUnlocked(oldSlug: string, targetSlug: string, name: string, exportDirectory?: string | null): Promise<Project> {
     const current = await this.loadProject(oldSlug);
     const updated: Project = {
       ...current,
@@ -646,7 +635,7 @@ export class ProjectStorage {
     };
 
     if (targetSlug === oldSlug) {
-      return this.saveProject(updated);
+      return this.saveProjectUnlocked(updated);
     }
 
     const oldDirectory = this.projectDirectory(oldSlug);
@@ -657,7 +646,7 @@ export class ProjectStorage {
 
     await fsRename(oldDirectory, targetDirectory);
     try {
-      return await this.saveProject(updated);
+      return await this.saveProjectUnlocked(updated);
     } catch (error) {
       await fsRename(targetDirectory, oldDirectory).catch(() => undefined);
       throw error;
@@ -665,16 +654,27 @@ export class ProjectStorage {
   }
 
   async deleteProject(slug: string): Promise<void> {
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, () => this.deleteProjectUnlocked(safeSlug));
+  }
+
+  private async deleteProjectUnlocked(slug: string): Promise<void> {
     const projectDirectory = this.projectDirectory(slug);
     if (!(await pathExists(projectDirectory))) {
       throw new PlinthError("PROJECT_NOT_FOUND", 404, `Project "${slug}" was not found.`);
     }
+    await assertDirectoryContained(this.rootDir, projectDirectory);
     await rm(projectDirectory, { recursive: true, force: false });
   }
 
   async duplicateProject(slug: string, newSlug: string, name?: string): Promise<Project> {
-    const source = await this.loadProject(slug);
+    const sourceSlug = assertProjectSlug(slug);
     const targetSlug = assertProjectSlug(newSlug);
+    return this.mutationLock.runMany([sourceSlug, targetSlug], () => this.duplicateProjectUnlocked(sourceSlug, targetSlug, name));
+  }
+
+  private async duplicateProjectUnlocked(slug: string, targetSlug: string, name?: string): Promise<Project> {
+    const source = await this.loadProject(slug);
     const now = nowIso();
     const usedIds = new Set([
       source.id,
@@ -728,20 +728,26 @@ export class ProjectStorage {
       await this.copyAssets(slug, targetSlug);
       return created;
     } catch (error) {
-      await this.deleteProject(targetSlug).catch(() => undefined);
+      await this.deleteProjectUnlocked(targetSlug).catch(() => undefined);
       throw error;
     }
   }
 
   async addDeck(slug: string, options: AddDeckOptions): Promise<Project> {
-    const project = await this.loadProject(slug);
-    return this.saveProject(addSceneDeck(project, options));
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, async () => {
+      const project = await this.loadProject(safeSlug);
+      return this.saveProjectUnlocked(addSceneDeck(project, options));
+    });
   }
 
   async addScreen(slug: string, deckId: string, preset: ScreenPreset, name?: string, options: AddScreenOptions = {}): Promise<Project> {
-    const project = await this.loadProject(slug);
-    const screenName = name?.trim() || `${preset[0]?.toUpperCase() ?? "S"}${preset.slice(1)} screen`;
-    return this.saveProject(addSceneScreen(project, deckId, preset, { ...options, name: screenName }));
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, async () => {
+      const project = await this.loadProject(safeSlug);
+      const screenName = name?.trim() || `${preset[0]?.toUpperCase() ?? "S"}${preset.slice(1)} screen`;
+      return this.saveProjectUnlocked(addSceneScreen(project, deckId, preset, { ...options, name: screenName }));
+    });
   }
 
   private async createProjectFromValue(project: Project): Promise<Project> {
@@ -757,6 +763,7 @@ export class ProjectStorage {
     }
 
     try {
+      await assertDirectoryContained(this.rootDir, projectDirectory);
       for (const subdirectory of PROJECT_SUBDIRECTORIES) {
         await mkdir(resolveWithin(projectDirectory, subdirectory), { recursive: false });
       }
@@ -774,12 +781,15 @@ export class ProjectStorage {
     if (!(await pathExists(sourceDirectory))) {
       return;
     }
+    await assertDirectoryContained(this.projectDirectory(sourceSlug), sourceDirectory);
+    await assertDirectoryContained(this.projectDirectory(targetSlug), targetDirectory);
 
     const entries = await readdir(sourceDirectory, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isFile()) {
         continue;
       }
+      await assertFileNotSymlink(resolveWithin(sourceDirectory, entry.name));
       await cp(
         resolveWithin(sourceDirectory, entry.name),
         resolveWithin(targetDirectory, entry.name),

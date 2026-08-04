@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { apiAction, handleDeleteAsset, handleGetAsset, handleListAssets, handleUploadAsset } from "../src/lib/api";
@@ -12,18 +12,9 @@ import { ProjectStorage } from "../src/lib/storage";
 import type { AssetMetadata } from "../src/lib/schema";
 import { createAssetMutationQueue, mergeAssetMutationProject } from "../src/lib/asset-mutations";
 import { clearImageCache, imageResourceState, loadImageResource } from "../src/canvas/image-cache";
-import { ownedElements } from "./helpers";
+import { ownedElements, pngFixture } from "./helpers";
 
 const temporaryDirectories: string[] = [];
-
-function pngFixture(width = 640, height = 480): Uint8Array {
-  const bytes = new Uint8Array(24);
-  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
-  bytes.set([0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 8);
-  bytes.set([(width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff], 16);
-  bytes.set([(height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff], 20);
-  return bytes;
-}
 
 function fixtureFile(bytes: Uint8Array, name: string, type: string): File {
   return new File([bytes as unknown as BlobPart], name, { type });
@@ -45,8 +36,11 @@ afterEach(async () => {
 describe("asset validation and geometry", () => {
   test("validates signatures and dimensions instead of trusting names", async () => {
     const validated = await validateImageBytes(pngFixture(), "not-really-a-jpeg.jpg", "image/jpeg");
-    expect(validated).toMatchObject({ format: "png", extension: "png", mimeType: "image/png", width: 640, height: 480, byteSize: 24 });
+    expect(validated).toMatchObject({ format: "png", extension: "png", mimeType: "image/png", width: 640, height: 480 });
     expect(validated.contentHash).toHaveLength(64);
+    const headerOnlyPng = new Uint8Array(24);
+    headerOnlyPng.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    await expect(validateImageBytes(headerOnlyPng, "header-only.png", "image/png")).rejects.toMatchObject({ code: "ASSET_INVALID_CONTENT" });
     await expect(validateImageBytes(new TextEncoder().encode("<svg><script>alert(1)</script></svg>"), "unsafe.svg")).rejects.toThrow(/disallowed script/);
     await expect(validateImageBytes(new Uint8Array(MAX_ASSET_BYTES + 1), "large.png")).rejects.toThrow(/25 MB/);
   });
@@ -121,6 +115,32 @@ describe("asset validation and geometry", () => {
 });
 
 describe("asset storage and API", () => {
+  test("serializes concurrent uploads without losing metadata or orphaning files", async () => {
+    const storage = await temporaryStorage();
+    await storage.createProject({ name: "Concurrent assets", slug: "concurrent-assets", description: "Concurrency fixture" });
+
+    const results = await Promise.all([
+      storage.ingestAsset("concurrent-assets", fixtureFile(pngFixture(16, 12), "first.png", "image/png")),
+      storage.ingestAsset("concurrent-assets", fixtureFile(pngFixture(17, 12), "second.png", "image/png")),
+    ]);
+    const project = await storage.loadProject("concurrent-assets");
+    const files = await readdir(storage.projectSubdirectory("concurrent-assets", "assets"));
+
+    expect(results.every((result) => result.duplicate === false)).toBe(true);
+    expect(project.assets).toHaveLength(2);
+    expect(new Set(project.assets.map((asset) => asset.fileName))).toEqual(new Set(files));
+  });
+
+  test("preserves server-owned asset metadata when saving a stale client snapshot", async () => {
+    const storage = await temporaryStorage();
+    const stale = await storage.createProject({ name: "Stale client", slug: "stale-client", description: "Stale save fixture" });
+    const uploaded = await storage.ingestAsset("stale-client", fixtureFile(pngFixture(16, 12), "uploaded.png", "image/png"));
+
+    const saved = await storage.saveProjectFromClient({ ...stale, name: "Client edit" });
+    expect(saved.name).toBe("Client edit");
+    expect(saved.assets).toEqual(uploaded.project.assets);
+  });
+
   test("merges a completed asset mutation into a newer local scene snapshot", async () => {
     const project = await (await temporaryStorage()).createProject({ name: "Merge fixture", slug: "merge-fixture", description: "Asset merge" });
     const latest = { ...project, decks: project.decks.map((deck) => ({ ...deck, screens: deck.screens.map((screen) => ({ ...screen, notes: "edited while uploading" })) })) };
@@ -132,7 +152,7 @@ describe("asset storage and API", () => {
       mimeType: "image/png",
       width: 16,
       height: 12,
-      byteSize: 24,
+      byteSize: pngFixture(16, 12).byteLength,
     };
     const server = { ...project, assets: [asset] };
     const merged = mergeAssetMutationProject(latest, server, true);

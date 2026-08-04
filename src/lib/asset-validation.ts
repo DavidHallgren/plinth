@@ -1,4 +1,5 @@
 import { PlinthError } from "./errors";
+import { decodeStructuredPng, hasPngSignature, PngStructureError } from "./png-validation";
 
 export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
 export const ASSET_PATH_PREFIX = "assets/";
@@ -33,22 +34,20 @@ function bytesEqual(bytes: Uint8Array, offset: number, values: number[]): boolea
   return values.every((value, index) => bytes[offset + index] === value);
 }
 
-function readUint32BigEndian(bytes: Uint8Array, offset: number): number {
-  return ((bytes[offset] ?? 0) * 0x1000000) + ((bytes[offset + 1] ?? 0) << 16) + ((bytes[offset + 2] ?? 0) << 8) + (bytes[offset + 3] ?? 0);
-}
-
 function readUint16LittleEndian(bytes: Uint8Array, offset: number): number {
   return (bytes[offset] ?? 0) + ((bytes[offset + 1] ?? 0) << 8);
 }
 
 function parsePngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
-  if (bytes.length < 24 || !bytesEqual(bytes, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) || readUint32BigEndian(bytes, 8) !== 13 || !bytesEqual(bytes, 12, [0x49, 0x48, 0x44, 0x52])) {
-    return null;
+  if (!hasPngSignature(bytes)) return null;
+  try {
+    return decodeStructuredPng(bytes, MAX_ASSET_BYTES);
+  } catch (error) {
+    if (error instanceof PngStructureError) {
+      fail(error.kind === "too-large" ? "ASSET_TOO_LARGE" : "ASSET_INVALID_CONTENT", `The PNG is invalid: ${error.message}`, error.details);
+    }
+    throw error;
   }
-  return {
-    width: assertDimension(readUint32BigEndian(bytes, 16), "width"),
-    height: assertDimension(readUint32BigEndian(bytes, 20), "height"),
-  };
 }
 
 function parseJpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {

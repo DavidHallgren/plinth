@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createScreenPreset } from "../src/lib/defaults";
@@ -29,6 +29,22 @@ describe("safe project storage", () => {
     expect(() => resolveWithin("/tmp/plinth", "../outside")).toThrow();
     expect(() => resolveWithin("/tmp/plinth", "/etc/passwd")).toThrow();
     expect(() => resolveWithin("/tmp/plinth", "assets/../project.json")).toThrow();
+  });
+
+  test("rejects symlinked managed project directories", async () => {
+    const storage = await temporaryStorage();
+    await storage.ensureRoot();
+    const outside = join(storage.rootDir, "..", "outside-storage");
+    await mkdir(outside, { recursive: true });
+    await symlink(outside, storage.projectDirectory("linked-project"), "dir");
+    await expect(storage.loadProject("linked-project")).rejects.toMatchObject({ code: "INVALID_PATH" });
+
+    await rm(storage.projectDirectory("linked-project"));
+    await storage.createProject({ name: "Linked assets", slug: "linked-assets", description: "Symlink fixture" });
+    const assetsDirectory = storage.projectSubdirectory("linked-assets", "assets");
+    await rm(assetsDirectory, { recursive: true });
+    await symlink(outside, assetsDirectory, "dir");
+    await expect(storage.ensureProjectDirectories("linked-assets")).rejects.toMatchObject({ code: "INVALID_PATH" });
   });
 
   test("writes pretty JSON atomically without leaving a temp file", async () => {

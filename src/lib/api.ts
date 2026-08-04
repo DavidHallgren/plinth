@@ -4,11 +4,17 @@ import { MAX_EXPORT_BYTES } from "./export-validation";
 import { parseProject } from "./migrations";
 import { CURRENT_SCHEMA_VERSION, ScreenPresetSchema } from "./schema";
 import { assetPathFromRequestName, ProjectStorage } from "./storage";
+import { PROJECT_SLUG_PATTERN } from "./ids";
+
+const ProjectSlugRequestSchema = z.string().trim().min(1).max(64).regex(
+  PROJECT_SLUG_PATTERN,
+  "Use lowercase letters, numbers, and single hyphens.",
+);
 
 const CreateProjectRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
-    slug: z.string().trim().min(1).max(64).optional(),
+    slug: ProjectSlugRequestSchema.optional(),
     description: z.string().max(500).optional(),
   })
   .strict();
@@ -16,14 +22,14 @@ const CreateProjectRequestSchema = z
 const RenameProjectRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
-    slug: z.string().trim().min(1).max(64).optional(),
+    slug: ProjectSlugRequestSchema.optional(),
     exportDirectory: z.string().trim().max(4096).nullable().optional(),
   })
   .strict();
 
 const DuplicateProjectRequestSchema = z
   .object({
-    slug: z.string().trim().min(1).max(64),
+    slug: ProjectSlugRequestSchema,
     name: z.string().trim().min(1).max(120).optional(),
   })
   .strict();
@@ -171,12 +177,11 @@ export async function handleGetProject(request: Request, storage: ProjectStorage
 
 export async function handleSaveProject(request: Request, storage: ProjectStorage): Promise<Response> {
   const slug = pathSegment(request, 3);
-  await storage.loadProject(slug);
   const project = parseProject(await jsonBody(request));
   if (project.slug !== slug) {
     throw new PlinthError("INVALID_REQUEST", 400, "Project slug in the body must match the URL.");
   }
-  const savedProject = await storage.saveProject(project);
+  const savedProject = await storage.saveProjectFromClient(project);
   return success({ project: savedProject });
 }
 

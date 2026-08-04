@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { apiAction, handleAddDeck, handleAddScreen, handleCreateProject, handleGetProject } from "../src/lib/api";
+import { apiAction, handleAddDeck, handleAddScreen, handleCreateProject, handleDuplicateProject, handleGetProject, handleRenameProject } from "../src/lib/api";
 import { ProjectStorage } from "../src/lib/storage";
 
 const temporaryDirectories: string[] = [];
@@ -21,6 +21,33 @@ afterEach(async () => {
 });
 
 describe("deck and screen API", () => {
+  test("returns structured client errors for invalid project slugs", async () => {
+    const storage = await temporaryStorage();
+    const createResponse = await apiAction(() => handleCreateProject(new Request("http://plinth.test/api/projects", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Bad slug", slug: "Bad Slug" }),
+    }), storage));
+    expect(createResponse.status).toBe(400);
+    expect(await createResponse.json()).toMatchObject({ error: { code: "INVALID_REQUEST", details: { issues: [{ path: ["slug"] }] } } });
+
+    await storage.createProject({ name: "Valid", slug: "valid", description: "Slug fixture" });
+    const renameResponse = await apiAction(() => handleRenameProject(new Request("http://plinth.test/api/projects/valid/rename", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Valid", slug: "also bad" }),
+    }), storage));
+    expect(renameResponse.status).toBe(400);
+
+    const duplicateResponse = await apiAction(() => handleDuplicateProject(new Request("http://plinth.test/api/projects/valid/duplicate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ slug: "../bad" }),
+    }), storage));
+    expect(duplicateResponse.status).toBe(400);
+    await expect(storage.createProject({ name: "Storage bad", slug: "Storage Bad", description: "Storage boundary" })).rejects.toMatchObject({ code: "INVALID_SLUG", status: 400 });
+  });
+
   test("creates decks and screens through structured routes with inherited dimensions", async () => {
     const storage = await temporaryStorage();
     const createdResponse = await handleCreateProject(new Request("http://plinth.test/api/projects", {
