@@ -14,6 +14,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { Button } from "../ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 
 type EditorToolbarProps = {
   projectName: string;
@@ -67,33 +68,31 @@ export function EditorToolbar({
         <span className="mx-2 h-5 w-px bg-white/10" />
         <Button onClick={onOpenAssets} size="sm" variant="secondary"><Images size={14} /> Assets</Button>
         <Button onClick={onAddText} size="sm" variant="secondary"><Type size={14} /> Text</Button>
-        <div className="relative">
-          <details className="group">
-            <summary className="plinth-focus-ring flex h-8 cursor-pointer list-none items-center gap-1 rounded-lg border border-line bg-panel-strong px-2.5 text-xs font-medium text-ink hover:bg-white/[0.08]"><Square size={13} /> Shape <ChevronDown className="transition group-open:rotate-180" size={13} /></summary>
-            <div className="absolute right-0 top-10 z-30 w-44 rounded-xl border border-white/10 bg-[#212121] p-1.5 shadow-2xl shadow-black/40">
-              <ShapeMenuItem label="Rectangle" icon={<Square size={13} />} onClick={() => onAddShape("rectangle")} />
-              <ShapeMenuItem label="Rounded rectangle" icon={<Square className="rounded" size={13} />} onClick={() => onAddShape("rounded-rectangle")} />
-              <ShapeMenuItem label="Ellipse" icon={<Circle size={13} />} onClick={() => onAddShape("ellipse")} />
-              <ShapeMenuItem label="Line" icon={<Minus size={13} />} onClick={() => onAddShape("line")} />
-            </div>
-          </details>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="group plinth-focus-ring flex h-8 items-center gap-1 rounded-lg border border-line bg-panel-strong px-2.5 text-xs font-medium text-ink hover:bg-white/[0.08]"><Square size={13} /> Shape <ChevronDown className="transition group-data-[popup-open]:rotate-180" size={13} /></DropdownMenuTrigger>
+          <DropdownMenuContent className="w-44">
+            <ShapeMenuItem label="Rectangle" icon={<Square size={13} />} onClick={() => onAddShape("rectangle")} />
+            <ShapeMenuItem label="Rounded rectangle" icon={<Square className="rounded" size={13} />} onClick={() => onAddShape("rounded-rectangle")} />
+            <ShapeMenuItem label="Ellipse" icon={<Circle size={13} />} onClick={() => onAddShape("ellipse")} />
+            <ShapeMenuItem label="Line" icon={<Minus size={13} />} onClick={() => onAddShape("line")} />
+          </DropdownMenuContent>
+        </DropdownMenu>
         <span className="mx-2 hidden h-5 w-px bg-white/10 lg:block" />
         <div className="hidden h-8 items-center gap-0.5 rounded-lg border border-line bg-panel-strong p-0.5 lg:flex">
           <Button aria-label="Zoom out" className="h-7 w-7 rounded-md" onClick={() => onZoomChange(zoom - 0.05)} size="icon" tooltip="Zoom out" variant="ghost"><ZoomOut size={14} /></Button>
-          <details className="group relative">
-            <summary aria-label="Zoom options" className="plinth-focus-ring flex h-7 min-w-16 cursor-pointer list-none items-center justify-center gap-1 px-1 text-[11px] text-muted hover:text-ink">
-              {Math.round(zoom * 100)}% <ChevronDown className="transition group-open:rotate-180" size={12} />
-            </summary>
-            <div className="absolute left-1/2 top-9 z-30 w-40 -translate-x-1/2 rounded-xl border border-white/10 bg-[#212121] p-1.5 shadow-2xl shadow-black/40">
+          <DropdownMenu>
+            <DropdownMenuTrigger aria-label="Zoom options" className="group plinth-focus-ring flex h-7 min-w-16 items-center justify-center gap-1 px-1 text-[11px] text-muted hover:text-ink">
+              {Math.round(zoom * 100)}% <ChevronDown className="transition group-data-[popup-open]:rotate-180" size={12} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-40">
               <ZoomMenuItem label="Fit screen (Default)" onClick={onDefaultZoom} />
               <ZoomMenuItem label="Fit deck" onClick={onFitDeck} />
               <ZoomMenuItem label="Fit screen width" onClick={onFitScreenWidth} />
               <ZoomMenuItem label="25%" onClick={() => onZoomChange(0.25)} />
               <ZoomMenuItem label="50%" onClick={() => onZoomChange(0.5)} />
               <ZoomMenuItem label="100%" onClick={() => onZoomChange(1)} />
-            </div>
-          </details>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button aria-label="Zoom in" className="h-7 w-7 rounded-md" onClick={() => onZoomChange(zoom + 0.05)} size="icon" tooltip="Zoom in" variant="ghost"><ZoomIn size={14} /></Button>
         </div>
       </div>
@@ -106,9 +105,9 @@ export function EditorToolbar({
 }
 
 function ShapeMenuItem({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
-  return <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-muted hover:bg-white/[0.07] hover:text-ink" onClick={onClick} type="button">{icon}{label}</button>;
+  return <DropdownMenuItem onClick={onClick}>{icon}{label}</DropdownMenuItem>;
 }
 
 function ZoomMenuItem({ label, onClick }: { label: string; onClick: () => void }) {
-  return <button className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-xs text-muted hover:bg-white/[0.07] hover:text-ink" onClick={(event) => { onClick(); event.currentTarget.closest("details")?.removeAttribute("open"); }} type="button">{label}</button>;
+  return <DropdownMenuItem onClick={onClick}>{label}</DropdownMenuItem>;
 }

@@ -3,8 +3,8 @@ import { useState } from "react";
 import type { ProjectMetadata } from "../lib/storage";
 import { PlinthMark } from "./icons/plinth-mark";
 import { Button } from "./ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type ProjectPickerProps = {
   projects: ProjectMetadata[];
@@ -102,18 +102,17 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDe
                         </div>
                         <ArrowUpRight className="shrink-0 text-muted transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent-soft" size={17} />
                       </button>
-                      <details className="relative mr-2 shrink-0">
-                        <Tooltip>
-                          <TooltipTrigger render={<summary aria-label={`More actions for ${project.name}`} className="plinth-focus-ring grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg text-muted hover:bg-white/[0.07] hover:text-ink"><MoreHorizontal size={16} /></summary>} />
-                          <TooltipContent>More actions for {project.name}</TooltipContent>
-                        </Tooltip>
-                        <div className="absolute right-0 top-10 z-30 w-40 rounded-lg border border-white/10 bg-[#212121] p-1 shadow-xl shadow-black/40">
-                          <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-red-200 hover:bg-red-400/10 disabled:pointer-events-none disabled:opacity-45" disabled={deletingSlug === project.slug} onClick={() => void deleteProject(project)} type="button">
-                            <Trash2 size={12} />
-                            {deletingSlug === project.slug ? "Deleting…" : "Delete project"}
-                          </button>
-                        </div>
-                      </details>
+                      <div className="mr-2 shrink-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger aria-label={`More actions for ${project.name}`} className="plinth-focus-ring grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-white/[0.07] hover:text-ink"><MoreHorizontal size={16} /></DropdownMenuTrigger>
+                          <DropdownMenuContent className="w-40">
+                            <DropdownMenuItem danger disabled={deletingSlug === project.slug} onClick={() => void deleteProject(project)}>
+                              <Trash2 size={12} />
+                              {deletingSlug === project.slug ? "Deleting…" : "Delete project"}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   ))
                 )}
