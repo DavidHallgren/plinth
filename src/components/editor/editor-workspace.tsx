@@ -3,20 +3,19 @@ import type { AssetMetadata, DeviceElement, Project, ScreenPreset, ImageElement,
 import { createId, nowIso } from "../../lib/ids";
 import { apiFetch, ApiClientError } from "../../lib/client-api";
 import { EditorStore } from "../../app/editor-store";
-import { resolveScreen, selectActiveDeck, selectSelectedElements } from "../../scene/selectors";
+import { resolveScreen, selectActiveDeck, selectCanonicalElement, selectSelectedElements } from "../../scene/selectors";
 import { selectAssetReferences } from "../../scene/selectors";
-import { addElement } from "../../scene/operations";
-import { EditorCanvas } from "../../canvas/editor-canvas";
-import { DocumentNavigator } from "../sidebar/document-navigator";
+import { addElement, updateDeck } from "../../scene/operations";
+import { DeckCanvas, type DeckFitMode } from "../../canvas/deck-canvas";
+import { ScreenNavigator } from "../sidebar/screen-navigator";
 import { EditorToolbar } from "../toolbar/editor-toolbar";
-import { ProjectPreview } from "./project-preview";
 import { Inspector } from "./inspector";
 import { AssetLibrary, type AssetUploadState } from "./asset-library";
 import { ExportDialog } from "./export-dialog";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
-import { APP_STORE_PRESETS } from "../../scene/presets";
+import { APP_STORE_PRESETS, getPresetDefinition } from "../../scene/presets";
 import { getDevicePreset } from "../../devices/presets";
 import { createAssetMutationQueue, mergeAssetMutationProject } from "../../lib/asset-mutations";
 import { assetUrl, clearImageCache } from "../../canvas/image-loading";
@@ -53,8 +52,15 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   store.setCommitHandler(handleProjectCommit);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [fitRequest, setFitRequest] = useState(0);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [fitMode, setFitMode] = useState<DeckFitMode>("deck");
   const [addOpen, setAddOpen] = useState(false);
+  const [deckOpen, setDeckOpen] = useState(false);
+  const [deckEditId, setDeckEditId] = useState<string | null>(null);
+  const [deckName, setDeckName] = useState("");
+  const [deckSlug, setDeckSlug] = useState("");
+  const [deckPreset, setDeckPreset] = useState<ScreenPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
+  const [deckWidth, setDeckWidth] = useState(1320);
+  const [deckHeight, setDeckHeight] = useState(2868);
   const [addPreset, setAddPreset] = useState<ScreenPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
   const [addName, setAddName] = useState("");
   const [renameOpen, setRenameOpen] = useState(false);
@@ -82,8 +88,9 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   }, [project.name, project.settings.exportDirectory, project.slug]);
 
   const activeDeck = selectActiveDeck(snapshot.project, snapshot.activeDeckId);
-  const activeDocument = resolveScreen(snapshot.project, snapshot.activeScreenId);
-  const selectedElements = selectSelectedElements(activeDocument, snapshot.selectedElementIds);
+  const activeScreen = resolveScreen(snapshot.project, snapshot.activeScreenId);
+  const selectedElements = selectSelectedElements(activeScreen, snapshot.selectedElementIds).map((element) => selectCanonicalElement(snapshot.project, element.id)).filter((element): element is NonNullable<typeof element> => Boolean(element));
+  const focusedOwnerScreen = activeScreen.elements.find((element) => snapshot.selectedElementIds.includes(element.id))?.ownerScreenId;
   const reportError = useCallback((reason: unknown) => {
     setLocalError(reason instanceof Error ? reason.message : "The editor could not apply that change.");
   }, []);
@@ -137,7 +144,6 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         run(() => store.redo());
         return;
       }
-      if (previewMode) return;
       if (command && event.key.toLowerCase() === "c") {
         event.preventDefault();
         store.copy();
@@ -181,20 +187,19 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewMode, run, store]);
+  }, [run, store]);
 
   function addText() {
     const element: TextElement = {
       id: createId("text"),
       type: "text",
       name: "Text",
-      x: Math.round(activeDocument.width * 0.1),
-      y: Math.round(activeDocument.height * 0.12),
-      width: Math.round(activeDocument.width * 0.72),
+      x: Math.round(activeScreen.width * 0.1),
+      y: Math.round(activeScreen.height * 0.12),
+      width: Math.round(activeScreen.width * 0.72),
       height: 120,
       rotation: 0,
       opacity: 1,
-      zIndex: activeDocument.elements.length,
       locked: false,
       visible: true,
       shadow: null,
@@ -217,7 +222,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       },
     };
     run(() => {
-      store.apply("Add text", (current) => addElement(current, activeDocument.id, element));
+      store.apply("Add text", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
     });
   }
@@ -227,13 +232,12 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       id: createId("shape"),
       type: "shape",
       name: shape === "line" ? "Line" : "Shape",
-      x: Math.round(activeDocument.width * 0.12),
-      y: Math.round(activeDocument.height * 0.62),
-      width: Math.round(activeDocument.width * 0.5),
-      height: shape === "line" ? 12 : Math.round(activeDocument.height * 0.12),
+      x: Math.round(activeScreen.width * 0.12),
+      y: Math.round(activeScreen.height * 0.62),
+      width: Math.round(activeScreen.width * 0.5),
+      height: shape === "line" ? 12 : Math.round(activeScreen.height * 0.12),
       rotation: 0,
       opacity: 1,
-      zIndex: activeDocument.elements.length,
       locked: false,
       visible: true,
       shadow: null,
@@ -244,27 +248,26 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       radius: shape === "rounded-rectangle" ? 28 : 0,
     };
     run(() => {
-      store.apply("Add shape", (current) => addElement(current, activeDocument.id, element));
+      store.apply("Add shape", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
     });
   }
 
   function addImage(asset: AssetMetadata) {
-    const maxWidth = Math.max(120, Math.round(activeDocument.width * 0.58));
+    const maxWidth = Math.max(120, Math.round(activeScreen.width * 0.58));
     const aspect = asset.width / Math.max(1, asset.height);
-    const width = Math.min(maxWidth, Math.max(120, Math.round(activeDocument.width * 0.58)));
-    const height = Math.max(80, Math.min(activeDocument.height * 0.42, Math.round(width / Math.max(0.1, aspect))));
+    const width = Math.min(maxWidth, Math.max(120, Math.round(activeScreen.width * 0.58)));
+    const height = Math.max(80, Math.min(activeScreen.height * 0.42, Math.round(width / Math.max(0.1, aspect))));
     const element: ImageElement = {
       id: createId("image"),
       type: "image",
       name: asset.fileName,
-      x: Math.round((activeDocument.width - width) / 2),
-      y: Math.round((activeDocument.height - height) / 2),
+      x: Math.round((activeScreen.width - width) / 2),
+      y: Math.round((activeScreen.height - height) / 2),
       width,
       height,
       rotation: 0,
       opacity: 1,
-      zIndex: activeDocument.elements.length,
       locked: false,
       visible: true,
       shadow: null,
@@ -275,7 +278,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       alt: asset.fileName,
     };
     run(() => {
-      store.apply("Add image", (current) => addElement(current, activeDocument.id, element));
+      store.apply("Add image", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
     });
   }
@@ -288,8 +291,8 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     }
     const preset = getDevicePreset("iphone-17-pro-max");
     if (!preset) return;
-    const width = Math.round(activeDocument.width * 0.46);
-    const height = Math.min(Math.round(width / preset.aspectRatio), Math.round(activeDocument.height * 0.58));
+    const width = Math.round(activeScreen.width * 0.46);
+    const height = Math.min(Math.round(width / preset.aspectRatio), Math.round(activeScreen.height * 0.58));
     const element: DeviceElement = {
       id: createId("device"),
       type: "device",
@@ -308,19 +311,18 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       showGlare: false,
       showCamera: true,
       name: "iPhone 17 Pro Max",
-      x: Math.round((activeDocument.width - width) / 2),
-      y: Math.round((activeDocument.height - height) / 2),
+      x: Math.round((activeScreen.width - width) / 2),
+      y: Math.round((activeScreen.height - height) / 2),
       width,
       height,
       rotation: 0,
       opacity: 1,
-      zIndex: activeDocument.elements.length,
       locked: false,
       visible: true,
       shadow: null,
     };
     run(() => {
-      store.apply("Add device", (current) => addElement(current, activeDocument.id, element));
+      store.apply("Add device", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
     });
   }
@@ -407,9 +409,46 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       store.addScreen(addPreset, { name: addName.trim() || undefined });
       const added = store.history.project.decks.flatMap((deck) => deck.screens).find((screen) => !before.includes(screen.id));
       if (added) store.setActiveScreen(added.id);
-      setPreviewMode(false);
       setAddOpen(false);
       setAddName("");
+    });
+  }
+
+  function openNewDeck() {
+    setDeckEditId(null);
+    setDeckName("New deck");
+    setDeckSlug("");
+    setDeckPreset("custom");
+    setDeckWidth(1320);
+    setDeckHeight(2868);
+    setDeckOpen(true);
+  }
+
+  function openDeckEdit(deckId: string) {
+    const deck = snapshot.project.decks.find((candidate) => candidate.id === deckId);
+    if (!deck) return;
+    setDeckEditId(deck.id);
+    setDeckName(deck.name);
+    setDeckSlug(deck.slug);
+    setDeckWidth(deck.width);
+    setDeckHeight(deck.height);
+    setDeckOpen(true);
+  }
+
+  function submitDeck(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = deckName.trim();
+    if (!name) return;
+    run(() => {
+      if (deckEditId) {
+        store.apply("Rename deck", (current) => updateDeck(current, deckEditId, { name, slug: deckSlug.trim() || undefined }));
+      } else {
+        const before = store.history.project.decks.map((deck) => deck.id);
+        store.addDeck({ name, slug: deckSlug.trim() || undefined, width: Math.max(1, Math.round(deckWidth)), height: Math.max(1, Math.round(deckHeight)), screenPreset: deckPreset });
+        const added = store.history.project.decks.find((deck) => !before.includes(deck.id));
+        if (added) store.setActiveDeck(added.id);
+      }
+      setDeckOpen(false);
     });
   }
 
@@ -471,105 +510,90 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         onOpenAssets={() => setAssetLibraryOpen(true)}
         onExport={() => setExportOpen(true)}
         onBack={() => { commitInspectorTransaction(); void leaveProject(); }}
-        onFit={() => setFitRequest((value) => value + 1)}
+        onFitDeck={() => { setFitMode("deck"); setFitRequest((value) => value + 1); }}
+        onFitScreen={() => { setFitMode("focused-screen"); setFitRequest((value) => value + 1); }}
         onRedo={() => run(() => store.redo())}
         onRenameProject={() => setRenameOpen(true)}
         onUndo={() => run(() => store.undo())}
         onZoomChange={(zoom) => store.setZoom(zoom)}
         projectName={project.name}
         zoom={snapshot.zoom}
-        previewMode={previewMode}
       />
       {visibleError ? <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-300/20 bg-red-400/[0.08] px-4 py-2 text-xs text-red-100" role="alert"><span>{visibleError}</span><button className="text-red-100/70 hover:text-red-50" onClick={() => setLocalError(null)} type="button">Dismiss</button></div> : null}
       <div className="flex min-h-0 flex-1">
-        <DocumentNavigator
-          activeDocumentId={snapshot.activeScreenId}
+        <ScreenNavigator
+          activeDeckId={snapshot.activeDeckId}
+          activeScreenId={snapshot.activeScreenId}
           assets={snapshot.project.assets}
-          documents={activeDeck.screens.map((screen) => resolveScreen(snapshot.project, screen.id))}
-          onAddDocument={() => setAddOpen(true)}
-          onDeleteDocument={deleteScreen}
-          onDuplicateDocument={(screenId) => run(() => store.duplicateScreenById(activeDeck.id, screenId))}
-          onOpenPreview={() => { commitInspectorTransaction(); store.setSelection([]); setPreviewMode(true); }}
+          onAddDeck={openNewDeck}
+          onAddScreen={() => setAddOpen(true)}
+          onDeleteDeck={(deckId) => run(() => { if (snapshot.project.decks.length <= 1) throw new Error("A project must keep at least one deck."); const deck = snapshot.project.decks.find((candidate) => candidate.id === deckId); if (deck && window.confirm(`Delete “${deck.name}”?`)) store.removeDeckById(deckId); })}
           onDeleteElement={(elementId) => run(() => { store.setSelection([elementId]); store.deleteSelection(); })}
+          onDeleteScreen={deleteScreen}
+          onDuplicateDeck={(deckId) => run(() => store.duplicateDeckById(deckId))}
           onDuplicateElement={(elementId) => run(() => store.duplicateElement(elementId))}
-          onMoveDocument={(screenId, direction) => run(() => {
-            const index = activeDeck.screens.findIndex((screen) => screen.id === screenId);
-            store.reorderCurrentScreens([screenId], index + direction);
-          })}
-          onReorderDocument={(screenId, targetIndex) => run(() => {
-            const sourceIndex = activeDeck.screens.findIndex((screen) => screen.id === screenId);
-            store.reorderCurrentScreens([screenId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
-          })}
-          onMoveElement={(elementId, direction) => run(() => store.reorderElementByDirection(elementId, direction))}
-          onReorderElement={(elementId, targetIndex) => run(() => {
-            const currentDocument = resolveScreen(store.getSnapshot().project, store.getSnapshot().activeScreenId);
-            const ordered = [...currentDocument.elements].sort((left, right) => left.zIndex - right.zIndex);
-            const sourceIndex = ordered.findIndex((element) => element.id === elementId);
-            store.reorderElementToIndex(elementId, sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
-          })}
+          onDuplicateScreen={(screenId) => run(() => store.duplicateScreenById(activeDeck.id, screenId))}
+          onEditDeck={openDeckEdit}
+          onGoToOwner={(ownerScreenId, elementId) => { commitInspectorTransaction(); store.setActiveScreen(ownerScreenId); store.setSelection([elementId]); }}
+          onMoveDeck={(deckId, direction) => run(() => { const index = snapshot.project.decks.findIndex((deck) => deck.id === deckId); store.reorderCurrentDecks([deckId], index + direction); })}
+          onMoveLayer={(elementId, direction) => run(() => store.reorderElementByDirection(elementId, direction))}
+          onMoveScreen={(screenId, direction) => run(() => { const index = activeDeck.screens.findIndex((screen) => screen.id === screenId); store.reorderCurrentScreens([screenId], index + direction); })}
           onRenameElement={(elementId, name) => run(() => store.updateElement(elementId, { name }))}
-          onSelectDocument={(screenId) => { store.setActiveScreen(screenId); setPreviewMode(false); }}
-          onSelectElement={(elementId, additive) => store.toggleSelection(elementId, additive)}
+          onReorderLayer={(elementId, targetIndex) => run(() => { const current = store.getSnapshot().project.decks.find((deck) => deck.id === store.getSnapshot().activeDeckId)?.screens.find((screen) => screen.id === store.getSnapshot().activeScreenId); const sourceIndex = current?.layers.findIndex((layer) => (layer.kind === "owned" ? layer.element.id : layer.elementId) === elementId) ?? -1; store.reorderElementToIndex(elementId, sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex); })}
+          onReorderScreen={(screenId, targetIndex) => run(() => { const sourceIndex = activeDeck.screens.findIndex((screen) => screen.id === screenId); store.reorderCurrentScreens([screenId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex); })}
+          onSelectDeck={(deckId) => { commitInspectorTransaction(); store.setActiveDeck(deckId); }}
+          onSelectLayer={(elementId, additive) => store.toggleSelection(elementId, additive)}
+          onSelectScreen={(screenId) => { commitInspectorTransaction(); store.setActiveScreen(screenId); }}
           onToggleLocked={(element) => run(() => store.updateElement(element.id, { locked: !element.locked }))}
           onToggleVisible={(element) => run(() => store.updateElement(element.id, { visible: !element.visible }))}
-          projectSlug={project.slug}
+          project={snapshot.project}
           selectedElementIds={snapshot.selectedElementIds}
-          previewMode={previewMode}
         />
         <main className="flex min-w-0 flex-1 flex-col">
           <div
             className="relative flex min-h-0 flex-1"
-            onDragEnter={(event) => { if (previewMode) return; event.preventDefault(); setDropActive(true); }}
-            onDragLeave={(event) => { if (!previewMode && event.currentTarget === event.target) setDropActive(false); }}
-            onDragOver={(event) => { if (previewMode) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
-            onDrop={(event) => { if (previewMode) return; event.preventDefault(); void handleDroppedFiles(event.dataTransfer.files); }}
+            onDragEnter={(event) => { event.preventDefault(); setDropActive(true); }}
+            onDragLeave={(event) => { if (event.currentTarget === event.target) setDropActive(false); }}
+            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
+            onDrop={(event) => { event.preventDefault(); void handleDroppedFiles(event.dataTransfer.files); }}
           >
-            {exportRendering ? <div className="grid min-h-0 flex-1 place-items-center text-xs text-muted">Rendering export…</div> : previewMode ? <ProjectPreview
+            {exportRendering ? <div className="grid min-h-0 flex-1 place-items-center text-xs text-muted">Rendering export…</div> : <DeckCanvas
               assets={snapshot.project.assets}
-              screens={activeDeck.screens.map((screen) => resolveScreen(snapshot.project, screen.id))}
-              onMoveScreen={(screenId, direction) => run(() => {
-                const index = activeDeck.screens.findIndex((screen) => screen.id === screenId);
-                store.reorderCurrentScreens([screenId], index + direction);
-              })}
-              onOpenScreen={(screenId) => { store.setActiveScreen(screenId); setPreviewMode(false); }}
-              onReorderScreen={(screenId, targetIndex) => run(() => {
-                const sourceIndex = activeDeck.screens.findIndex((screen) => screen.id === screenId);
-                store.reorderCurrentScreens([screenId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
-              })}
-              projectSlug={project.slug}
-            /> : <EditorCanvas
-              assets={snapshot.project.assets}
-              document={activeDocument}
-              fitRequest={`${activeDocument.id}:${fitRequest}`}
+              deck={activeDeck}
+              fitMode={fitMode}
+              fitRequest={`${activeDeck.id}:${fitRequest}`}
+              focusedScreenId={snapshot.activeScreenId}
               onClearSelection={() => store.setSelection([])}
               onFitZoom={fitZoom}
-              onGestureStart={(label) => { commitInspectorTransaction(); store.beginTransaction(label); }}
-              onMoveEnd={(elementId, x, y) => run(() => {
+              onFocusScreen={(screenId) => store.focusScreen(screenId)}
+              onGestureStart={(label, targetScreenId) => { store.focusScreen(targetScreenId); commitInspectorTransaction(); store.beginTransaction(label); }}
+              onMoveEnd={(targetScreenId, elementId, x, y) => run(() => {
                 const currentSnapshot = store.getSnapshot();
-                const currentDocument = resolveScreen(currentSnapshot.project, currentSnapshot.activeScreenId);
-                const current = currentDocument.elements.find((element) => element.id === elementId);
+                const currentScreen = resolveScreen(currentSnapshot.project, targetScreenId);
+                const current = currentScreen.elements.find((element) => element.id === elementId);
                 if (!current) return;
                 const dx = x - current.x;
                 const dy = y - current.y;
                 if (!currentSnapshot.selectedElementIds.includes(elementId)) store.setSelection([elementId]);
-                store.moveSelection({ x: dx, y: dy });
+                store.moveSelection({ x: dx, y: dy }, targetScreenId);
                 store.commitTransaction();
               })}
-              onSelect={(elementId, additive) => store.toggleSelection(elementId, additive)}
-              onTransformEnd={(transforms) => run(() => {
-                store.updateElements(transforms.map((transform) => ({ id: transform.id, patch: transform })));
+              onSelect={(targetScreenId, elementId, additive) => { store.focusScreen(targetScreenId); store.toggleSelection(elementId, additive); }}
+              onTransformEnd={(targetScreenId, transforms) => run(() => {
+                store.updateElements(transforms.map((transform) => ({ id: transform.id, patch: transform })), targetScreenId);
                 store.commitTransaction();
               })}
               projectSlug={project.slug}
               selectedElementIds={snapshot.selectedElementIds}
+              screens={activeDeck.screens.map((screen) => resolveScreen(snapshot.project, screen.id))}
               zoom={snapshot.zoom}
             />}
             {dropActive ? <div className="pointer-events-none absolute inset-4 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-accent bg-accent/[0.12] text-sm font-semibold text-accent-soft">Drop images to upload and place them</div> : null}
           </div>
         </main>
-        {!previewMode ? <aside className="flex min-h-0 w-[256px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
-          <Inspector document={activeDocument} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateDocument={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
-        </aside> : null}
+        <aside className="flex min-h-0 w-[276px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
+          <Inspector onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} screen={activeScreen} selectedElements={selectedElements} />
+        </aside>
       </div>
 
       <Dialog footer={<><Button onClick={() => setAddOpen(false)} variant="ghost">Cancel</Button><Button form="add-screen" type="submit" variant="primary">Add screen</Button></>} onOpenChange={setAddOpen} open={addOpen} title="New screen">
@@ -579,6 +603,24 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           <p className="text-[10px] leading-4 text-muted">This screen inherits {activeDeck.width} × {activeDeck.height} from the active deck.</p>
           <label className="block pt-2 text-xs font-medium text-muted" htmlFor="new-screen-name">Name</label>
           <Input id="new-screen-name" onChange={(event) => setAddName(event.target.value)} placeholder="Product launch" value={addName} />
+        </form>
+      </Dialog>
+
+      <Dialog footer={<><Button onClick={() => setDeckOpen(false)} variant="ghost">Cancel</Button><Button form="deck-editor" type="submit" variant="primary">{deckEditId ? "Save deck name" : "Create deck"}</Button></>} onOpenChange={setDeckOpen} open={deckOpen} title={deckEditId ? "Rename deck" : "New deck"}>
+        <form className="space-y-3" id="deck-editor" onSubmit={submitDeck}>
+          <label className="block text-xs font-medium text-muted" htmlFor="deck-name">Name</label>
+          <Input id="deck-name" onChange={(event) => setDeckName(event.target.value)} value={deckName} />
+          <label className="block text-xs font-medium text-muted" htmlFor="deck-slug">Slug</label>
+          <Input id="deck-slug" onChange={(event) => setDeckSlug(event.target.value)} placeholder="marketing-deck" value={deckSlug} />
+          {!deckEditId ? <>
+            <label className="block text-xs font-medium text-muted" htmlFor="deck-preset">Size preset</label>
+            <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-accent/70" id="deck-preset" onChange={(event) => { const value = event.target.value as ScreenPreset; setDeckPreset(value); const definition = getPresetDefinition(value); if (definition) { setDeckWidth(definition.width); setDeckHeight(definition.height); } }} value={deckPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Exact custom size</option></select>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-xs font-medium text-muted" htmlFor="deck-width"><span className="mb-1 block">Width</span><Input id="deck-width" min={1} onChange={(event) => { setDeckPreset("custom"); setDeckWidth(Number(event.target.value)); }} type="number" value={deckWidth} /></label>
+              <label className="block text-xs font-medium text-muted" htmlFor="deck-height"><span className="mb-1 block">Height</span><Input id="deck-height" min={1} onChange={(event) => { setDeckPreset("custom"); setDeckHeight(Number(event.target.value)); }} type="number" value={deckHeight} /></label>
+            </div>
+            <p className="text-[10px] leading-4 text-muted">Deck dimensions are immutable after creation. Screens in this deck inherit them.</p>
+          </> : <p className="text-[10px] leading-4 text-muted">{deckWidth} × {deckHeight}. Dimensions cannot be changed after creation.</p>}
         </form>
       </Dialog>
 
@@ -607,6 +649,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         usageCounts={selectAssetReferences(snapshot.project)}
       />
       <ExportDialog
+        activeDeckId={snapshot.activeDeckId}
         activeScreenId={snapshot.activeScreenId}
         onBeforeExport={flushPendingSave}
         onError={setLocalError}

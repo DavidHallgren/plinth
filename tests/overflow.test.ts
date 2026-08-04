@@ -16,6 +16,7 @@ import {
 } from "../src/scene/operations";
 import { elementLocalBounds, overflowTargetScreenIds } from "../src/scene/overflow";
 import { resolveScreen } from "../src/scene/selectors";
+import { EditorStore } from "../src/app/editor-store";
 
 const timestamp = "2026-08-02T00:00:00.000Z";
 
@@ -30,7 +31,6 @@ function shape(id: string, values: Partial<ShapeElement> = {}): ShapeElement {
     height: 80,
     rotation: 0,
     opacity: 1,
-    zIndex: 0,
     locked: false,
     visible: true,
     shadow: null,
@@ -135,6 +135,32 @@ describe("screen overflow model", () => {
     expect(project.decks[0]?.screens[0]?.layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId)).toEqual(beforeOwner);
   });
 
+  test("focuses a target projection, selects its canonical element, and routes a gesture through target coordinates", () => {
+    let project = fixture(2);
+    project = addElement(project, "screen_1", shape("dragged", { x: 350, width: 120 }));
+    project = toggleElementOverflow(project, "screen_1", "dragged", true);
+    const store = new EditorStore(project, () => undefined);
+    store.focusScreen("screen_2");
+    store.setSelection(["dragged"]);
+    expect(store.getSnapshot()).toMatchObject({ activeScreenId: "screen_2", selectedElementIds: ["dragged"] });
+    store.beginTransaction("Drag linked projection");
+    store.moveSelection({ x: 10, y: 0 }, "screen_2");
+    store.commitTransaction();
+    const owner = store.getSnapshot().project.decks[0]?.screens[0];
+    const canonical = owner && owner.layers.find((layer) => layer.kind === "owned" && layer.element.id === "dragged");
+    expect(canonical?.kind === "owned" && canonical.element.x).toBe(360);
+  });
+
+  test("allows a linked transform to cross the seam before ownership reconciliation", () => {
+    let project = fixture(2);
+    project = addElement(project, "screen_1", shape("resized", { x: 350, width: 80 }));
+    project = toggleElementOverflow(project, "screen_1", "resized", true);
+    project = updateElement(project, "screen_2", "resized", { x: 50, width: 80 });
+    expect(ownerScreen(project, "resized")).toBe("screen_2");
+    const ownerLayer = project.decks[0]?.screens[1]?.layers.find((layer) => layer.kind === "owned" && layer.element.id === "resized");
+    expect(ownerLayer?.kind === "owned" && ownerLayer.element.x).toBe(50);
+  });
+
   test("transfers ownership after a move leaves the owner and exposes an explicit transfer operation", () => {
     let project = fixture(3);
     project = addElement(project, "screen_1", shape("moving", { x: 320, width: 80 }));
@@ -181,6 +207,36 @@ describe("screen overflow model", () => {
           : screen),
       })),
     })).toThrow(/owner screen/);
+  });
+
+  test("normalizes missing required links and stale non-intersecting links when loading v7", () => {
+    let project = fixture(2);
+    project = addElement(project, "screen_1", shape("load-link", { x: 350, width: 120 }));
+    project = toggleElementOverflow(project, "screen_1", "load-link", true);
+    const missingLink = {
+      ...project,
+      decks: project.decks.map((deck) => ({
+        ...deck,
+        screens: deck.screens.map((screen) => ({
+          ...screen,
+          layers: screen.id === "screen_2" ? screen.layers.filter((layer) => layer.kind !== "overflow-link") : screen.layers,
+        })),
+      })),
+    };
+    const repairedMissing = parseProject(missingLink);
+    expect(repairedMissing.decks[0]?.screens[1]?.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === "load-link")).toBe(true);
+
+    const staleLink = {
+      ...project,
+      decks: project.decks.map((deck) => ({
+        ...deck,
+        screens: deck.screens.map((screen) => screen.id === "screen_1"
+          ? { ...screen, layers: screen.layers.map((layer) => layer.kind === "owned" && layer.element.id === "load-link" ? { ...layer, element: { ...layer.element, x: 20 } } : layer) }
+          : screen),
+      })),
+    };
+    const repairedStale = parseProject(staleLink);
+    expect(repairedStale.decks[0]?.screens[1]?.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === "load-link")).toBe(false);
   });
 
   test("duplicates a deck with remapped overflow links and unique canonical ids", () => {
@@ -237,7 +293,6 @@ describe("screen overflow model", () => {
       height: 40,
       rotation: 0,
       opacity: 1,
-      zIndex: 1,
       locked: false,
       visible: true,
       shadow: null,

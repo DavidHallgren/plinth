@@ -16,7 +16,6 @@ import { CURRENT_SCHEMA_VERSION, ProjectSchema, SceneElementSchema, ScreenSchema
 import { getPresetDefinition, isAppStorePreset } from "../scene/presets";
 import { getDevicePreset } from "../devices/presets";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
-import { normalizeLayerOrder } from "../scene/selectors";
 
 export const DEFAULT_BACKGROUND: Background = {
   type: "solid",
@@ -43,7 +42,7 @@ export const DEFAULT_SHADOW = {
   opacity: 0.24,
 } as const;
 
-type ElementFrameValues = Pick<SceneElement, "x" | "y" | "width" | "height"> & { zIndex: number };
+type ElementFrameValues = Pick<SceneElement, "x" | "y" | "width" | "height">;
 
 export type CreateScreenOptions = {
   id?: string;
@@ -69,7 +68,6 @@ function frame(
     height: values.height,
     rotation: 0,
     opacity: 1,
-    zIndex: values.zIndex,
     locked: false,
     visible: true,
     shadow: null,
@@ -221,7 +219,6 @@ function createAppStoreElements(
       y: deviceY,
       width: deviceWidth,
       height: deviceHeight,
-      zIndex: 1,
     }),
     textElement(
       "Project overview",
@@ -230,7 +227,6 @@ function createAppStoreElements(
         y: Math.round(height * 0.085),
         width: width - horizontalPadding * 2,
         height: Math.round(headlineSize * 2.15),
-        zIndex: 3,
       },
       {
         fontFamily: "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
@@ -251,7 +247,6 @@ function createAppStoreElements(
         y: Math.round(height * 0.19),
         width: Math.round(width * 0.72),
         height: Math.round(bodySize * 2.8),
-        zIndex: 4,
       },
       {
         fontFamily: "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
@@ -271,7 +266,6 @@ function createAppStoreElements(
         y: Math.round(height * 0.84),
         width: width - horizontalPadding * 2,
         height: Math.max(120, Math.round(height * 0.055)),
-        zIndex: 0,
       },
       {
         shape: "rounded-rectangle",
@@ -292,12 +286,12 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
   if (preset === "social") {
     return [
       shapeElement(
-        { x: 120, y: 120, width: 960, height: 1040, zIndex: 0 },
+        { x: 120, y: 120, width: 960, height: 1040 },
         { shape: "rounded-rectangle", fill: "#8b7cff", stroke: "#8b7cff", strokeWidth: 0, radius: 40 },
       ),
       textElement(
         "Sample composition",
-        { x: 208, y: 320, width: 790, height: 220, zIndex: 1 },
+        { x: 208, y: 320, width: 790, height: 220 },
         {
           fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
           fontSize: 84,
@@ -318,7 +312,6 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
       y: 96,
       width: isPhone ? 390 : 960,
       height: isPhone ? 844 : 620,
-      zIndex: 0,
     }),
     textElement(
       "Project overview",
@@ -327,7 +320,6 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
         y: isPhone ? 230 : 184,
         width: isPhone ? 286 : 720,
         height: 112,
-        zIndex: 2,
       },
       {
         fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
@@ -345,7 +337,6 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
         y: isPhone ? 404 : 352,
         width: isPhone ? 170 : 260,
         height: 12,
-        zIndex: 1,
       },
       {
         shape: "rounded-rectangle",
@@ -385,7 +376,7 @@ export function createScreenPreset(
       start: { x: 0, y: 1 },
       end: { x: 1, y: 0 },
     } : DEFAULT_BACKGROUND,
-    layers: normalizeLayerOrder(normalizedElements).map((element) => ({
+    layers: normalizedElements.map((element) => ({
       kind: "owned" as const,
       element: SceneElementSchema.parse(element),
       overflow: false,
@@ -440,17 +431,14 @@ export function createDeckPreset(
   };
 }
 
-/** @deprecated Use createScreenPreset. */
-export const createDocumentPreset = createScreenPreset;
-
 export function createDefaultProject(
   name = "Untitled project",
-  input: Partial<ProjectInput> & { now?: string; id?: string; deckCount?: number; screenCount?: number; documentCount?: number } = {},
+  input: Partial<ProjectInput> & { now?: string; id?: string; deckCount?: number; screenCount?: number } = {},
 ): Project {
   const now = input.now ?? nowIso();
   const slug = input.slug ?? slugify(name);
   const deckCount = Math.max(1, input.deckCount ?? 1);
-  const screenCount = Math.max(1, input.screenCount ?? input.documentCount ?? 1);
+  const screenCount = Math.max(1, input.screenCount ?? 1);
   const defaultPreset = DEFAULT_SETTINGS.defaultScreenPreset;
   const definition = getPresetDefinition(defaultPreset);
   const width = definition?.width ?? 1320;

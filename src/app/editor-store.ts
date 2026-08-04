@@ -16,11 +16,13 @@ import {
   reorderScreens,
   resizeElement,
   toggleElementOverflow,
+  transferElementOwnership,
+  updateDeck,
   updateElement,
   updateElements,
   updateScreen,
 } from "../scene/operations";
-import type { AddDeckOptions, AddScreenOptions, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput, ScreenPatch } from "../scene/operations";
+import type { AddDeckOptions, AddScreenOptions, DeckPatch, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput, ScreenPatch } from "../scene/operations";
 import { ProjectHistory, type ProjectOperation } from "../scene/history";
 import { resolveScreen } from "../scene/selectors";
 
@@ -111,6 +113,10 @@ export class EditorStore {
     }
   }
 
+  focusScreen(screenId: string): void {
+    if (this.snapshot.activeScreenId !== screenId) this.setActiveScreen(screenId);
+  }
+
   setSelection(elementIds: readonly string[]): void {
     this.updateSnapshot({ selectedElementIds: this.validSelection(this.history.project, this.snapshot.activeScreenId, elementIds) });
   }
@@ -182,13 +188,13 @@ export class EditorStore {
 
   copy(): void {
     const screen = resolveScreen(this.history.project, this.snapshot.activeScreenId);
-    const selected = screen?.elements.filter((element) => this.snapshot.selectedElementIds.includes(element.id)) ?? [];
+    const selected = screen.elements.filter((element) => this.snapshot.selectedElementIds.includes(element.id));
     this.clipboard = selected.map((element) => {
       const {
-        zIndex: _zIndex,
         ownerScreenId: _ownerScreenId,
         targetScreenId: _targetScreenId,
         isOverflowLink: _isOverflowLink,
+        renderOrder: _renderOrder,
         ...canonicalElement
       } = element;
       return canonicalElement;
@@ -235,7 +241,7 @@ export class EditorStore {
   reorderElementByDirection(elementId: string, direction: -1 | 1): void {
     const screen = this.activeScreen();
     if (!screen) return;
-    const ordered = [...resolveScreen(this.history.project, screen.id).elements].sort((left, right) => left.zIndex - right.zIndex);
+    const ordered = [...resolveScreen(this.history.project, screen.id).elements].sort((left, right) => left.renderOrder - right.renderOrder);
     const index = ordered.findIndex((element) => element.id === elementId);
     if (index < 0) return;
     this.apply("Reorder layer", (project) => reorderElements(project, screen.id, [elementId], index + direction));
@@ -259,30 +265,38 @@ export class EditorStore {
     this.apply("Nudge selection", (project) => moveElements(project, this.snapshot.activeScreenId, ids, delta));
   }
 
-  updateElement(elementId: string, patch: ElementPatch): void {
-    this.apply("Update element", (project) => updateElement(project, this.snapshot.activeScreenId, elementId, patch));
+  updateElement(elementId: string, patch: ElementPatch, targetScreenId = this.snapshot.activeScreenId): void {
+    this.apply("Update element", (project) => updateElement(project, targetScreenId, elementId, patch));
   }
 
-  updateElements(updates: ElementUpdate[] | Record<string, ElementPatch>): void {
-    this.apply("Update elements", (project) => updateElements(project, this.snapshot.activeScreenId, updates));
+  updateElements(updates: ElementUpdate[] | Record<string, ElementPatch>, targetScreenId = this.snapshot.activeScreenId): void {
+    this.apply("Update elements", (project) => updateElements(project, targetScreenId, updates));
   }
 
-  moveSelection(delta: MoveDelta): void {
+  moveSelection(delta: MoveDelta, targetScreenId = this.snapshot.activeScreenId): void {
     const ids = this.editableSelectedIds();
     if (ids.length === 0) return;
-    this.apply("Move selection", (project) => moveElements(project, this.snapshot.activeScreenId, ids, delta));
+    this.apply("Move selection", (project) => moveElements(project, targetScreenId, ids, delta));
   }
 
-  resizeElement(elementId: string, input: ResizeElementInput): void {
-    this.apply("Resize element", (project) => resizeElement(project, this.snapshot.activeScreenId, elementId, input));
+  resizeElement(elementId: string, input: ResizeElementInput, targetScreenId = this.snapshot.activeScreenId): void {
+    this.apply("Resize element", (project) => resizeElement(project, targetScreenId, elementId, input));
   }
 
-  toggleElementOverflow(elementId: string, enabled?: boolean): void {
-    this.apply("Toggle overflow", (project) => toggleElementOverflow(project, this.snapshot.activeScreenId, elementId, enabled));
+  toggleElementOverflow(elementId: string, enabled?: boolean, targetScreenId = this.snapshot.activeScreenId): void {
+    this.apply("Toggle overflow", (project) => toggleElementOverflow(project, targetScreenId, elementId, enabled));
+  }
+
+  moveOwnershipToFocusedScreen(elementId: string): void {
+    this.apply("Move ownership", (project) => transferElementOwnership(project, elementId, this.snapshot.activeScreenId));
   }
 
   updateCurrentScreen(patch: ScreenPatch): void {
     this.apply("Update screen", (project) => updateScreen(project, this.snapshot.activeScreenId, patch));
+  }
+
+  updateCurrentDeck(patch: DeckPatch): void {
+    this.apply("Update deck", (project) => updateDeck(project, this.snapshot.activeDeckId, patch));
   }
 
   addDeck(options: AddDeckOptions): void {
@@ -355,9 +369,9 @@ export class EditorStore {
   private reorderSelection(direction: number, label: string): void {
     const screen = this.activeScreen();
     if (!screen || this.snapshot.selectedElementIds.length === 0) return;
-    const ordered = [...resolveScreen(this.history.project, screen.id).elements].sort((left, right) => left.zIndex - right.zIndex);
+    const ordered = [...resolveScreen(this.history.project, screen.id).elements].sort((left, right) => left.renderOrder - right.renderOrder);
     const selected = new Set(this.snapshot.selectedElementIds);
-    const currentIndex = Math.min(...ordered.filter((element) => selected.has(element.id)).map((element) => element.zIndex));
+    const currentIndex = Math.min(...ordered.filter((element) => selected.has(element.id)).map((element) => element.renderOrder));
     const target = direction === 9999 ? ordered.length : direction === 0 ? 0 : currentIndex + direction;
     this.apply(label, (project) => reorderElements(project, screen.id, this.snapshot.selectedElementIds, target));
   }

@@ -8,6 +8,7 @@ import {
   SceneElementSchema,
   ScreenSchema,
 } from "../src/lib/schema";
+import { ownedElements } from "./helpers";
 
 describe("project schema", () => {
   test("creates a serializable project with fixed-size decks and normalized screens", () => {
@@ -20,15 +21,14 @@ describe("project schema", () => {
     expect(screen).toBeDefined();
     expect(screen && Object.hasOwn(screen, "width")).toBe(false);
     expect(screen && Object.hasOwn(screen, "height")).toBe(false);
-    expect(screen?.elements.map((element) => element.type)).toEqual(["shape", "device", "text", "text"]);
+    expect(screen && ownedElements(screen).map((element) => element.type)).toEqual(["device", "text", "text", "shape"]);
     expect(JSON.parse(JSON.stringify(project))).toEqual(project);
 
     if (!deck || !screen) throw new Error("Expected a starter deck and screen.");
     expect(DeckSchema.parse(deck)).toEqual(deck);
     expect(ScreenSchema.parse(screen)).toEqual(screen);
-    for (const element of screen.elements) {
-      const { zIndex: _zIndex, ...canonicalElement } = element;
-      expect(SceneElementSchema.parse(element)).toEqual(canonicalElement);
+    for (const element of ownedElements(screen)) {
+      expect(SceneElementSchema.parse(element)).toEqual(element);
     }
   });
 
@@ -44,7 +44,6 @@ describe("project schema", () => {
       height: 180,
       rotation: 0,
       opacity: 1,
-      zIndex: 0,
       locked: false,
       visible: true,
       assetPath: "assets/fixture.svg",
@@ -54,7 +53,8 @@ describe("project schema", () => {
       alt: "Fixture asset",
     };
 
-    expect(ScreenSchema.parse({ ...screen, elements: [image] }).elements[0]).toEqual(image);
+    const parsed = ScreenSchema.parse({ ...screen, layers: [{ kind: "owned", element: image, overflow: false }] });
+    expect(parsed.layers[0]).toEqual({ kind: "owned", element: image, overflow: false });
     expect(JSON.stringify(image)).not.toContain("base64");
   });
 
@@ -148,8 +148,8 @@ describe("project schema", () => {
     const secondDeck = project.decks[1];
     const firstScreen = deck?.screens[0];
     const secondScreen = secondDeck?.screens[0];
-    const firstElement = firstScreen?.elements[0];
-    const secondElement = secondScreen?.elements[0];
+    const firstElement = firstScreen && ownedElements(firstScreen)[0];
+    const secondElement = secondScreen && ownedElements(secondScreen)[0];
     if (!deck || !firstScreen || !secondScreen || !firstElement || !secondElement) throw new Error("Expected two screens with elements.");
 
     const duplicateElement = ProjectSchema.safeParse({
@@ -169,5 +169,33 @@ describe("project schema", () => {
       expect(duplicateElement.error.issues[0]?.message).toContain("Duplicate scene element id");
       expect(duplicateElement.error.issues[0]?.path).toEqual(["decks", 1, "screens", 0, "layers", 0, "element", "id"]);
     }
+  });
+
+  test("keeps v7 strict while leaving legacy fields to the v6 migration", () => {
+    const project = createDefaultProject("Strict v7 fixture");
+    const deck = project.decks[0];
+    const screen = deck?.screens[0];
+    const element = screen && ownedElements(screen)[0];
+    if (!deck || !screen || !element) throw new Error("Expected a starter screen element.");
+
+    const legacyProjection = ProjectSchema.safeParse({
+      ...project,
+      decks: [{
+        ...deck,
+        screens: [{
+          ...screen,
+          elements: ownedElements(screen),
+          layers: screen.layers.map((layer) => layer.kind === "owned" && layer.element.id === element.id
+            ? { ...layer, element: { ...layer.element, zIndex: 4 } }
+            : layer),
+        }],
+      }],
+    });
+    expect(legacyProjection.success).toBe(false);
+    if (!legacyProjection.success) {
+      expect(legacyProjection.error.issues.some((issue) => "keys" in issue && issue.keys.includes("elements"))).toBe(true);
+      expect(legacyProjection.error.issues.some((issue) => "keys" in issue && issue.keys.includes("zIndex"))).toBe(true);
+    }
+    expect(SceneElementSchema.safeParse({ ...element, zIndex: 4 }).success).toBe(false);
   });
 });

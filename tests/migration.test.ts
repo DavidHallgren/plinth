@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { parseProject, migrateProject } from "../src/lib/migrations";
 import { createDefaultProject } from "../src/lib/defaults";
 import { CURRENT_SCHEMA_VERSION } from "../src/lib/schema";
+import { ownedElements } from "./helpers";
 
 const timestamp = "2026-08-02T00:00:00.000Z";
 
@@ -129,8 +130,9 @@ describe("project migrations", () => {
     const screen = migrated.decks[0]?.screens[0];
     expect(screen?.preset).toBe("custom");
     expect(screen?.background.type).toBe("linear-gradient");
-    expect(screen?.elements[0]).toMatchObject({ type: "text", shadow: null });
-    expect(screen?.elements[0]?.type === "text" && screen.elements[0].style).toMatchObject({ italic: false, autoHeight: true });
+    const migratedElements = screen ? ownedElements(screen) : [];
+    expect(migratedElements[0]).toMatchObject({ type: "text", shadow: null });
+    expect(migratedElements[0]?.type === "text" && migratedElements[0].style).toMatchObject({ italic: false, autoHeight: true });
   });
 
   test("migrates v2 asset ids and device placeholders to canonical paths and presets", () => {
@@ -173,7 +175,8 @@ describe("project migrations", () => {
     });
 
     expect(migrated.assets[0]?.path).toBe("assets/screen.svg");
-    expect(migrated.decks[0]?.screens[0]?.elements[0]).toMatchObject({ type: "device", preset: "iphone-17-pro-max", screenshotPath: "assets/screen.svg" });
+    const migratedDeviceScreen = migrated.decks[0]?.screens[0];
+    expect(migratedDeviceScreen && ownedElements(migratedDeviceScreen)[0]).toMatchObject({ type: "device", preset: "iphone-17-pro-max", screenshotPath: "assets/screen.svg" });
   });
 
   test("adds export slugs and the configured export directory when loading v3/v4", () => {
@@ -197,7 +200,7 @@ describe("project migrations", () => {
     expect(migratedV4.settings.exportDirectory).toBeNull();
   });
 
-  test("canonicalizes persisted layer order and text geometry in schema v7", () => {
+  test("keeps v7 layer order and normalizes text geometry without compatibility fields", () => {
     const project = createDefaultProject("Layer order project", { now: timestamp });
     const deck = project.decks[0];
     const screen = deck?.screens[0];
@@ -208,12 +211,16 @@ describe("project migrations", () => {
         ...deck,
         screens: [{
           ...screen,
-          elements: screen.elements.map((element, index) => ({ ...element, zIndex: index === 0 ? 9 : index === 1 ? 2 : index + 10 })),
+          layers: screen.layers.map((layer) => layer.kind === "owned" && layer.element.type === "text"
+            ? { ...layer, element: { ...layer.element, height: 500 } }
+            : layer),
         }],
       }],
     });
-    expect(migrated.decks[0]?.screens[0]?.elements.map((element) => element.zIndex)).toEqual(
-      migrated.decks[0]?.screens[0]?.elements.map((_element, index) => index),
+    const migratedScreen = migrated.decks[0]?.screens[0];
+    expect(migratedScreen && migratedScreen.layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId)).toEqual(
+      screen.layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId),
     );
+    expect(migratedScreen && JSON.stringify(migratedScreen)).not.toContain('"zIndex"');
   });
 });

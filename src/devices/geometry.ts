@@ -85,9 +85,9 @@ export function calculateImageFitGeometry(
   };
 }
 
-export function thumbnailSize(documentWidth: number, documentHeight: number, maxWidth = 54, maxHeight = 54): { width: number; height: number; scale: number } {
-  const width = Math.max(1, documentWidth);
-  const height = Math.max(1, documentHeight);
+export function thumbnailSize(canvasWidth: number, canvasHeight: number, maxWidth = 54, maxHeight = 54): { width: number; height: number; scale: number } {
+  const width = Math.max(1, canvasWidth);
+  const height = Math.max(1, canvasHeight);
   const scale = Math.min(maxWidth / width, maxHeight / height);
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), scale };
 }

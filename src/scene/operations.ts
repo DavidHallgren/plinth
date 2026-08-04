@@ -14,7 +14,6 @@ import {
   screenOrigin,
 } from "./overflow";
 import { resolveDeckScreen } from "./overflow";
-import { sortLayerElements } from "./selectors";
 
 export const MIN_DIMENSION = 1;
 
@@ -37,8 +36,6 @@ export type ElementPatch = {
   height?: number;
   rotation?: number;
   opacity?: number;
-  /** @deprecated Layer array position is the persisted z-order. */
-  zIndex?: number;
   locked?: boolean;
   visible?: boolean;
   name?: string;
@@ -101,6 +98,7 @@ export type AddScreenOptions = {
 };
 
 export type ScreenPatch = Partial<Pick<Screen, "name" | "slug" | "exportSlug" | "preset" | "background" | "notes">>;
+export type DeckPatch = Partial<Pick<Deck, "name" | "slug">>;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -162,19 +160,16 @@ function withScreen(project: Project, screenId: string, update: (screen: Screen,
   });
 }
 
-export function normalizeElementOrder(elements: SceneElement[]): SceneElement[] {
-  return sortLayerElements(elements).map((element, index) => ({ ...element, zIndex: index }));
-}
-
-function clampElementToDeck(deck: Deck, element: SceneElement): SceneElement {
+function clampElementToDeck(deck: Deck, element: SceneElement, allowDeckGlobalX = false): SceneElement {
   const width = clamp(Math.round(Math.abs(finite(element.width, MIN_DIMENSION))), MIN_DIMENSION, deck.width * Math.max(1, deck.screens.length));
   const requestedHeight = element.type === "text" && element.style.autoHeight !== false
     ? calculateTextAutoHeight(element.text, width, element.style)
     : Math.abs(finite(element.height, MIN_DIMENSION));
   const height = clamp(Math.round(requestedHeight), MIN_DIMENSION, deck.height);
+  const maxX = allowDeckGlobalX ? deck.width * Math.max(1, deck.screens.length) : deck.width;
   return SceneElementSchema.parse({
     ...element,
-    x: clamp(Math.round(finite(element.x, 0)), MIN_DIMENSION - width, deck.width - MIN_DIMENSION),
+    x: clamp(Math.round(finite(element.x, 0)), MIN_DIMENSION - width, maxX - MIN_DIMENSION),
     y: clamp(Math.round(finite(element.y, 0)), MIN_DIMENSION - height, deck.height - MIN_DIMENSION),
     width,
     height,
@@ -271,7 +266,7 @@ function patchElement(deck: Deck, element: SceneElement, patch: ElementPatch, co
     id: element.id,
     type: element.type,
   } as SceneElement;
-  return SceneElementSchema.parse(clampElementToDeck(deck, next));
+  return SceneElementSchema.parse(clampElementToDeck(deck, next, coordinateScreenId !== ownerScreenId));
 }
 
 type ElementContext = {
@@ -516,7 +511,7 @@ export function resizeElement(project: Project, screenId: string, elementId: str
     height: Math.abs(finite(input.height, element.height)),
     rotation: finite(input.rotation, element.rotation),
   } as SceneElement;
-  return reconcileOverflowLinks(replaceOwnedElement(project, context.deck.id, context.ownerScreen.id, elementId, clampElementToDeck(context.deck, next)));
+  return reconcileOverflowLinks(replaceOwnedElement(project, context.deck.id, context.ownerScreen.id, elementId, clampElementToDeck(context.deck, next, screenId !== context.ownerScreen.id)));
 }
 
 function targetLayerEntry(screen: Screen, elementId: string): LayerEntry | undefined {
@@ -551,7 +546,7 @@ export function duplicateElements(project: Project, screenId: string, elementIds
   if (selected.length === 0) return project;
   const usedIds = projectIds(project);
   const duplicates = selected.map((element) => {
-    const { ownerScreenId: _ownerScreenId, targetScreenId: _targetScreenId, isOverflowLink: _isOverflowLink, zIndex: _zIndex, ...canonicalElement } = element;
+    const { ownerScreenId: _ownerScreenId, targetScreenId: _targetScreenId, isOverflowLink: _isOverflowLink, renderOrder: _renderOrder, ...canonicalElement } = element;
     const duplicate = SceneElementSchema.parse({
       ...canonicalElement,
       id: uniqueId(element.type, usedIds),
@@ -746,4 +741,15 @@ export function updateScreen(project: Project, screenId: string, patch: ScreenPa
   return reconcileOverflowLinks(withDeck(project, context.deck.id, (deck) => touchDeck(deck, {
     screens: deck.screens.map((screen) => screen.id === screenId ? touchScreen(screen, { ...candidate, layers }) : screen),
   })));
+}
+
+export function updateDeck(project: Project, deckId: string, patch: DeckPatch): Project {
+  const deck = deckFor(project, deckId);
+  const rawPatch = patch as Record<string, unknown>;
+  if ("width" in rawPatch || "height" in rawPatch) {
+    throw new SceneOperationError("INVALID_OPERATION", "Deck dimensions are immutable after creation.");
+  }
+  const nextName = patch.name === undefined ? deck.name : patch.name.trim() || deck.name;
+  const nextSlug = patch.slug === undefined ? deck.slug : uniqueDeckSlug(project, patch.slug, deckId);
+  return withDeck(project, deckId, (current) => touchDeck(current, { name: nextName, slug: nextSlug }));
 }

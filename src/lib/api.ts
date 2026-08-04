@@ -53,6 +53,11 @@ const ExportMetadataSchema = z
     fileName: z.string().min(1).max(180),
     width: z.number().int().positive().max(100_000),
     height: z.number().int().positive().max(100_000),
+    scope: z.discriminatedUnion("mode", [
+      z.object({ mode: z.literal("screen"), screenId: z.string().min(1).max(96) }).strict(),
+      z.object({ mode: z.literal("deck"), deckId: z.string().min(1).max(96) }).strict(),
+      z.object({ mode: z.literal("all") }).strict(),
+    ]).optional(),
     exportRunId: z.string().min(1).max(64).optional(),
   })
   .strict();

@@ -1,20 +1,13 @@
-import type { Deck, Project, SceneElement, Screen } from "../lib/schema";
+import type { Deck, LayerEntry, Project, SceneElement, Screen } from "../lib/schema";
 import { resolveDeckScreen, type ResolvedElement } from "./overflow";
 
-export type ResolvedScreen = Omit<Screen, "elements"> & {
+export type ResolvedScreen = Screen & {
   deckId: string;
   deckName: string;
   width: number;
   height: number;
   elements: ResolvedElement[];
 };
-
-export function sortLayerElements(elements: SceneElement[]): SceneElement[] {
-  return elements
-    .map((element, index) => ({ element, index, zIndex: (element as SceneElement & { zIndex?: number }).zIndex ?? index }))
-    .sort((left, right) => left.zIndex - right.zIndex || left.index - right.index)
-    .map(({ element }) => element);
-}
 
 export function selectActiveDeck(project: Project, deckId: string | null | undefined): Deck {
   return project.decks.find((deck) => deck.id === deckId) ?? project.decks[0] as Deck;
@@ -49,22 +42,27 @@ export function resolveScreen(project: Project, screenId: string | null | undefi
   };
 }
 
-export function selectSelectedElements(screen: { elements: readonly SceneElement[] }, selectedIds: readonly string[]): SceneElement[] {
+export function selectSelectedElements(screen: { elements: readonly ResolvedElement[] }, selectedIds: readonly string[]): ResolvedElement[] {
   const selected = new Set(selectedIds);
   return screen.elements.filter((element) => selected.has(element.id));
 }
 
-export function selectSortedLayers(screen: { elements: readonly SceneElement[] }): SceneElement[] {
-  return [...screen.elements].sort((left, right) => {
-    const leftZ = (left as SceneElement & { zIndex?: number }).zIndex ?? 0;
-    const rightZ = (right as SceneElement & { zIndex?: number }).zIndex ?? 0;
-    return leftZ - rightZ;
-  });
+export function selectSortedLayers(screen: { elements: readonly ResolvedElement[] }): ResolvedElement[] {
+  return [...screen.elements].sort((left, right) => left.renderOrder - right.renderOrder);
 }
 
-/** Compatibility helper for legacy callers; persisted order is `screen.layers`. */
-export function normalizeLayerOrder(elements: SceneElement[]): SceneElement[] {
-  return sortLayerElements(elements).map((element, index) => ({ ...element, zIndex: index }));
+export function selectLayerEntries(screen: Screen): LayerEntry[] {
+  return screen.layers;
+}
+
+export function selectCanonicalElement(project: Project, elementId: string): SceneElement | undefined {
+  for (const deck of project.decks) {
+    for (const screen of deck.screens) {
+      const layer = screen.layers.find((candidate) => candidate.kind === "owned" && candidate.element.id === elementId);
+      if (layer?.kind === "owned") return layer.element;
+    }
+  }
+  return undefined;
 }
 
 export function selectAssetReferences(project: Project, screenId?: string): Map<string, number> {
@@ -116,7 +114,7 @@ export function selectAssetUsages(project: Project, assetPath: string): AssetUsa
   return usages;
 }
 
-export function selectElementById(screen: { elements: readonly SceneElement[] }, elementId: string | null | undefined): SceneElement | undefined {
+export function selectElementById(screen: { elements: readonly ResolvedElement[] }, elementId: string | null | undefined): ResolvedElement | undefined {
   return elementId ? screen.elements.find((element) => element.id === elementId) : undefined;
 }
 

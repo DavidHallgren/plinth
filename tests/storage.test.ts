@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createScreenPreset } from "../src/lib/defaults";
 import { handleRenameProject } from "../src/lib/api";
 import { resolveWithin, writePrettyJsonAtomic, ProjectStorage } from "../src/lib/storage";
+import { ownedElements } from "./helpers";
 
 const temporaryDirectories: string[] = [];
 
@@ -62,10 +63,12 @@ describe("safe project storage", () => {
       updatedAt: "2026-08-02T00:00:00.000Z",
     });
     const reloaded = await storage.loadProject(updated.slug);
-    const kinds = reloaded.decks[0]?.screens[0]?.elements.map((element) => element.type);
+    const reloadedScreen = reloaded.decks[0]?.screens[0];
+    const updatedScreen = updated.decks[0]?.screens[0];
+    const kinds = reloadedScreen ? ownedElements(reloadedScreen).map((element) => element.type) : undefined;
 
-    expect(kinds).toEqual(["device", "shape", "text"]);
-    expect(reloaded.decks[0]?.screens[0]?.elements).toEqual(updated.decks[0]?.screens[0]?.elements);
+    expect(kinds).toEqual(["device", "text", "shape"]);
+    expect(reloadedScreen && updatedScreen && ownedElements(reloadedScreen)).toEqual(updatedScreen && ownedElements(updatedScreen));
     expect(JSON.parse(await readFile(storage.projectFile("round-trip"), "utf8"))).toEqual(reloaded);
   });
 

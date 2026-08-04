@@ -19,13 +19,15 @@ import {
   updateScreen,
   updateElement,
   updateElements,
+  updateDeck,
 } from "../src/scene/operations";
 import { ProjectHistory } from "../src/scene/history";
 import { EditorStore } from "../src/app/editor-store";
+import { ownedElements } from "./helpers";
 
 const timestamp = "2026-08-02T00:00:00.000Z";
 
-function shape(id: string, x = 20, y = 20, zIndex = 0): ShapeElement {
+function shape(id: string, x = 20, y = 20): ShapeElement {
   return {
     id,
     type: "shape",
@@ -36,7 +38,6 @@ function shape(id: string, x = 20, y = 20, zIndex = 0): ShapeElement {
     height: 80,
     rotation: 0,
     opacity: 1,
-    zIndex,
     locked: false,
     visible: true,
     shadow: null,
@@ -78,43 +79,45 @@ function firstScreen(project: Project) {
   return screen;
 }
 
+function elements(project: Project) {
+  return ownedElements(firstScreen(project));
+}
+
 describe("scene operations", () => {
   test("adds, updates, moves, and removes normalized elements using deck bounds", () => {
     const project = fixture();
     const added = addElement(project, "screen_operations", shape("shape_one", 340, 280));
-    const element = firstScreen(added).elements[0];
-    expect(element?.zIndex).toBe(0);
+    const element = elements(added)[0];
     expect(element?.x).toBe(340);
     expect(element?.y).toBe(280);
 
     const updated = updateElement(added, "screen_operations", "shape_one", { name: "Updated", opacity: 0.4 });
-    expect(firstScreen(updated).elements[0]).toMatchObject({ name: "Updated", opacity: 0.4 });
+    expect(elements(updated)[0]).toMatchObject({ name: "Updated", opacity: 0.4 });
     const moved = moveElements(updated, "screen_operations", ["shape_one"], { x: -1000, y: -1000 });
-    expect(firstScreen(moved).elements[0]).toMatchObject({ x: -99, y: -79 });
+    expect(elements(moved)[0]).toMatchObject({ x: -99, y: -79 });
     const removed = removeElements(moved, "screen_operations", ["shape_one"]);
-    expect(firstScreen(removed).elements).toHaveLength(0);
+    expect(elements(removed)).toHaveLength(0);
   });
 
-  test("keeps z-order valid and gives duplicates fresh identities", () => {
+  test("keeps layer order valid and gives duplicates fresh identities", () => {
     let project = fixture();
     project = addElement(project, "screen_operations", shape("bottom", 0, 0));
     project = addElement(project, "screen_operations", shape("middle", 20, 20));
     project = addElement(project, "screen_operations", shape("top", 40, 40));
     project = reorderElements(project, "screen_operations", ["bottom"], 2);
-    const ordered = [...firstScreen(project).elements].sort((a, b) => a.zIndex - b.zIndex);
+    const ordered = elements(project);
     expect(ordered.map((element) => element.id)).toEqual(["middle", "top", "bottom"]);
     const duplicated = duplicateElements(project, "screen_operations", ["bottom"], { x: 10, y: 10 });
-    const elements = firstScreen(duplicated).elements;
-    expect(elements).toHaveLength(4);
-    expect(new Set(elements.map((element) => element.id)).size).toBe(4);
-    expect(elements.find((element) => element.name === "bottom copy")).toMatchObject({ x: 10, y: 10, zIndex: 3 });
-    expect(new Set(elements.map((element) => element.zIndex)).size).toBe(elements.length);
+    const duplicatedElements = elements(duplicated);
+    expect(duplicatedElements).toHaveLength(4);
+    expect(new Set(duplicatedElements.map((element) => element.id)).size).toBe(4);
+    expect(duplicatedElements.find((element) => element.name === "bottom copy")).toMatchObject({ x: 10, y: 10 });
   });
 
   test("normalizes negative resize transforms and clamps to fixed deck bounds", () => {
     const project = addElement(fixture(), "screen_operations", shape("resize_me", 40, 40));
     const resized = resizeElement(project, "screen_operations", "resize_me", { x: 50, y: 40, width: -800, height: -500, rotation: 32 });
-    const element = firstScreen(resized).elements[0];
+    const element = elements(resized)[0];
     expect(element?.width).toBe(400);
     expect(element?.height).toBe(300);
     expect(element?.x).toBe(-399);
@@ -129,7 +132,7 @@ describe("scene operations", () => {
       id: "resize_me",
       patch: { x: 50.25, y: 40.75, width: 299.6, height: 199.4, rotation: 4.092700945, opacity: 0.437 },
     }]);
-    const element = firstScreen(transformed).elements.find((candidate) => candidate.id === "resize_me");
+    const element = elements(transformed).find((candidate) => candidate.id === "resize_me");
     expect(element?.width).toBe(300);
     expect(element?.height).toBe(199);
     expect(element?.x).toBe(50);
@@ -141,20 +144,21 @@ describe("scene operations", () => {
   test("preserves partially off-canvas layer positions while keeping a recovery edge", () => {
     const project = addElement(fixture(), "screen_operations", shape("off_canvas", 40, 40));
     const partiallyOutside = updateElement(project, "screen_operations", "off_canvas", { x: -45, y: 260 });
-    expect(firstScreen(partiallyOutside).elements[0]).toMatchObject({ x: -45, y: 260 });
+    expect(elements(partiallyOutside)[0]).toMatchObject({ x: -45, y: 260 });
     const beyondRecoveryEdge = updateElement(partiallyOutside, "screen_operations", "off_canvas", { x: -500, y: 500 });
-    expect(firstScreen(beyondRecoveryEdge).elements[0]).toMatchObject({ x: -99, y: 299 });
+    expect(elements(beyondRecoveryEdge)[0]).toMatchObject({ x: -99, y: 299 });
   });
 
-  test("preserves existing z-order when updating element or screen properties", () => {
+  test("preserves existing layer order when updating element or screen properties", () => {
     const project = createDefaultProject("Layer order fixture", { now: timestamp });
     const screen = firstScreen(project);
-    const expectedOrder = [...screen.elements].sort((left, right) => left.zIndex - right.zIndex).map((element) => element.id);
-    const updatedElement = updateElement(project, screen.id, screen.elements[0]?.id ?? "", { locked: true });
-    const afterElementUpdate = firstScreen(updatedElement).elements.slice().sort((left, right) => left.zIndex - right.zIndex).map((element) => element.id);
+    const expectedOrder = screen.layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId);
+    const firstElementId = screen.layers.find((layer) => layer.kind === "owned")?.element.id ?? "";
+    const updatedElement = updateElement(project, screen.id, firstElementId, { locked: true });
+    const afterElementUpdate = firstScreen(updatedElement).layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId);
     expect(afterElementUpdate).toEqual(expectedOrder);
     const updatedScreen = updateScreen(updatedElement, screen.id, { background: { type: "transparent" } });
-    const afterScreenUpdate = firstScreen(updatedScreen).elements.slice().sort((left, right) => left.zIndex - right.zIndex).map((element) => element.id);
+    const afterScreenUpdate = firstScreen(updatedScreen).layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId);
     expect(afterScreenUpdate).toEqual(expectedOrder);
   });
 
@@ -163,12 +167,12 @@ describe("scene operations", () => {
     const moved = moveElements(project, "screen_operations", ["locked_shape"], { x: 100, y: 100 });
     const resized = resizeElement(project, "screen_operations", "locked_shape", { x: 12, y: 14, width: 220, height: 180, rotation: 30 });
     const patched = updateElement(project, "screen_operations", "locked_shape", { x: 12, y: 14, width: 220, height: 180, rotation: 30, name: "Still locked" });
-    const original = firstScreen(project).elements[0];
+    const original = elements(project)[0];
     expect(moved).toBe(project);
     expect(resized).toBe(project);
-    expect(firstScreen(moved).elements[0]).toEqual(original);
-    expect(firstScreen(resized).elements[0]).toEqual(original);
-    expect(firstScreen(patched).elements[0]).toMatchObject({ x: 40, y: 50, width: 100, height: 80, rotation: 0, name: "Still locked", locked: true });
+    expect(elements(moved)[0]).toEqual(original);
+    expect(elements(resized)[0]).toEqual(original);
+    expect(elements(patched)[0]).toMatchObject({ x: 40, y: 50, width: 100, height: 80, rotation: 0, name: "Still locked", locked: true });
   });
 
   test("adds, duplicates, reorders, and protects final decks and screens", () => {
@@ -206,6 +210,15 @@ describe("scene operations", () => {
     const screen = firstScreen(fixture());
     expect(() => updateScreen(fixture(), screen.id, { width: 800 } as never)).toThrow(/inherited from its deck/);
   });
+
+  test("renames decks while keeping their creation dimensions immutable", () => {
+    const project = fixture();
+    const deck = project.decks[0];
+    if (!deck) throw new Error("Missing deck");
+    const renamed = updateDeck(project, deck.id, { name: "Renamed deck", slug: "renamed-deck" });
+    expect(renamed.decks[0]).toMatchObject({ name: "Renamed deck", slug: "renamed-deck", width: deck.width, height: deck.height });
+    expect(() => updateDeck(project, deck.id, { width: 800 } as never)).toThrow(/immutable/);
+  });
 });
 
 describe("operation history", () => {
@@ -221,11 +234,11 @@ describe("operation history", () => {
     expect(commits).toHaveLength(0);
     store.commitTransaction();
     expect(commits).toHaveLength(1);
-    expect(firstScreen(store.getSnapshot().project).elements[0]).toMatchObject({ x: 25, y: 10 });
+    expect(elements(store.getSnapshot().project)[0]).toMatchObject({ x: 25, y: 10 });
 
     store.undo();
     expect(commits).toHaveLength(2);
-    expect(firstScreen(store.getSnapshot().project).elements[0]).toMatchObject({ x: 10, y: 10 });
+    expect(elements(store.getSnapshot().project)[0]).toMatchObject({ x: 10, y: 10 });
   });
 
   test("does not nudge a locked-only selection", () => {
@@ -235,7 +248,7 @@ describe("operation history", () => {
     store.setSelection(["locked"]);
     store.nudge({ x: 10, y: 10 });
     expect(commits).toHaveLength(0);
-    expect(firstScreen(store.getSnapshot().project).elements[0]).toMatchObject({ x: 10, y: 10, locked: true });
+    expect(elements(store.getSnapshot().project)[0]).toMatchObject({ x: 10, y: 10, locked: true });
   });
 
   test("keeps zoom when switching active decks and screens", () => {
@@ -259,8 +272,8 @@ describe("operation history", () => {
     expect(history.past).toHaveLength(1);
     expect(history.canUndo).toBe(true);
     const undone = history.undo();
-    expect(firstScreen(undone).elements).toHaveLength(0);
-    expect(firstScreen(history.redo()).elements[0]).toMatchObject({ width: 180, height: 140 });
+    expect(elements(undone)).toHaveLength(0);
+    expect(elements(history.redo())[0]).toMatchObject({ width: 180, height: 140 });
 
     for (let index = 0; index < 110; index += 1) {
       history.apply(`move-${index}`, (project) => updateElement(project, "screen_operations", "dragged", { x: index }));

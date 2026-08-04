@@ -18,32 +18,33 @@ const FONT_OPTIONS = [
   "ui-monospace, SFMono-Regular, Menlo, monospace",
 ];
 
-type Document = ResolvedScreen;
-type DocumentPatch = ScreenPatch;
-
 type InspectorProps = {
-  document: Document;
+  screen: ResolvedScreen;
   selectedElements: SceneElement[];
-  onUpdateDocument: (patch: DocumentPatch) => void;
+  onUpdateScreen: (patch: ScreenPatch) => void;
   onUpdateElement: (elementId: string, patch: ElementPatch) => void;
   onUpdateElements: (updates: ElementUpdate[]) => void;
   onToggleOverflow: (elementId: string, enabled: boolean) => void;
+  onMoveOwnership: (elementId: string) => void;
+  ownerScreenName?: string;
 };
 
-export function Inspector({ document, selectedElements, onUpdateDocument, onUpdateElement, onUpdateElements, onToggleOverflow }: InspectorProps) {
+export function Inspector({ screen, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
-    return <DocumentInspector document={document} onUpdate={onUpdateDocument} />;
+    return <ScreenInspector screen={screen} onUpdate={onUpdateScreen} />;
   }
   if (selectedElements.length > 1) {
     return <MultiSelectionInspector elements={selectedElements} onUpdateElements={onUpdateElements} />;
   }
   const element = selectedElements[0];
   if (!element) return null;
-  const ownedLayer = document.layers.find((layer): layer is Extract<typeof layer, { kind: "owned" }> => layer.kind === "owned" && layer.element.id === element.id);
-  return <ElementInspector element={element} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} overflowEnabled={Boolean(ownedLayer?.overflow) || document.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} />;
+  const resolved = screen.elements.find((candidate) => candidate.id === element.id);
+  const ownedLayer = screen.layers.find((layer): layer is Extract<typeof layer, { kind: "owned" }> => layer.kind === "owned" && layer.element.id === element.id);
+  const ownerScreen = resolved?.ownerScreenId === screen.id ? undefined : resolved?.ownerScreenId;
+  return <ElementInspector element={element} isLinked={Boolean(resolved?.isOverflowLink)} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} />;
 }
 
-function DocumentInspector({ document, onUpdate }: { document: Document; onUpdate: (patch: DocumentPatch) => void }) {
+function ScreenInspector({ screen, onUpdate }: { screen: ResolvedScreen; onUpdate: (patch: ScreenPatch) => void }) {
   function changePreset(value: string) {
     if (value === "custom") {
       onUpdate({ preset: "custom" });
@@ -55,12 +56,12 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
-      <InspectorHeading title="Screen" detail={`${document.width} × ${document.height} · ${document.deckName}`} />
+      <InspectorHeading title="Screen" detail={`${screen.width} × ${screen.height} · ${screen.deckName}`} />
       <Section title="Identity">
-        <Field label="Name"><Input onChange={(event) => onUpdate({ name: event.target.value })} value={document.name} /></Field>
-        <Field label="Export name"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={document.exportSlug} /></Field>
+        <Field label="Name"><Input onChange={(event) => onUpdate({ name: event.target.value })} value={screen.name} /></Field>
+        <Field label="Export name"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={screen.exportSlug} /></Field>
         <Field label="Preset">
-          <select className={selectClass} onChange={(event) => changePreset(event.target.value)} value={APP_STORE_PRESETS.some((preset) => preset.id === document.preset) ? document.preset : "custom"}>
+          <select className={selectClass} onChange={(event) => changePreset(event.target.value)} value={APP_STORE_PRESETS.some((preset) => preset.id === screen.preset) ? screen.preset : "custom"}>
             {APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
             <option value="custom">Custom size</option>
           </select>
@@ -68,7 +69,7 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
         <p className="text-[10px] leading-4 text-muted">Screen dimensions are fixed by the containing deck.</p>
       </Section>
       <Section title="Background">
-        <BackgroundControls background={document.background} onChange={(background) => onUpdate({ background })} />
+        <BackgroundControls background={screen.background} onChange={(background) => onUpdate({ background })} />
       </Section>
     </div>
   );
@@ -93,11 +94,12 @@ function MultiSelectionInspector({ elements, onUpdateElements }: { elements: Sce
   );
 }
 
-function ElementInspector({ element, onUpdate, overflowEnabled, onToggleOverflow }: { element: SceneElement; onUpdate: (id: string, patch: ElementPatch) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void }) {
+function ElementInspector({ element, onUpdate, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; onUpdate: (id: string, patch: ElementPatch) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
   const update = (patch: ElementPatch) => onUpdate(element.id, patch);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
-      <InspectorHeading title={element.name} detail={element.type} />
+      <InspectorHeading title={element.name} detail={isLinked ? `${element.type} · linked projection` : element.type} />
+      {isLinked ? <div className="mb-3 rounded-lg border border-accent/20 bg-accent/[0.08] px-2.5 py-2 text-[10px] leading-4 text-muted">Editing the canonical element owned by {ownerScreenName ?? "another screen"}. Changes apply to every projection.</div> : null}
       <Section title="Transform">
         <Field label="Name"><Input onChange={(event) => update({ name: event.target.value })} value={element.name} /></Field>
         <div className="grid grid-cols-2 gap-2">
@@ -113,6 +115,7 @@ function ElementInspector({ element, onUpdate, overflowEnabled, onToggleOverflow
           <ToggleButton active={!element.locked} icon={element.locked ? <Lock size={13} /> : <Unlock size={13} />} label={element.locked ? "Locked" : "Editable"} onClick={() => update({ locked: !element.locked })} />
           <ToggleButton active={overflowEnabled} icon={<Link2 size={13} />} label="Overflow" onClick={() => onToggleOverflow(element.id, !overflowEnabled)} />
         </div>
+        {isLinked ? <Button onClick={() => onMoveOwnership(element.id)} size="sm" variant="secondary">Move ownership here</Button> : null}
       </Section>
       {element.type === "text" ? <TextControls element={element} onUpdate={update} /> : null}
       {element.type === "shape" ? <ShapeControls element={element} onUpdate={update} /> : null}

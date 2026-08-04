@@ -20,6 +20,42 @@ export type ExportPlanItem = PngDimensions & {
   exportName: string;
 };
 
+export type ExportScope =
+  | { mode: "screen"; screenId: string }
+  | { mode: "deck"; deckId: string }
+  | { mode: "all" };
+
+export function exportPlansForScreen(project: Project, screenId: string): ExportPlanItem[] {
+  const screen = project.decks.flatMap((deck) => deck.screens).find((candidate) => candidate.id === screenId);
+  if (!screen) return [];
+  const deck = project.decks.find((candidate) => candidate.screens.some((candidateScreen) => candidateScreen.id === screenId));
+  if (!deck) return [];
+
+  const plans = [
+    buildExportPlan(project, { mode: "all" }),
+    buildExportPlan(project, { mode: "deck", deckId: deck.id }),
+    buildExportPlan(project, { mode: "screen", screenId }),
+  ];
+  const seen = new Set<string>();
+  return plans.flatMap((plan) => plan.filter((item) => {
+    if (item.screenId !== screenId || seen.has(item.exportName)) return false;
+    seen.add(item.exportName);
+    return true;
+  }));
+}
+
+export function findExportPlanForFile(project: Project, fileName: string): ExportPlanItem | undefined {
+  const safeName = assertExportFileName(fileName);
+  const screens = project.decks
+    .flatMap((deck) => deck.screens)
+    .filter((candidate) => safeName.endsWith(`-${candidate.exportSlug}.png`));
+  for (const screen of screens) {
+    const planned = exportPlansForScreen(project, screen.id).find((item) => item.exportName === safeName);
+    if (planned) return planned;
+  }
+  return undefined;
+}
+
 function isPngSignature(bytes: Uint8Array): boolean {
   return PNG_SIGNATURE.every((value, index) => bytes[index] === value);
 }
@@ -131,26 +167,40 @@ export function exportFileName(screen: Pick<Screen, "exportSlug">, index: number
   return assertExportFileName(`${number}-${screen.exportSlug}.png`);
 }
 
-export function buildExportPlan(project: Project): ExportPlanItem[] {
+export function buildExportPlan(project: Project, scope: ExportScope = { mode: "all" }): ExportPlanItem[] {
   const names = new Set<string>();
+  const decks = scope.mode === "deck"
+    ? project.decks.filter((deck) => deck.id === scope.deckId)
+    : scope.mode === "screen"
+      ? project.decks.filter((deck) => deck.screens.some((screen) => screen.id === scope.screenId))
+      : project.decks;
   let index = 0;
-  return project.decks.flatMap((deck) => deck.screens.map((screen) => {
-    const exportName = exportFileName(screen, index);
-    index += 1;
-    if (names.has(exportName)) {
-      throw new PlinthError("EXPORT_FILE_INVALID", 422, `Screens produce the duplicate export name "${exportName}". Rename the affected screen export slugs before exporting.`, { exportName });
-    }
-    names.add(exportName);
-    return {
-      deckId: deck.id,
-      deckName: deck.name,
-      screenId: screen.id,
-      screenName: screen.name,
-      exportName,
-      width: deck.width,
-      height: deck.height,
-    };
-  }));
+  const plan = decks.flatMap((deck) => deck.screens
+    .filter((screen) => scope.mode !== "screen" || screen.id === scope.screenId)
+    .map((screen) => {
+      const exportName = exportFileName(screen, index);
+      index += 1;
+      if (names.has(exportName)) {
+        throw new PlinthError("EXPORT_FILE_INVALID", 422, `Screens produce the duplicate export name "${exportName}". Rename the affected screen export slugs before exporting.`, { exportName });
+      }
+      names.add(exportName);
+      return {
+        deckId: deck.id,
+        deckName: deck.name,
+        screenId: screen.id,
+        screenName: screen.name,
+        exportName,
+        width: deck.width,
+        height: deck.height,
+      };
+    }));
+  if (scope.mode === "screen" && plan.length === 0) {
+    throw new PlinthError("EXPORT_SCREEN_NOT_FOUND", 404, `Screen "${scope.screenId}" was not found in the project.`, { screenId: scope.screenId });
+  }
+  if (scope.mode === "deck" && plan.length === 0) {
+    throw new PlinthError("EXPORT_SCREEN_NOT_FOUND", 404, `Deck "${scope.deckId}" was not found in the project.`, { deckId: scope.deckId });
+  }
+  return plan;
 }
 
 export function assertExportDimensions(actual: PngDimensions, expected: PngDimensions): void {

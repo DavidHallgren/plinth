@@ -32,11 +32,11 @@ bun run tool help  # Show CLI commands
 
 Projects are stored under `data/projects/<slug>/` with a human-readable `project.json`, an `assets/` directory, and generated `exports/`. Image data is never embedded in project JSON.
 
-Each project contains ordered decks. A deck chooses its immutable pixel width and height at creation, and contains one or more ordered screens. A screen stores editable background, an ordered `layers` array, notes, and export identity; its render and export dimensions are always resolved from the containing deck. Owned layers contain the canonical element data once and an `overflow` flag. When overflow is enabled, target screens store compact links containing only the canonical element ID and owner screen ID. Links resolve from owner-local coordinates through deck-global coordinates into each target screen, while each screen keeps its own background crop and layer ordering.
+Each project contains ordered decks. A deck chooses its immutable pixel width and height at creation, and contains one or more ordered screens. The editor mounts only the active deck as one edge-to-edge horizontal canvas; clicking any screen focuses it and makes its layer stack the editing context. A screen stores editable background, an ordered `layers` array, notes, and export identity; its render and export dimensions are always resolved from the containing deck. Owned layers contain the canonical element data once and an `overflow` flag. When overflow is enabled, target screens store compact links containing only the canonical element ID and owner screen ID. Links resolve from owner-local coordinates through deck-global coordinates into each target screen, while each screen keeps its own background crop and independent layer ordering. Selecting a linked projection still selects the one canonical element, and target-local moves or reorders affect only the focused screen's projection/order.
 
 ## Export
 
-Use the Export dialog to export the current screen or every screen. PNGs can be downloaded through the browser or written to a configured local folder. Screens inherit their fixed dimensions from the deck that contains them.
+Use the Export dialog to export the focused screen, the current deck, or all decks. PNGs are rendered sequentially one screen at a time through the shared `SceneRenderer`, then downloaded through the browser or written to a configured local folder. Screens inherit their fixed dimensions from the deck that contains them.
 
 ## CLI
 

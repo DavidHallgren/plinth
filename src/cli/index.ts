@@ -217,7 +217,7 @@ async function run(parsed: ParsedArgs, storage: ProjectStorage): Promise<{ value
     }
 
     case "export":
-      throw new PlinthError("NOT_IMPLEMENTED", 501, "CLI export requires browser rendering. Open the local Plinth editor, choose Export, and use Current screen or All screens; the browser writes exact PNGs to the project's exports/ directory. The CLI deliberately does not duplicate the shared Konva renderer.", {
+      throw new PlinthError("NOT_IMPLEMENTED", 501, "CLI export requires browser rendering. Open the local Plinth editor, choose Export, and use Focused screen, Current deck, or All decks; the browser writes exact PNGs to the project's exports/ directory. The CLI deliberately does not duplicate the shared Konva renderer.", {
         browserRequired: true,
         projectSlug: parsed.positionals[0],
         workflow: "Open the editor -> Export -> choose screens -> render/download.",

@@ -12,6 +12,8 @@ import {
   Undo2,
   ZoomIn,
   ZoomOut,
+  Maximize2,
+  Scan,
 } from "lucide-react";
 import { Button } from "../ui/button";
 
@@ -28,9 +30,9 @@ type EditorToolbarProps = {
   onOpenAssets: () => void;
   onAddShape: (shape: "rectangle" | "rounded-rectangle" | "ellipse" | "line") => void;
   onZoomChange: (zoom: number) => void;
-  onFit: () => void;
+  onFitDeck: () => void;
+  onFitScreen: () => void;
   onExport: () => void;
-  previewMode?: boolean;
 };
 
 export function EditorToolbar({
@@ -46,24 +48,10 @@ export function EditorToolbar({
   onOpenAssets,
   onAddShape,
   onZoomChange,
-  onFit,
+  onFitDeck,
+  onFitScreen,
   onExport,
-  previewMode = false,
 }: EditorToolbarProps) {
-  if (previewMode) {
-    return (
-      <header className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-white/[0.08] bg-[#141414] px-4">
-        <p className="max-w-[320px] truncate text-xs font-semibold text-ink">{projectName}</p>
-        <div className="flex items-center gap-1">
-          <Button aria-label="Undo" disabled={!canUndo} onClick={onUndo} size="icon" tooltip="Undo" variant="ghost"><Undo2 size={15} /></Button>
-          <Button aria-label="Redo" disabled={!canRedo} onClick={onRedo} size="icon" tooltip="Redo" variant="ghost"><Redo2 size={15} /></Button>
-        </div>
-        <div className="justify-self-end">
-          <Button onClick={onExport} size="sm" variant="secondary"><FileOutput size={14} /> Export</Button>
-        </div>
-      </header>
-    );
-  }
   return (
     <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-3 border-b border-white/[0.08] bg-[#141414] px-3">
       <div className="flex min-w-0 items-center gap-2">
@@ -93,9 +81,11 @@ export function EditorToolbar({
         <span className="mx-2 hidden h-5 w-px bg-white/10 lg:block" />
         <div className="hidden items-center gap-0.5 rounded-lg border border-line bg-panel-strong p-0.5 lg:flex">
           <Button aria-label="Zoom out" onClick={() => onZoomChange(zoom - 0.05)} size="icon" tooltip="Zoom out" variant="ghost"><ZoomOut size={14} /></Button>
-          <button className="h-7 min-w-12 px-1 text-[11px] text-muted hover:text-ink" onClick={onFit} type="button">{Math.round(zoom * 100)}%</button>
+          <button className="h-7 min-w-12 px-1 text-[11px] text-muted hover:text-ink" onClick={onFitDeck} type="button">{Math.round(zoom * 100)}%</button>
           <Button aria-label="Zoom in" onClick={() => onZoomChange(zoom + 0.05)} size="icon" tooltip="Zoom in" variant="ghost"><ZoomIn size={14} /></Button>
         </div>
+        <Button aria-label="Fit deck" onClick={onFitDeck} size="sm" tooltip="Fit deck" variant="ghost"><Maximize2 size={14} /> Fit deck</Button>
+        <Button aria-label="Fit focused screen" onClick={onFitScreen} size="sm" tooltip="Fit focused screen" variant="ghost"><Scan size={14} /> Focused</Button>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 justify-self-end">

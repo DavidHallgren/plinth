@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
-import { previewScreenZoom } from "../src/components/editor/project-preview";
+import { fitDeckZoom, fitFocusedScreenZoom } from "../src/canvas/deck-canvas";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
 import { addElement, reorderElements } from "../src/scene/operations";
+import { ownedElements } from "./helpers";
+import { projectionKey } from "../src/scene/overflow";
 
 describe("editor interaction guards and geometry", () => {
   test("does not intercept typing targets, including contenteditable descendants", () => {
@@ -15,6 +17,11 @@ describe("editor interaction guards and geometry", () => {
     expect(shouldIgnoreEditorShortcutTarget(editor)).toBe(true);
     expect(shouldIgnoreEditorShortcutTarget(canvas)).toBe(false);
     expect(shouldIgnoreEditorShortcutTarget(null)).toBe(false);
+  });
+
+  test("keeps projection node identities distinct while preserving the canonical id", () => {
+    expect(projectionKey("screen-a", "element-1")).toBe("screen-a:element-1");
+    expect(projectionKey("screen-b", "element-1")).not.toBe(projectionKey("screen-a", "element-1"));
   });
 
   test("computes multiline auto-height while preserving fixed-height text", () => {
@@ -31,13 +38,13 @@ describe("editor interaction guards and geometry", () => {
     expect(calculateTextAutoHeight("Many words", 220, { ...style, autoHeight: false })).toBe(1);
   });
 
-  test("fits project preview screens within the available vertical space", () => {
-    expect(previewScreenZoom(2868, 839)).toBeCloseTo(727 / 2868);
-    expect(previewScreenZoom(600, 839)).toBe(1);
-    expect(previewScreenZoom(2868, 0)).toBeCloseTo(120 / 2868);
+  test("fits the active deck or focused screen in the viewport", () => {
+    expect(fitFocusedScreenZoom(1320, 2868, 900, 839)).toBeCloseTo(775 / 2868);
+    expect(fitFocusedScreenZoom(600, 400, 839, 839)).toBe(1);
+    expect(fitDeckZoom(1320, 2868, 2, 900, 839)).toBeCloseTo(775 / 2868);
   });
 
-  test("reorder normalizes z-index and retains the moved selection identity", () => {
+  test("reorder keeps layer order and retains the moved selection identity", () => {
     const seed = createDefaultProject("Reorder fixture");
     const screen = seed.decks[0]?.screens[0];
     if (!screen) throw new Error("Missing screen");
@@ -51,7 +58,6 @@ describe("editor interaction guards and geometry", () => {
       height: 80,
       rotation: 0,
       opacity: 1,
-      zIndex: screen.elements.length,
       locked: false,
       visible: true,
       shadow: null,
@@ -76,7 +82,7 @@ describe("editor interaction guards and geometry", () => {
     const project = addElement(seed, screen.id, text);
     const reordered = reorderElements(project, screen.id, [text.id], 0);
     const parsed = ProjectSchema.parse(reordered);
-    expect(parsed.decks[0]?.screens[0]?.elements.find((element) => element.id === text.id)?.zIndex).toBe(0);
-    expect(parsed.decks[0]?.screens[0]?.elements.map((element) => element.zIndex)).toEqual(parsed.decks[0]?.screens[0]?.elements.map((_element, index) => index));
+    expect(parsed.decks[0]?.screens[0]?.layers[0]).toMatchObject({ kind: "owned", element: { id: text.id } });
+    expect(parsed.decks[0]?.screens[0]?.layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId)).toEqual([text.id, ...ownedElements(screen).map((element) => element.id)]);
   });
 });

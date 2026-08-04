@@ -1,13 +1,14 @@
 import { createDefaultProject, DEFAULT_BACKGROUND } from "./defaults";
 import { PlinthError } from "./errors";
 import { createId, slugify } from "./ids";
-import { CURRENT_SCHEMA_VERSION, ProjectSchema, decorateScreen } from "./schema";
+import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
 import type { AssetMetadata, Background, LayerEntry, OwnedLayer, Project, SceneElement, Screen, Shadow } from "./schema";
 import { SceneElementSchema } from "./schema";
 import { isAppStorePreset } from "../scene/presets";
 import { isDevicePreset, getDevicePreset } from "../devices/presets";
 import { sanitizeAssetStem } from "./asset-validation";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
+import { reconcileOverflowLinks } from "../scene/operations";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -159,7 +160,9 @@ function normalizeAssets(value: unknown): AssetMetadata[] {
   return Array.isArray(value) ? value.map((asset, index) => normalizeAsset(asset, index)) : [];
 }
 
-function migrateElement(value: unknown, index: number, assets: AssetMetadata[]): SceneElement | null {
+type MigratedElement = SceneElement & { zIndex: number };
+
+function migrateElement(value: unknown, index: number, assets: AssetMetadata[]): MigratedElement | null {
   if (!isRecord(value) || typeof value.type !== "string") return null;
   const type = value.type;
   const base = {
@@ -256,14 +259,19 @@ function migrateElement(value: unknown, index: number, assets: AssetMetadata[]):
   return null;
 }
 
-type LegacyDocument = Omit<Screen, "createdAt" | "updatedAt" | "elements"> & {
+function canonicalMigratedElement(element: MigratedElement): SceneElement {
+  const { zIndex: _zIndex, ...canonical } = element;
+  return SceneElementSchema.parse(canonical);
+}
+
+type LegacyScreen = Omit<Screen, "createdAt" | "updatedAt"> & {
   width: number;
   height: number;
   createdAt: string;
   updatedAt: string;
 };
 
-function legacyDocument(value: unknown, index: number, now: string, assets: AssetMetadata[]): LegacyDocument {
+function legacyScreen(value: unknown, index: number, now: string, assets: AssetMetadata[]): LegacyScreen {
   const source = isRecord(value) ? value : {};
   const name = asString(source.name, asString(source.title, `Composition ${index + 1}`));
   const width = Math.round(asPositiveNumber(source.width, 1320));
@@ -275,16 +283,16 @@ function legacyDocument(value: unknown, index: number, now: string, assets: Asse
       : [];
   const elements = rawElements
     .map((element, elementIndex) => migrateElement(element, elementIndex, assets))
-    .filter((element): element is SceneElement => element !== null)
+    .filter((element): element is MigratedElement => element !== null)
     .sort((left, right) => ((left as SceneElement & { zIndex?: number }).zIndex ?? 0) - ((right as SceneElement & { zIndex?: number }).zIndex ?? 0));
   const layers: OwnedLayer[] = elements.map((element) => ({
     kind: "owned",
-    element: SceneElementSchema.parse(element),
+    element: canonicalMigratedElement(element),
     overflow: false,
   }));
 
   return {
-    id: asString(source.id, createId("doc")),
+    id: asString(source.id, createId("screen")),
     name,
     slug: slugify(asString(source.slug, name), "composition"),
     exportSlug: slugify(asString(source.exportSlug, asString(source.exportFileName, asString(source.slug, name))), "composition"),
@@ -328,20 +336,21 @@ function migrateVersionOne(source: Record<string, unknown>): Record<string, unkn
     now,
     id: typeof source.id === "string" ? source.id : undefined,
     slug: typeof source.slug === "string" ? slugify(source.slug) : slugify(name),
-    documentCount: 1,
+    deckCount: 1,
+    screenCount: 1,
   });
   const starterDeck = starter.decks[0];
   const starterScreen = starterDeck?.screens[0];
   if (!starterDeck || !starterScreen) throw new Error("The default project did not contain a starter screen.");
   const assets = normalizeAssets(source.assets);
   const rawDocuments = Array.isArray(source.documents) ? source.documents : [];
-  const fallbackDocument: LegacyDocument = {
+  const fallbackDocument: LegacyScreen = {
     ...starterScreen,
     width: starterDeck.width,
     height: starterDeck.height,
   };
   const documents = rawDocuments.length > 0
-    ? rawDocuments.map((document, index) => legacyDocument(document, index, now, assets))
+    ? rawDocuments.map((document, index) => legacyScreen(document, index, now, assets))
     : [fallbackDocument];
   const { decks: _decks, ...starterWithoutDecks } = starter;
 
@@ -423,15 +432,15 @@ function migrateVersionFive(source: Record<string, unknown>): Record<string, unk
   const assets = normalizeAssets(source.assets);
   const rawDocuments = Array.isArray(source.documents) ? source.documents : [];
   const documents = rawDocuments.length > 0
-    ? rawDocuments.map((document, index) => legacyDocument(document, index, now, assets))
+    ? rawDocuments.map((document, index) => legacyScreen(document, index, now, assets))
     : (() => {
       const deck = starter.decks[0];
       const screen = deck?.screens[0];
       if (!deck || !screen) throw new Error("The default project did not contain a starter screen.");
-      return [{ ...screen, width: deck.width, height: deck.height } satisfies LegacyDocument];
+      return [{ ...screen, width: deck.width, height: deck.height } satisfies LegacyScreen];
     })();
 
-  const groups = new Map<string, { width: number; height: number; documents: LegacyDocument[] }>();
+  const groups = new Map<string, { width: number; height: number; documents: LegacyScreen[] }>();
   for (const document of documents) {
     const width = Math.round(asPositiveNumber(document.width, 1320));
     const height = Math.round(asPositiveNumber(document.height, 2868));
@@ -498,11 +507,11 @@ function migrateVersionSix(source: Record<string, unknown>): Record<string, unkn
         const rawElements = Array.isArray(screenValue.elements) ? screenValue.elements : [];
         const elements = rawElements
           .map((element, elementIndex) => migrateElement(element, elementIndex, assets))
-          .filter((element): element is SceneElement => element !== null)
+          .filter((element): element is MigratedElement => element !== null)
           .sort((left, right) => ((left as SceneElement & { zIndex?: number }).zIndex ?? 0) - ((right as SceneElement & { zIndex?: number }).zIndex ?? 0))
           .map((element) => ({
             kind: "owned" as const,
-            element: SceneElementSchema.parse(element),
+            element: canonicalMigratedElement(element),
             overflow: false,
           } satisfies OwnedLayer));
         const { elements: _elements, ...screenWithoutElements } = screenValue;
@@ -556,11 +565,11 @@ export function parseProject(input: unknown): Project {
     });
   }
 
-  return {
+  const normalized = ProjectSchema.parse({
     ...result.data,
     decks: result.data.decks.map((deck) => ({
       ...deck,
-      screens: deck.screens.map((screen) => decorateScreen({
+      screens: deck.screens.map((screen) => ({
         ...screen,
         layers: screen.layers.map((layer): LayerEntry => layer.kind === "owned"
           ? {
@@ -572,5 +581,9 @@ export function parseProject(input: unknown): Project {
           : layer),
       })),
     })),
-  };
+  });
+
+  // Persisted v7 links are required to name a real owner, but links can become
+  // stale after hand-edited geometry. Normalize that recoverable case on load.
+  return reconcileOverflowLinks(normalized, { transferOwnership: false });
 }

@@ -167,6 +167,11 @@ describe("export API and storage", () => {
       { deckId: "deck_home", deckName: "Home deck", screenId: homeScreen.id, screenName: "Home screen", exportName: "01-home.png", width: 640, height: 480 },
       { deckId: "deck_other", deckName: "Other deck", screenId: otherScreen.id, screenName: "Other screen", exportName: "02-other.png", width: 320, height: 240 },
     ]);
+    expect(buildExportPlan(project, { mode: "screen", screenId: otherScreen.id })).toEqual([
+      { deckId: "deck_other", deckName: "Other deck", screenId: otherScreen.id, screenName: "Other screen", exportName: "01-other.png", width: 320, height: 240 },
+    ]);
+    expect(buildExportPlan(project, { mode: "deck", deckId: "deck_home" }).map((item) => item.screenId)).toEqual([homeScreen.id]);
+    expect(buildExportPlan(project, { mode: "all" }).map((item) => item.deckId)).toEqual(["deck_home", "deck_other"]);
 
     const form = new FormData();
     form.append("metadata", JSON.stringify({ screenId: homeScreen.id, fileName: "01-home.png", width: 640, height: 480 }));
@@ -186,6 +191,21 @@ describe("export API and storage", () => {
     expect(downloaded.status).toBe(200);
     expect(downloaded.headers.get("content-type")).toBe("image/png");
     expect(Array.from(new Uint8Array(await downloaded.arrayBuffer()))).toEqual(Array.from(pngFixture(640, 480)));
+
+    const scopedForm = new FormData();
+    scopedForm.append("metadata", JSON.stringify({
+      screenId: otherScreen.id,
+      fileName: "01-other.png",
+      width: 320,
+      height: 240,
+      scope: { mode: "screen", screenId: otherScreen.id },
+    }));
+    scopedForm.append("file", fixtureFile(pngFixture(320, 240), "01-other.png"), "01-other.png");
+    const scopedResponse = await handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: scopedForm }), storage);
+    expect(scopedResponse.status).toBe(201);
+    const scopedDownload = await handleGetExport(new Request("http://plinth.test/api/projects/export-fixture/exports/01-other.png"), storage);
+    expect(scopedDownload.status).toBe(200);
+    expect(Array.from(new Uint8Array(await scopedDownload.arrayBuffer()))).toEqual(Array.from(pngFixture(320, 240)));
 
     const invalidName = new FormData();
     invalidName.append("metadata", JSON.stringify({ screenId: homeScreen.id, fileName: "../escape.png", width: 640, height: 480 }));

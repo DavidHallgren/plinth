@@ -9,8 +9,6 @@ const TimestampSchema = z.string().datetime({ offset: true });
 export const DimensionSchema = z.number().int().positive().max(100_000);
 export const DeckSlugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(96);
 export const ScreenSlugSchema = DeckSlugSchema;
-/** @deprecated Use ScreenSlugSchema. */
-export const DocumentSlugSchema = ScreenSlugSchema;
 export const AssetPathSchema = z.string().regex(/^assets\/[a-z0-9][a-z0-9._-]{0,254}$/);
 export type AssetPath = z.infer<typeof AssetPathSchema>;
 export const ImageFitSchema = z.enum(["contain", "cover", "stretch"]);
@@ -24,7 +22,7 @@ export const ScreenPresetSchema = z.enum([
   "iphone-5-5",
   "ipad-13",
   "custom",
-  // These values remain readable so a v1 document can be migrated without
+  // These values remain readable so a v1 project can be migrated without
   // throwing away its dimensions. Migrations convert them to `custom`.
   "blank",
   "browser",
@@ -33,12 +31,6 @@ export const ScreenPresetSchema = z.enum([
 ]);
 export type ScreenPreset = z.infer<typeof ScreenPresetSchema>;
 export type AppStoreScreenPreset = (typeof APP_STORE_PRESETS)[number]["id"];
-/** @deprecated Use ScreenPresetSchema. */
-export const DocumentPresetSchema = ScreenPresetSchema;
-/** @deprecated Use ScreenPreset. */
-export type DocumentPreset = ScreenPreset;
-/** @deprecated Use AppStoreScreenPreset. */
-export type AppStoreDocumentPreset = AppStoreScreenPreset;
 
 export const ShadowSchema = z
   .object({
@@ -123,10 +115,6 @@ export const ElementFrameSchema = z
     height: DimensionSchema,
     rotation: z.number().finite(),
     opacity: z.number().min(0).max(1),
-    // v6 persisted zIndex values. They remain accepted as migration input but
-    // are stripped by SceneElementSchema; layer array position is the only
-    // persisted ordering authority in v7.
-    zIndex: z.number().int().min(0).optional(),
     locked: z.boolean(),
     visible: z.boolean(),
     name: z.string().trim().min(1).max(120),
@@ -151,7 +139,7 @@ export const DeviceElementSchema = ElementFrameSchema.extend({
   showGlare: z.boolean(),
   showCamera: z.boolean(),
 }).strict();
-export type DeviceElement = Omit<z.infer<typeof DeviceElementSchema>, "zIndex"> & { zIndex: number };
+export type DeviceElement = z.infer<typeof DeviceElementSchema>;
 
 const TextStyleSchema = z
   .object({
@@ -178,7 +166,7 @@ export const TextElementSchema = ElementFrameSchema.extend({
   text: z.string().max(20_000),
   style: TextStyleSchema,
 }).strict();
-export type TextElement = Omit<z.infer<typeof TextElementSchema>, "zIndex"> & { zIndex: number };
+export type TextElement = z.infer<typeof TextElementSchema>;
 
 export const ImageElementSchema = ElementFrameSchema.extend({
   type: z.literal("image"),
@@ -188,7 +176,7 @@ export const ImageElementSchema = ElementFrameSchema.extend({
   cornerRadius: z.number().min(0).finite(),
   alt: z.string().max(500),
 }).strict();
-export type ImageElement = Omit<z.infer<typeof ImageElementSchema>, "zIndex"> & { zIndex: number };
+export type ImageElement = z.infer<typeof ImageElementSchema>;
 
 export const ShapeElementSchema = ElementFrameSchema.extend({
   type: z.literal("shape"),
@@ -198,7 +186,7 @@ export const ShapeElementSchema = ElementFrameSchema.extend({
   strokeWidth: z.number().min(0).finite(),
   radius: z.number().min(0).finite(),
 }).strict();
-export type ShapeElement = Omit<z.infer<typeof ShapeElementSchema>, "zIndex"> & { zIndex: number };
+export type ShapeElement = z.infer<typeof ShapeElementSchema>;
 
 const RawSceneElementSchema = z.discriminatedUnion("type", [
   DeviceElementSchema,
@@ -207,20 +195,8 @@ const RawSceneElementSchema = z.discriminatedUnion("type", [
   ShapeElementSchema,
 ]);
 
-export const SceneElementSchema = RawSceneElementSchema.transform((element) => {
-  const { zIndex: _zIndex, ...canonical } = element;
-  return canonical;
-});
-type CanonicalDeviceElement = Omit<z.infer<typeof DeviceElementSchema>, "zIndex">;
-type CanonicalTextElement = Omit<z.infer<typeof TextElementSchema>, "zIndex">;
-type CanonicalImageElement = Omit<z.infer<typeof ImageElementSchema>, "zIndex">;
-type CanonicalShapeElement = Omit<z.infer<typeof ShapeElementSchema>, "zIndex">;
-export type SceneElement = CanonicalDeviceElement | CanonicalTextElement | CanonicalImageElement | CanonicalShapeElement;
-export type LegacySceneElement =
-  (CanonicalDeviceElement & { zIndex: number }) |
-  (CanonicalTextElement & { zIndex: number }) |
-  (CanonicalImageElement & { zIndex: number }) |
-  (CanonicalShapeElement & { zIndex: number });
+export const SceneElementSchema = RawSceneElementSchema;
+export type SceneElement = z.infer<typeof SceneElementSchema>;
 
 export const AssetMetadataSchema = z
   .object({
@@ -292,29 +268,7 @@ type ScreenData = {
   createdAt: string;
   updatedAt: string;
 };
-
-export type Screen = ScreenData & {
-  /** @deprecated Derived compatibility projection; never persisted. */
-  readonly elements: LegacySceneElement[];
-};
-
-function legacyLayersFromElements(elements: Array<SceneElement & { zIndex?: number }>): OwnedLayer[] {
-  return elements
-    .map((element, index) => ({ element, index, zIndex: (element as SceneElement & { zIndex?: number }).zIndex ?? index }))
-    .sort((left, right) => left.zIndex - right.zIndex || left.index - right.index)
-    .map(({ element }) => ({ kind: "owned" as const, element: SceneElementSchema.parse(element), overflow: false }));
-}
-
-export function decorateScreen(screen: ScreenData): Screen {
-  Object.defineProperty(screen, "elements", {
-    configurable: true,
-    enumerable: false,
-    get: () => screen.layers
-      .filter((layer): layer is OwnedLayer => layer.kind === "owned")
-      .map((layer, index) => ({ ...layer.element, zIndex: index })),
-  });
-  return screen as Screen;
-}
+export type Screen = ScreenData;
 
 const ScreenInputSchema = z
   .object({
@@ -324,33 +278,12 @@ const ScreenInputSchema = z
     name: z.string().trim().min(1).max(120),
     preset: ScreenPresetSchema,
     background: BackgroundSchema,
-    layers: z.array(LayerEntrySchema).optional(),
-    // Accepted only as an in-memory/backward-compatible input. Migrations
-    // write v7 layers, and the transform below removes this property.
-    elements: z.array(RawSceneElementSchema).optional(),
+    layers: z.array(LayerEntrySchema),
     notes: z.string().max(10_000),
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
   })
-  .strict()
-  .superRefine((screen, context) => {
-    if (!screen.layers && !screen.elements) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["layers"], message: "A screen must contain a layers array." });
-    }
-  })
-  .transform((screen) => {
-    const ownedLayers = screen.layers?.filter((layer): layer is OwnedLayer => layer.kind === "owned") ?? [];
-    const hasLegacyElements = screen.elements !== undefined;
-    const legacyElements = screen.elements ?? [];
-    const sameOwnedElements = ownedLayers.length === legacyElements.length
-      && ownedLayers.every((layer, index) => JSON.stringify(layer.element) === JSON.stringify(legacyElements[index]));
-    const hasLinkOrOverflow = Boolean(screen.layers?.some((layer) => layer.kind === "overflow-link" || (layer.kind === "owned" && layer.overflow)));
-    const layers = screen.layers && (!hasLegacyElements || hasLinkOrOverflow || sameOwnedElements)
-      ? screen.layers
-      : legacyLayersFromElements(legacyElements);
-    const { elements: _elements, ...rest } = screen;
-    return decorateScreen({ ...rest, layers });
-  });
+  .strict();
 export const ScreenSchema = ScreenInputSchema;
 
 export const DeckSchema = z
@@ -509,11 +442,6 @@ const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) =
 
 export const ProjectSchema = ProjectIdentitySchema;
 export type Project = z.infer<typeof ProjectSchema>;
-
-/** @deprecated Use ScreenSchema. */
-export const DocumentSchema = ScreenSchema;
-/** @deprecated Use Screen. */
-export type Document = Screen;
 
 export type ProjectInput = Pick<Project, "name" | "description"> &
   Partial<Pick<Project, "slug">>;

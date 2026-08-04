@@ -5,7 +5,8 @@ import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject } from "./migrations";
 import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, deriveAssetFileName, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
-import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, MAX_EXPORT_BYTES } from "./export-validation";
+import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, findExportPlanForFile, MAX_EXPORT_BYTES } from "./export-validation";
+import type { ExportScope } from "./export-validation";
 import type { AssetMetadata, Project, ProjectInput, ScreenPreset } from "./schema";
 import { selectAssetReferences, selectAssetUsages, type AssetUsage } from "../scene/selectors";
 import { addDeck as addSceneDeck, addScreen as addSceneScreen, type AddDeckOptions, type AddScreenOptions } from "../scene/operations";
@@ -44,6 +45,7 @@ export type ExportWriteInput = {
   width: number;
   height: number;
   bytes: Uint8Array;
+  scope?: ExportScope;
   exportRunId?: string;
 };
 
@@ -484,7 +486,7 @@ export class ProjectStorage {
 
   async writeExport(slug: string, input: ExportWriteInput): Promise<ExportWrite> {
     const project = await this.loadProject(slug);
-    const plan = buildExportPlan(project);
+    const plan = buildExportPlan(project, input.scope);
     const planned = plan.find((item) => item.screenId === input.screenId);
     if (!planned) {
       throw new PlinthError("EXPORT_SCREEN_NOT_FOUND", 404, `Screen "${input.screenId}" is not part of project "${slug}".`, {
@@ -548,7 +550,7 @@ export class ProjectStorage {
 
   async readExport(slug: string, fileName: string): Promise<ExportRead> {
     const project = await this.loadProject(slug);
-    const planned = buildExportPlan(project).find((item) => item.exportName === assertExportFileName(fileName));
+    const planned = findExportPlanForFile(project, fileName);
     if (!planned) {
       throw new PlinthError("EXPORT_NOT_FOUND", 404, `Export "${fileName}" is not registered for project "${slug}".`, { fileName });
     }

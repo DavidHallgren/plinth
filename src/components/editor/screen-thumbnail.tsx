@@ -4,18 +4,17 @@ import { thumbnailSize } from "../../devices/geometry";
 import type { AssetMetadata } from "../../lib/schema";
 import type { ResolvedScreen } from "../../scene/selectors";
 
-type DocumentThumbnailProps = {
+type ScreenThumbnailProps = {
   assets: readonly AssetMetadata[];
-  document: ResolvedScreen;
+  screen: ResolvedScreen;
   projectSlug: string;
 };
 
-export function DocumentThumbnail({ assets, document, projectSlug }: DocumentThumbnailProps) {
-  const size = thumbnailSize(document.width, document.height, 28, 28);
-
+export function ScreenThumbnail({ assets, screen, projectSlug }: ScreenThumbnailProps) {
+  const size = thumbnailSize(screen.width, screen.height, 28, 28);
   return (
     <Stage height={size.height} listening={false} scaleX={size.scale} scaleY={size.scale} width={size.width}>
-      <SceneRenderer assets={assets} document={document} projectSlug={projectSlug} />
+      <SceneRenderer assets={assets} projectSlug={projectSlug} screen={screen} />
     </Stage>
   );
 }

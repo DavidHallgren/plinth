@@ -4,6 +4,7 @@ import { parseProject } from "../src/lib/migrations";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { addElement, updateElement } from "../src/scene/operations";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
+import { ownedElements } from "./helpers";
 
 const timestamp = "2026-08-02T00:00:00.000Z";
 
@@ -50,7 +51,6 @@ describe("text auto-height geometry", () => {
       height: 12,
       rotation: 0,
       opacity: 1,
-      zIndex: 0,
       locked: false,
       visible: true,
       shadow: null,
@@ -69,20 +69,22 @@ describe("text auto-height geometry", () => {
     };
     const project = ProjectSchema.parse({ ...seed, decks: [{ ...deck, screens: [screen] }] });
     const wrapped = addElement(project, screen.id, text);
-    const wrappedText = wrapped.decks[0]?.screens[0]?.elements[0];
+    const wrappedScreen = wrapped.decks[0]?.screens[0];
+    const wrappedText = wrappedScreen && ownedElements(wrappedScreen)[0];
     expect(wrappedText?.type).toBe("text");
     expect(wrappedText?.height).toBeGreaterThan(text.height);
 
     const fixed = updateElement(wrapped, screen.id, text.id, { style: { autoHeight: false }, height: 40 });
     const changed = updateElement(fixed, screen.id, text.id, { text: `${text.text} more words` });
-    expect(changed.decks[0]?.screens[0]?.elements[0]?.height).toBe(40);
+    const changedScreen = changed.decks[0]?.screens[0];
+    expect(changedScreen && ownedElements(changedScreen)[0]?.height).toBe(40);
   });
 
   test("keeps stored auto-height geometry aligned with renderer and migrated JSON", () => {
     const project = createDefaultProject("Auto-height fixture", { now: timestamp });
     const deck = project.decks[0];
     const screen = deck?.screens[0];
-    const text = screen?.elements.find((element): element is TextElement => element.type === "text");
+    const text = screen && ownedElements(screen).find((element): element is TextElement => element.type === "text");
     if (!deck || !screen || !text) throw new Error("Missing starter text element");
     const expectedHeight = calculateTextAutoHeight(text.text, text.width, text.style);
     expect(text.height).toBe(expectedHeight);
@@ -90,8 +92,9 @@ describe("text auto-height geometry", () => {
     const legacyHeight = 500;
     const parsed = parseProject({
       ...project,
-      decks: [{ ...deck, screens: [{ ...screen, elements: screen.elements.map((element) => element.id === text.id ? { ...element, height: legacyHeight } : element) }] }],
+      decks: [{ ...deck, screens: [{ ...screen, layers: screen.layers.map((layer) => layer.kind === "owned" && layer.element.id === text.id ? { ...layer, element: { ...layer.element, height: legacyHeight } } : layer) }] }],
     });
-    expect(parsed.decks[0]?.screens[0]?.elements.find((element) => element.id === text.id)?.height).toBe(expectedHeight);
+    const parsedScreen = parsed.decks[0]?.screens[0];
+    expect(parsedScreen && ownedElements(parsedScreen).find((element) => element.id === text.id)?.height).toBe(expectedHeight);
   });
 });
