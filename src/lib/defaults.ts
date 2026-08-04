@@ -440,13 +440,16 @@ export function createDefaultProject(
   const deckCount = Math.max(1, input.deckCount ?? 1);
   const screenCount = Math.max(1, input.screenCount ?? 1);
   const defaultPreset = DEFAULT_SETTINGS.defaultScreenPreset;
-  const definition = getPresetDefinition(defaultPreset);
-  const width = definition?.width ?? 1320;
-  const height = definition?.height ?? 2868;
+  const defaultDefinition = getPresetDefinition(defaultPreset);
+  const defaultWidth = defaultDefinition?.width ?? 1320;
+  const defaultHeight = defaultDefinition?.height ?? 2868;
   const decks = Array.from({ length: deckCount }, (_, deckIndex) => {
+    const preset = deckIndex === 0 ? input.firstDeck?.screenPreset ?? defaultPreset : defaultPreset;
+    const width = deckIndex === 0 ? input.firstDeck?.width ?? defaultWidth : defaultWidth;
+    const height = deckIndex === 0 ? input.firstDeck?.height ?? defaultHeight : defaultHeight;
     const deckName = deckIndex === 0 ? "First deck" : `Deck ${deckIndex + 1}`;
     const screens = Array.from({ length: screenCount }, (_, screenIndex) => createScreenPreset(
-      screenIndex === 0 ? defaultPreset : "custom",
+      screenIndex === 0 ? preset : "custom",
       {
         name: deckIndex === 0 && screenIndex === 0 ? "First screen" : `Screen ${screenIndex + 1}`,
         slug: slugify(`${deckName}-${screenIndex === 0 ? "first-screen" : `screen-${screenIndex + 1}`}`, "screen"),
@@ -474,7 +477,10 @@ export function createDefaultProject(
     slug,
     name,
     description: input.description ?? "A local-first composition project.",
-    settings: DEFAULT_SETTINGS,
+    settings: {
+      ...DEFAULT_SETTINGS,
+      exportDirectory: input.exportDirectory?.trim() || null,
+    },
     background: DEFAULT_BACKGROUND,
     assets: [],
     decks,

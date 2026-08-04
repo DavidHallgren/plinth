@@ -1,8 +1,12 @@
 import { ArrowUpRight, Layers3, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import type { CreateProjectInput } from "../hooks/use-project-persistence";
+import type { ScreenPreset } from "../lib/schema";
 import type { ProjectMetadata } from "../lib/storage";
+import { APP_STORE_PRESETS, getPresetDefinition } from "../scene/presets";
 import { PlinthMark } from "./icons/plinth-mark";
 import { Button } from "./ui/button";
+import { Dialog } from "./ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 
@@ -11,26 +15,42 @@ type ProjectPickerProps = {
   loading: boolean;
   error: string | null;
   onOpen: (slug: string) => Promise<void>;
-  onCreate: (name: string, slug?: string) => Promise<void>;
+  onCreate: (input: CreateProjectInput) => Promise<void>;
   onDelete: (slug: string) => Promise<void>;
 };
 
 export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDelete }: ProjectPickerProps) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [exportDirectory, setExportDirectory] = useState("");
+  const [deckPreset, setDeckPreset] = useState<ScreenPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
+  const [deckWidth, setDeckWidth] = useState<number>(APP_STORE_PRESETS[0]?.width ?? 1320);
+  const [deckHeight, setDeckHeight] = useState<number>(APP_STORE_PRESETS[0]?.height ?? 2868);
+  const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
 
   async function submitCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!name.trim()) {
+    if (!name.trim() || !Number.isInteger(deckWidth) || deckWidth < 1 || deckWidth > 100_000 || !Number.isInteger(deckHeight) || deckHeight < 1 || deckHeight > 100_000) {
       return;
     }
     setCreating(true);
     try {
-      await onCreate(name.trim(), slug.trim() || undefined);
+      await onCreate({
+        name: name.trim(),
+        slug: slug.trim() || undefined,
+        exportDirectory: exportDirectory.trim() || null,
+        firstDeck: {
+          width: Math.round(deckWidth),
+          height: Math.round(deckHeight),
+          screenPreset: deckPreset,
+        },
+      });
       setName("");
       setSlug("");
+      setExportDirectory("");
+      setCreateOpen(false);
     } catch {
       // The app shell presents the structured API error above the project list.
     } finally {
@@ -118,20 +138,41 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDe
                 )}
               </div>
 
-              <form className="mt-4 border-t border-line pt-4" onSubmit={(event) => void submitCreate(event)}>
-                <div className="flex items-center gap-2 text-sm font-medium text-ink"><Plus size={15} className="text-primary" /> New project</div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_0.75fr]">
-                  <Input aria-label="Project name" onChange={(event) => setName(event.target.value)} placeholder="Project name" value={name} />
-                  <Input aria-label="Project slug" onChange={(event) => setSlug(event.target.value)} placeholder="slug (optional)" value={slug} />
-                </div>
-                <Button className="mt-3 w-full" disabled={creating || !name.trim()} type="submit" variant="primary">
-                  {creating ? "Creating…" : "Create project"}
+              <div className="mt-4 border-t border-line pt-4">
+                <Button className="w-full" onClick={() => setCreateOpen(true)} type="button" variant="primary">
+                  <Plus size={15} /> Create new project
                 </Button>
-              </form>
+              </div>
             </div>
           </section>
         </main>
       </div>
+
+      <Dialog
+        description="Choose the project details and dimensions for its first deck."
+        footer={<><Button disabled={creating} onClick={() => setCreateOpen(false)} variant="ghost">Cancel</Button><Button disabled={creating || !name.trim() || !Number.isInteger(deckWidth) || deckWidth < 1 || deckWidth > 100_000 || !Number.isInteger(deckHeight) || deckHeight < 1 || deckHeight > 100_000} form="create-project" type="submit" variant="primary">{creating ? "Creating…" : "Create project"}</Button></>}
+        onOpenChange={(open) => { if (!creating) setCreateOpen(open); }}
+        open={createOpen}
+        title="Create new project"
+      >
+        <form className="space-y-3" id="create-project" onSubmit={(event) => void submitCreate(event)}>
+          {error ? <div className="rounded-lg border border-red-300/20 bg-red-300/[0.08] px-3 py-2.5 text-sm text-red-100">{error}</div> : null}
+          <label className="block text-xs font-medium text-muted" htmlFor="create-project-name">Name</label>
+          <Input autoFocus id="create-project-name" maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="My screenshots" value={name} />
+          <label className="block pt-2 text-xs font-medium text-muted" htmlFor="create-project-slug">Slug <span className="font-normal text-muted/70">(optional)</span></label>
+          <Input id="create-project-slug" maxLength={64} onChange={(event) => setSlug(event.target.value)} placeholder="Generated from the name" value={slug} />
+          <label className="block pt-2 text-xs font-medium text-muted" htmlFor="create-project-export-directory">Export folder <span className="font-normal text-muted/70">(optional)</span></label>
+          <Input id="create-project-export-directory" maxLength={4096} onChange={(event) => setExportDirectory(event.target.value)} placeholder="/absolute/path/to/exports" value={exportDirectory} />
+          <p className="text-[10px] leading-4 text-muted">Folder exports create timestamped directories inside this existing absolute path.</p>
+          <label className="block pt-2 text-xs font-medium text-muted" htmlFor="create-project-deck-preset">First deck size</label>
+          <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-accent/70" id="create-project-deck-preset" onChange={(event) => { const value = event.target.value as ScreenPreset; setDeckPreset(value); const definition = getPresetDefinition(value); if (definition) { setDeckWidth(definition.width); setDeckHeight(definition.height); } }} value={deckPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Exact custom size</option></select>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs font-medium text-muted" htmlFor="create-project-deck-width"><span className="mb-1 block">Width</span><Input id="create-project-deck-width" max={100000} min={1} onChange={(event) => { setDeckPreset("custom"); setDeckWidth(Number(event.target.value)); }} type="number" value={deckWidth} /></label>
+            <label className="block text-xs font-medium text-muted" htmlFor="create-project-deck-height"><span className="mb-1 block">Height</span><Input id="create-project-deck-height" max={100000} min={1} onChange={(event) => { setDeckPreset("custom"); setDeckHeight(Number(event.target.value)); }} type="number" value={deckHeight} /></label>
+          </div>
+          <p className="text-[10px] leading-4 text-muted">Deck dimensions cannot be changed after creation.</p>
+        </form>
+      </Dialog>
     </div>
   );
 }

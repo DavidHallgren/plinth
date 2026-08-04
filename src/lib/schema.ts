@@ -444,7 +444,14 @@ export const ProjectSchema = ProjectIdentitySchema;
 export type Project = z.infer<typeof ProjectSchema>;
 
 export type ProjectInput = Pick<Project, "name" | "description"> &
-  Partial<Pick<Project, "slug">>;
+  Partial<Pick<Project, "slug">> & {
+    exportDirectory?: string | null;
+    firstDeck?: {
+      width: number;
+      height: number;
+      screenPreset?: ScreenPreset;
+    };
+  };
 
 export function isSceneElement(value: unknown): value is SceneElement {
   return SceneElementSchema.safeParse(value).success;

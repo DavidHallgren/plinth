@@ -16,6 +16,12 @@ const CreateProjectRequestSchema = z
     name: z.string().trim().min(1).max(120),
     slug: ProjectSlugRequestSchema.optional(),
     description: z.string().max(500).optional(),
+    exportDirectory: z.string().trim().max(4096).nullable().optional(),
+    firstDeck: z.object({
+      width: z.number().int().positive().max(100_000),
+      height: z.number().int().positive().max(100_000),
+      screenPreset: ScreenPresetSchema.optional(),
+    }).strict().optional(),
   })
   .strict();
 
@@ -166,6 +172,8 @@ export async function handleCreateProject(request: Request, storage: ProjectStor
     name: body.name,
     slug: body.slug,
     description: body.description ?? "A local-first composition project.",
+    exportDirectory: body.exportDirectory,
+    firstDeck: body.firstDeck,
   });
   return success({ project }, 201);
 }

@@ -21,6 +21,26 @@ afterEach(async () => {
 });
 
 describe("deck and screen API", () => {
+  test("creates a project with export settings and custom first-deck dimensions", async () => {
+    const storage = await temporaryStorage();
+    const response = await handleCreateProject(new Request("http://plinth.test/api/projects", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Custom project",
+        slug: "custom-project",
+        exportDirectory: "/tmp/plinth-exports",
+        firstDeck: { width: 800, height: 600, screenPreset: "custom" },
+      }),
+    }), storage);
+
+    expect(response.status).toBe(201);
+    const project = (await response.json() as { data: { project: { settings: { exportDirectory: string | null }; decks: Array<{ width: number; height: number; screens: Array<{ preset: string }> }> } } }).data.project;
+    expect(project.settings.exportDirectory).toBe("/tmp/plinth-exports");
+    expect(project.decks[0]).toMatchObject({ width: 800, height: 600 });
+    expect(project.decks[0]?.screens[0]?.preset).toBe("custom");
+  });
+
   test("returns structured client errors for invalid project slugs", async () => {
     const storage = await temporaryStorage();
     const createResponse = await apiAction(() => handleCreateProject(new Request("http://plinth.test/api/projects", {

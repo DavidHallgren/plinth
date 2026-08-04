@@ -6,6 +6,17 @@ import { useDebouncedAutosave } from "./use-autosave";
 
 type RefreshProjects = () => Promise<ProjectMetadata[]>;
 
+export type CreateProjectInput = {
+  name: string;
+  slug?: string;
+  exportDirectory?: string | null;
+  firstDeck: {
+    width: number;
+    height: number;
+    screenPreset?: Project["decks"][number]["screens"][number]["preset"];
+  };
+};
+
 export function rebaseProjectAfterRename(latest: Project, renamed: Project): Project {
   return {
     ...latest,
@@ -92,10 +103,10 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
     }
   }, [acceptProject]);
 
-  const createProject = useCallback(async (name: string, slug?: string) => {
+  const createProject = useCallback(async (input: CreateProjectInput) => {
     setError(null);
     try {
-      const result = await apiFetch<{ project: Project }>("/api/projects", jsonRequest({ name, slug }));
+      const result = await apiFetch<{ project: Project }>("/api/projects", jsonRequest(input));
       revisionRef.current = 0;
       acceptProject(result.project, { dirty: false });
       await refreshProjects();
