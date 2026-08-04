@@ -2,7 +2,8 @@ import type Konva from "konva";
 import { Download, FileOutput, FolderOutput, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Stage } from "react-konva";
-import type { Document, Project } from "../../lib/schema";
+import type { Project } from "../../lib/schema";
+import type { ResolvedScreen } from "../../scene/selectors";
 import { apiFetch } from "../../lib/client-api";
 import { buildExportPlan } from "../../lib/export-validation";
 import { waitForSceneReady } from "../../canvas/export-readiness";
@@ -12,10 +13,12 @@ import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
+type Document = ResolvedScreen;
+
 type ExportDialogProps = {
   open: boolean;
   project: Project;
-  activeDocumentId: string;
+  activeScreenId: string;
   onOpenChange: (open: boolean) => void;
   onError?: (message: string) => void;
   onBeforeExport?: () => Promise<Project>;
@@ -66,13 +69,15 @@ function downloadBlob(blob: Blob, fileName: string): void {
 
 function planForProject(sourceProject: Project): Array<{ document: Document; fileName: string }> {
   return buildExportPlan(sourceProject).map((item) => {
-    const document = sourceProject.documents.find((candidate) => candidate.id === item.documentId);
-    if (!document) throw new Error(`Export document "${item.documentId}" is missing from the project.`);
-    return { document, fileName: item.exportName };
+    const document = sourceProject.decks.flatMap((deck) => deck.screens).find((candidate) => candidate.id === item.screenId);
+    if (!document) throw new Error(`Export screen "${item.screenId}" is missing from the project.`);
+    const deck = sourceProject.decks.find((candidate) => candidate.id === item.deckId);
+    if (!deck) throw new Error(`Export deck "${item.deckId}" is missing from the project.`);
+    return { document: { ...document, deckId: deck.id, deckName: deck.name, width: deck.width, height: deck.height }, fileName: item.exportName };
   });
 }
 
-export function ExportDialog({ open, project, activeDocumentId, onOpenChange, onError, onBeforeExport, onExportDirectoryChange, onRenderingChange }: ExportDialogProps) {
+export function ExportDialog({ open, project, activeScreenId, onOpenChange, onError, onBeforeExport, onExportDirectoryChange, onRenderingChange }: ExportDialogProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [mode, setMode] = useState<"current" | "all">("current");
   const [destination, setDestination] = useState<"download" | "folder">("download");
@@ -83,7 +88,11 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
   const [renderProject, setRenderProject] = useState<Project | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const currentDocument = project.documents.find((document) => document.id === activeDocumentId) ?? project.documents[0];
+  const currentScreen = project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === activeScreenId) ?? project.decks[0]?.screens[0];
+  const currentDeck = project.decks.find((deck) => deck.screens.some((screen) => screen.id === currentScreen?.id));
+  const currentDocument = currentScreen && currentDeck
+    ? { ...currentScreen, deckId: currentDeck.id, deckName: currentDeck.name, width: currentDeck.width, height: currentDeck.height }
+    : undefined;
   const planResult = useMemo(() => {
     try {
       return {
@@ -96,7 +105,7 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
         error: error instanceof Error ? error.message : "The export plan is invalid.",
       };
     }
-  }, [project.documents]);
+  }, [project.decks]);
   const { plan, error: planError } = planResult;
   const configuredExportDirectory = exportDirectory.trim();
 
@@ -158,10 +167,10 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
         onError?.(error instanceof Error ? error.message : "The export plan is invalid.");
         return;
       }
-      const sourceCurrentDocument = sourceProject.documents.find((document) => document.id === activeDocumentId) ?? sourceProject.documents[0];
+      const sourceCurrentDocument = sourcePlan.find(({ document }) => document.id === activeScreenId)?.document ?? sourcePlan[0]?.document;
       const selected = mode === "all" ? sourcePlan : sourcePlan.filter(({ document }) => document.id === sourceCurrentDocument?.id);
       if (selected.length === 0) {
-        onError?.("There is no document available to export.");
+        onError?.("There is no screen available to export.");
         return;
       }
       let exportRun: { id: string; absolutePath: string } | null = null;
@@ -184,7 +193,7 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
           updateRow(item.document.id, { status: "uploading" });
           const formData = new FormData();
           formData.append("metadata", JSON.stringify({
-            documentId: item.document.id,
+            screenId: item.document.id,
             fileName: item.fileName,
             width: item.document.width,
             height: item.document.height,
@@ -198,7 +207,7 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
           if (destination === "download") downloadBlob(blob, item.fileName);
           updateRow(item.document.id, { status: "done", path: result.export.absolutePath ?? result.export.relativePath, downloaded: destination === "download" });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "The document could not be exported.";
+          const message = error instanceof Error ? error.message : "The screen could not be exported.";
           updateRow(item.document.id, { status: "error", error: message });
         } finally {
           setRenderDocument(null);
@@ -243,7 +252,7 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
           <div className="grid grid-cols-2 gap-2 rounded-xl border border-line bg-black/15 p-1">
             {(["current", "all"] as const).map((value) => (
               <button className={`h-8 rounded-lg text-xs font-medium ${mode === value ? "bg-accent/[0.16] text-accent-soft" : "text-muted hover:text-ink"}`} key={value} onClick={() => setMode(value)} type="button">
-                {value === "current" ? "Current document" : "All documents"}
+                {value === "current" ? "Current screen" : "All screens"}
               </button>
             ))}
           </div>
@@ -265,7 +274,7 @@ export function ExportDialog({ open, project, activeDocumentId, onOpenChange, on
                 placeholder="/absolute/path/to/exports"
                 value={exportDirectory}
               />
-              <p className="text-[10px] leading-4 text-muted">Folder exports create one timestamped directory for the selected documents. The server requires an existing absolute directory.</p>
+              <p className="text-[10px] leading-4 text-muted">Folder exports create one timestamped directory for the selected screens. The server requires an existing absolute directory.</p>
             </div>
           ) : null}
           {destinationError ? <p className="rounded-xl border border-red-300/20 bg-red-400/[0.08] px-3 py-2 text-[11px] leading-5 text-red-200" role="alert">{destinationError}</p> : null}

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createDocumentPreset } from "../src/lib/defaults";
+import { createScreenPreset } from "../src/lib/defaults";
 import { handleRenameProject } from "../src/lib/api";
 import { resolveWithin, writePrettyJsonAtomic, ProjectStorage } from "../src/lib/storage";
 
@@ -48,22 +48,24 @@ describe("safe project storage", () => {
       slug: "round-trip",
       description: "Storage integration fixture",
     });
-    const document = createDocumentPreset("browser", {
-      id: "doc_round_trip",
-      name: "Round trip document",
+    const screen = createScreenPreset("browser", {
+      id: "screen_round_trip",
+      name: "Round trip screen",
       slug: "round-trip-document",
       now: "2026-08-02T00:00:00.000Z",
     });
+    const deck = created.decks[0];
+    if (!deck) throw new Error("Missing starter deck");
     const updated = await storage.saveProject({
       ...created,
-      documents: [document],
+      decks: [{ ...deck, screens: [screen] }],
       updatedAt: "2026-08-02T00:00:00.000Z",
     });
     const reloaded = await storage.loadProject(updated.slug);
-    const kinds = reloaded.documents[0]?.elements.map((element) => element.type);
+    const kinds = reloaded.decks[0]?.screens[0]?.elements.map((element) => element.type);
 
     expect(kinds).toEqual(["device", "shape", "text"]);
-    expect(reloaded.documents[0]?.elements).toEqual(updated.documents[0]?.elements);
+    expect(reloaded.decks[0]?.screens[0]?.elements).toEqual(updated.decks[0]?.screens[0]?.elements);
     expect(JSON.parse(await readFile(storage.projectFile("round-trip"), "utf8"))).toEqual(reloaded);
   });
 
@@ -72,7 +74,7 @@ describe("safe project storage", () => {
     await storage.createProject({ name: "Listed project", slug: "listed-project", description: "Metadata" });
 
     const metadata = await storage.listProjectMetadata();
-    expect(metadata[0]).toMatchObject({ slug: "listed-project", name: "Listed project", documentCount: 1, valid: true });
+    expect(metadata[0]).toMatchObject({ slug: "listed-project", name: "Listed project", deckCount: 1, screenCount: 1, valid: true });
     await expect(storage.createProject({ name: "Same slug", slug: "listed-project", description: "No overwrite" })).rejects.toThrow(/already exists/);
   });
 
@@ -104,8 +106,11 @@ describe("safe project storage", () => {
     await storage.createProject({ name: "Asset source", slug: "asset-source", description: "Assets" });
     await Bun.write(join(storage.projectSubdirectory("asset-source", "assets"), "fixture.svg"), "<svg />");
 
-    await storage.duplicateProject("asset-source", "asset-copy");
+    const duplicated = await storage.duplicateProject("asset-source", "asset-copy");
 
     expect(await readFile(join(storage.projectSubdirectory("asset-copy", "assets"), "fixture.svg"), "utf8")).toBe("<svg />");
+    expect(duplicated.decks).toHaveLength(1);
+    expect(duplicated.decks[0]).toMatchObject({ width: 1320, height: 2868 });
+    expect(duplicated.decks[0]?.screens[0] && Object.hasOwn(duplicated.decks[0].screens[0], "width")).toBe(false);
   });
 });

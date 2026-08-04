@@ -1,25 +1,38 @@
 import { describe, expect, test } from "bun:test";
 import { assertProjectSlug, slugify } from "../src/lib/ids";
-import { createDefaultProject, createDocumentPreset } from "../src/lib/defaults";
-import { CURRENT_SCHEMA_VERSION, DocumentSchema, ProjectSchema, SceneElementSchema } from "../src/lib/schema";
+import { createDefaultProject, createScreenPreset } from "../src/lib/defaults";
+import {
+  CURRENT_SCHEMA_VERSION,
+  DeckSchema,
+  ProjectSchema,
+  SceneElementSchema,
+  ScreenSchema,
+} from "../src/lib/schema";
 
 describe("project schema", () => {
-  test("creates a serializable project with normalized discriminated elements", () => {
+  test("creates a serializable project with fixed-size decks and normalized screens", () => {
     const project = createDefaultProject("Schema fixture", { now: "2026-08-02T00:00:00.000Z" });
-    const document = project.documents[0];
+    const deck = project.decks[0];
+    const screen = deck?.screens[0];
 
     expect(project.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(document).toBeDefined();
-    expect(document?.elements.map((element) => element.type)).toEqual(["shape", "device", "text", "text"]);
+    expect(deck).toBeDefined();
+    expect(screen).toBeDefined();
+    expect(screen && Object.hasOwn(screen, "width")).toBe(false);
+    expect(screen && Object.hasOwn(screen, "height")).toBe(false);
+    expect(screen?.elements.map((element) => element.type)).toEqual(["shape", "device", "text", "text"]);
     expect(JSON.parse(JSON.stringify(project))).toEqual(project);
 
-    for (const element of document?.elements ?? []) {
+    if (!deck || !screen) throw new Error("Expected a starter deck and screen.");
+    expect(DeckSchema.parse(deck)).toEqual(deck);
+    expect(ScreenSchema.parse(screen)).toEqual(screen);
+    for (const element of screen.elements) {
       expect(SceneElementSchema.parse(element)).toEqual(element);
     }
   });
 
-  test("accepts the image branch without embedded binary data", () => {
-    const document = createDocumentPreset("blank", { name: "Image fixture" });
+  test("accepts image screens without embedded binary data", () => {
+    const screen = createScreenPreset("blank", { name: "Image fixture" });
     const image = {
       id: "image_fixture",
       type: "image" as const,
@@ -30,7 +43,7 @@ describe("project schema", () => {
       height: 180,
       rotation: 0,
       opacity: 1,
-      zIndex: 1,
+      zIndex: 0,
       locked: false,
       visible: true,
       assetPath: "assets/fixture.svg",
@@ -40,7 +53,7 @@ describe("project schema", () => {
       alt: "Fixture asset",
     };
 
-    expect(DocumentSchema.parse({ ...document, elements: [image] }).elements[0]).toEqual(image);
+    expect(ScreenSchema.parse({ ...screen, elements: [image] }).elements[0]).toEqual(image);
     expect(JSON.stringify(image)).not.toContain("base64");
   });
 
@@ -51,28 +64,54 @@ describe("project schema", () => {
     expect(() => assertProjectSlug("Has Spaces")).toThrow();
   });
 
-  test("rejects duplicate document and asset ids with actionable paths", () => {
-    const project = createDefaultProject("Identity fixture", { documentCount: 2 });
-    const firstDocument = project.documents[0];
-    const secondDocument = project.documents[1];
-    if (!firstDocument || !secondDocument) throw new Error("Expected two documents.");
+  test("rejects duplicate deck, screen, and asset identities with actionable paths", () => {
+    const project = createDefaultProject("Identity fixture", { deckCount: 2, screenCount: 2 });
+    const firstDeck = project.decks[0];
+    const secondDeck = project.decks[1];
+    const firstScreen = firstDeck?.screens[0];
+    const secondScreen = secondDeck?.screens[0];
+    if (!firstDeck || !secondDeck || !firstScreen || !secondScreen) throw new Error("Expected two decks with screens.");
 
-    const duplicateDocument = ProjectSchema.safeParse({
+    const duplicateDeck = ProjectSchema.safeParse({
       ...project,
-      documents: [firstDocument, { ...secondDocument, id: firstDocument.id }],
+      decks: [firstDeck, { ...secondDeck, id: firstDeck.id }],
     });
-    expect(duplicateDocument.success).toBe(false);
-    if (!duplicateDocument.success) {
-      expect(duplicateDocument.error.issues[0]?.message).toContain("Duplicate document id");
-      expect(duplicateDocument.error.issues[0]?.path).toEqual(["documents", 1, "id"]);
+    expect(duplicateDeck.success).toBe(false);
+    if (!duplicateDeck.success) {
+      expect(duplicateDeck.error.issues[0]?.message).toContain("Duplicate deck id");
+      expect(duplicateDeck.error.issues[0]?.path).toEqual(["decks", 1, "id"]);
     }
+
+    const duplicateScreen = ProjectSchema.safeParse({
+      ...project,
+      decks: [firstDeck, { ...secondDeck, screens: [{ ...secondScreen, id: firstScreen.id }, ...secondDeck.screens.slice(1)] }],
+    });
+    expect(duplicateScreen.success).toBe(false);
+    if (!duplicateScreen.success) {
+      expect(duplicateScreen.error.issues[0]?.message).toContain("Duplicate screen id");
+      expect(duplicateScreen.error.issues[0]?.path).toEqual(["decks", 1, "screens", 0, "id"]);
+    }
+
+    const duplicateSlug = ProjectSchema.safeParse({
+      ...project,
+      decks: [firstDeck, { ...secondDeck, screens: [{ ...secondScreen, slug: firstScreen.slug }, ...secondDeck.screens.slice(1)] }],
+    });
+    expect(duplicateSlug.success).toBe(false);
+    if (!duplicateSlug.success) expect(duplicateSlug.error.issues[0]?.message).toContain("Duplicate screen slug");
+
+    const duplicateExportSlug = ProjectSchema.safeParse({
+      ...project,
+      decks: [firstDeck, { ...secondDeck, screens: [{ ...secondScreen, exportSlug: firstScreen.exportSlug }, ...secondDeck.screens.slice(1)] }],
+    });
+    expect(duplicateExportSlug.success).toBe(false);
+    if (!duplicateExportSlug.success) expect(duplicateExportSlug.error.issues[0]?.message).toContain("Duplicate screen export slug");
 
     const asset = {
       id: "asset_duplicate",
       kind: "image" as const,
       path: "assets/fixture.svg",
       fileName: "fixture.svg",
-      mimeType: "image/svg+xml",
+      mimeType: "image/svg+xml" as const,
       width: 100,
       height: 100,
       byteSize: 10,
@@ -85,25 +124,41 @@ describe("project schema", () => {
     }
   });
 
-  test("rejects scene element ids duplicated across documents", () => {
-    const project = createDefaultProject("Element identity fixture");
-    const firstDocument = project.documents[0];
-    if (!firstDocument?.elements[0]) throw new Error("Expected a foundation element.");
-    const secondDocument = createDocumentPreset("browser", { name: "Second document" });
-    const secondElement = secondDocument.elements[0];
-    if (!secondElement) throw new Error("Expected a second foundation element.");
+  test("rejects screen dimensions and invalid deck dimensions in persisted JSON", () => {
+    const project = createDefaultProject("Dimension fixture");
+    const deck = project.decks[0];
+    const screen = deck?.screens[0];
+    if (!deck || !screen) throw new Error("Expected a starter deck and screen.");
+
+    const screenDimensions = ProjectSchema.safeParse({
+      ...project,
+      decks: [{ ...deck, screens: [{ ...screen, width: deck.width, height: deck.height }] }],
+    });
+    expect(screenDimensions.success).toBe(false);
+    if (!screenDimensions.success) expect(screenDimensions.error.issues.some((issue) => issue.message.includes("width") || issue.message.includes("height"))).toBe(true);
+
+    const invalidDeck = ProjectSchema.safeParse({ ...project, decks: [{ ...deck, width: 0 }] });
+    expect(invalidDeck.success).toBe(false);
+  });
+
+  test("rejects scene element ids duplicated across screens", () => {
+    const project = createDefaultProject("Element identity fixture", { deckCount: 2 });
+    const deck = project.decks[0];
+    const secondDeck = project.decks[1];
+    const firstScreen = deck?.screens[0];
+    const secondScreen = secondDeck?.screens[0];
+    const firstElement = firstScreen?.elements[0];
+    const secondElement = secondScreen?.elements[0];
+    if (!deck || !firstScreen || !secondScreen || !firstElement || !secondElement) throw new Error("Expected two screens with elements.");
 
     const duplicateElement = ProjectSchema.safeParse({
       ...project,
-      documents: [
-        firstDocument,
-        { ...secondDocument, elements: [{ ...secondElement, id: firstDocument.elements[0].id }, ...secondDocument.elements.slice(1)] },
-      ],
+      decks: [deck, { ...secondDeck, screens: [{ ...secondScreen, elements: [{ ...secondElement, id: firstElement.id }, ...secondScreen.elements.slice(1)] }] }],
     });
     expect(duplicateElement.success).toBe(false);
     if (!duplicateElement.success) {
       expect(duplicateElement.error.issues[0]?.message).toContain("Duplicate scene element id");
-      expect(duplicateElement.error.issues[0]?.path).toEqual(["documents", 1, "elements", 0, "id"]);
+      expect(duplicateElement.error.issues[0]?.path).toEqual(["decks", 1, "screens", 0, "elements", 0, "id"]);
     }
   });
 });

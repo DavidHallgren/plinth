@@ -1,9 +1,10 @@
 import { createId, nowIso, slugify } from "./ids";
 import type {
   Background,
+  Deck,
   DeviceElement,
-  Document,
-  DocumentPreset,
+  Screen,
+  ScreenPreset,
   Project,
   ProjectInput,
   SceneElement,
@@ -25,7 +26,7 @@ export const DEFAULT_BACKGROUND: Background = {
 export const DEFAULT_SETTINGS: Settings = {
   autosave: true,
   autosaveDelayMs: 800,
-  defaultDocumentPreset: "iphone-6-9",
+  defaultScreenPreset: "iphone-6-9",
   exportDirectory: null,
   grid: {
     enabled: true,
@@ -42,7 +43,7 @@ export const DEFAULT_SHADOW = {
   opacity: 0.24,
 } as const;
 
-type CreateDocumentOptions = {
+export type CreateScreenOptions = {
   id?: string;
   name?: string;
   slug?: string;
@@ -355,29 +356,27 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
   ];
 }
 
-export function createDocumentPreset(
-  preset: DocumentPreset,
-  options: CreateDocumentOptions = {},
-): Document {
+export function createScreenPreset(
+  preset: ScreenPreset,
+  options: CreateScreenOptions = {},
+): Screen {
   const now = options.now ?? nowIso();
   const definition = getPresetDefinition(preset);
   const isLegacy = preset === "blank" || preset === "browser" || preset === "phone" || preset === "social";
   const name = options.name ?? (definition?.shortLabel ?? `${preset[0]?.toUpperCase() ?? "D"}${preset.slice(1)} composition`);
-  const id = options.id ?? createId("doc");
+  const id = options.id ?? createId("screen");
   const width = options.width ?? definition?.width ?? (preset === "phone" ? 1170 : preset === "social" ? 1200 : preset === "browser" ? 1440 : 1320);
   const height = options.height ?? definition?.height ?? (preset === "phone" ? 2532 : preset === "social" ? 1500 : preset === "browser" ? 900 : 2868);
   const elements = isAppStorePreset(preset)
     ? createAppStoreElements(preset, width, height)
     : createLegacyElements(isLegacy ? preset : "blank");
   const normalizedElements = elements.map((element) => element.type === "text" ? normalizeTextElementGeometry(element, width, height) : element);
-  const document: Document = {
+  const screen: Screen = {
     id,
     slug: options.slug ?? slugify(name, "composition"),
     exportSlug: options.exportSlug ?? slugify(name, "composition"),
     name,
     preset,
-    width,
-    height,
     background: isAppStorePreset(preset) ? appStoreBackground(preset) : preset === "social" ? {
       type: "linear-gradient",
       stops: [{ offset: 0, color: "#27203d" }, { offset: 1, color: "#8b7cff" }],
@@ -390,22 +389,90 @@ export function createDocumentPreset(
     updatedAt: now,
   };
 
-  return document;
+  return screen;
 }
+
+export type CreateDeckOptions = {
+  id?: string;
+  name?: string;
+  slug?: string;
+  now?: string;
+  width?: number;
+  height?: number;
+  screenPreset?: ScreenPreset;
+  screenName?: string;
+  screenSlug?: string;
+  screenExportSlug?: string;
+};
+
+export function createDeckPreset(
+  preset: ScreenPreset = DEFAULT_SETTINGS.defaultScreenPreset,
+  options: CreateDeckOptions = {},
+): Deck {
+  const now = options.now ?? nowIso();
+  const definition = getPresetDefinition(preset);
+  const width = options.width ?? definition?.width ?? (preset === "phone" ? 1170 : preset === "social" ? 1200 : preset === "browser" ? 1440 : 1320);
+  const height = options.height ?? definition?.height ?? (preset === "phone" ? 2532 : preset === "social" ? 1500 : preset === "browser" ? 900 : 2868);
+  const name = options.name ?? `${definition?.shortLabel ?? "Screenshot"} deck`;
+  const screen = createScreenPreset(options.screenPreset ?? preset, {
+    name: options.screenName ?? "First screen",
+    slug: options.screenSlug,
+    exportSlug: options.screenExportSlug,
+    width,
+    height,
+    now,
+  });
+  return {
+    id: options.id ?? createId("deck"),
+    slug: options.slug ?? slugify(name, "deck"),
+    name,
+    width,
+    height,
+    screens: [screen],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** @deprecated Use createScreenPreset. */
+export const createDocumentPreset = createScreenPreset;
 
 export function createDefaultProject(
   name = "Untitled project",
-  input: Partial<ProjectInput> & { now?: string; id?: string; documentCount?: number } = {},
+  input: Partial<ProjectInput> & { now?: string; id?: string; deckCount?: number; screenCount?: number; documentCount?: number } = {},
 ): Project {
   const now = input.now ?? nowIso();
   const slug = input.slug ?? slugify(name);
-  const documentCount = input.documentCount ?? 1;
-  const documents = Array.from({ length: Math.max(1, documentCount) }, (_, index) =>
-    createDocumentPreset(index === 0 ? DEFAULT_SETTINGS.defaultDocumentPreset : "custom", {
-      name: index === 0 ? "First screenshot" : `Composition ${index + 1}`,
-      now,
-    }),
-  );
+  const deckCount = Math.max(1, input.deckCount ?? 1);
+  const screenCount = Math.max(1, input.screenCount ?? input.documentCount ?? 1);
+  const defaultPreset = DEFAULT_SETTINGS.defaultScreenPreset;
+  const definition = getPresetDefinition(defaultPreset);
+  const width = definition?.width ?? 1320;
+  const height = definition?.height ?? 2868;
+  const decks = Array.from({ length: deckCount }, (_, deckIndex) => {
+    const deckName = deckIndex === 0 ? "First deck" : `Deck ${deckIndex + 1}`;
+    const screens = Array.from({ length: screenCount }, (_, screenIndex) => createScreenPreset(
+      screenIndex === 0 ? defaultPreset : "custom",
+      {
+        name: deckIndex === 0 && screenIndex === 0 ? "First screen" : `Screen ${screenIndex + 1}`,
+        slug: slugify(`${deckName}-${screenIndex === 0 ? "first-screen" : `screen-${screenIndex + 1}`}`, "screen"),
+        exportSlug: slugify(`${deckName}-${screenIndex === 0 ? "first-screen" : `screen-${screenIndex + 1}`}`, "screen"),
+        width,
+        height,
+        now,
+      },
+    ));
+    return {
+      id: createId("deck"),
+      slug: slugify(deckName, "deck"),
+      name: deckName,
+      width,
+      height,
+      screens,
+      createdAt: now,
+      updatedAt: now,
+    } satisfies Deck;
+  });
 
   const project: Project = {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -416,7 +483,7 @@ export function createDefaultProject(
     settings: DEFAULT_SETTINGS,
     background: DEFAULT_BACKGROUND,
     assets: [],
-    documents,
+    decks,
     createdAt: now,
     updatedAt: now,
   };

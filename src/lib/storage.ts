@@ -1,21 +1,22 @@
 import { cp, mkdir, readdir, readFile, realpath, rename as fsRename, rm, stat, unlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { createDocumentPreset, createDefaultProject } from "./defaults";
+import { createDefaultProject } from "./defaults";
 import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject } from "./migrations";
 import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, deriveAssetFileName, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
 import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, MAX_EXPORT_BYTES } from "./export-validation";
-import type { AssetMetadata, Document, Project, ProjectInput, SceneElement } from "./schema";
+import type { AssetMetadata, Project, ProjectInput, SceneElement, ScreenPreset } from "./schema";
 import { selectAssetReferences, selectAssetUsages, type AssetUsage } from "../scene/selectors";
-import { addDocument as addSceneDocument, type AddDocumentOptions } from "../scene/operations";
+import { addDeck as addSceneDeck, addScreen as addSceneScreen, type AddDeckOptions, type AddScreenOptions } from "../scene/operations";
 
 export type ProjectMetadata = {
   slug: string;
   id: string | null;
   name: string;
   description: string;
-  documentCount: number;
+  deckCount: number;
+  screenCount: number;
   createdAt: string | null;
   updatedAt: string | null;
   valid: boolean;
@@ -38,7 +39,7 @@ export type AssetMutation = {
 };
 
 export type ExportWriteInput = {
-  documentId: string;
+  screenId: string;
   fileName: string;
   width: number;
   height: number;
@@ -52,8 +53,10 @@ export type ExportRun = {
 };
 
 export type ExportWrite = {
-  documentId: string;
-  documentName: string;
+  deckId: string;
+  deckName: string;
+  screenId: string;
+  screenName: string;
   fileName: string;
   relativePath: string;
   absolutePath: string;
@@ -482,20 +485,20 @@ export class ProjectStorage {
   async writeExport(slug: string, input: ExportWriteInput): Promise<ExportWrite> {
     const project = await this.loadProject(slug);
     const plan = buildExportPlan(project);
-    const planned = plan.find((item) => item.documentId === input.documentId);
+    const planned = plan.find((item) => item.screenId === input.screenId);
     if (!planned) {
-      throw new PlinthError("EXPORT_DOCUMENT_NOT_FOUND", 404, `Document "${input.documentId}" is not part of project "${slug}".`, {
-        documentId: input.documentId,
+      throw new PlinthError("EXPORT_SCREEN_NOT_FOUND", 404, `Screen "${input.screenId}" is not part of project "${slug}".`, {
+        screenId: input.screenId,
         projectSlug: slug,
       });
     }
 
     const fileName = assertExportFileName(input.fileName);
     if (fileName !== planned.exportName) {
-      throw new PlinthError("EXPORT_FILE_INVALID", 400, `Export file name "${fileName}" does not match this document's planned output "${planned.exportName}".`, {
+      throw new PlinthError("EXPORT_FILE_INVALID", 400, `Export file name "${fileName}" does not match this screen's planned output "${planned.exportName}".`, {
         expectedFileName: planned.exportName,
         fileName,
-        documentId: input.documentId,
+        screenId: input.screenId,
       });
     }
     if (!Number.isInteger(input.width) || !Number.isInteger(input.height)) {
@@ -530,8 +533,10 @@ export class ProjectStorage {
     }
 
     return {
-      documentId: planned.documentId,
-      documentName: planned.documentName,
+      deckId: planned.deckId,
+      deckName: planned.deckName,
+      screenId: planned.screenId,
+      screenName: planned.screenName,
       fileName,
       relativePath: input.exportRunId ? `${input.exportRunId}/${fileName}` : `exports/${fileName}`,
       absolutePath: filePath,
@@ -560,8 +565,10 @@ export class ProjectStorage {
     const decoded = decodePngDimensions(bytes);
     assertExportDimensions(decoded, planned);
     return {
-      documentId: planned.documentId,
-      documentName: planned.documentName,
+      deckId: planned.deckId,
+      deckName: planned.deckName,
+      screenId: planned.screenId,
+      screenName: planned.screenName,
       fileName,
       relativePath: `exports/${fileName}`,
       absolutePath: filePath,
@@ -596,7 +603,8 @@ export class ProjectStorage {
           id: project.id,
           name: project.name,
           description: project.description,
-          documentCount: project.documents.length,
+          deckCount: project.decks.length,
+          screenCount: project.decks.reduce((count, deck) => count + deck.screens.length, 0),
           createdAt: project.createdAt,
           updatedAt: project.updatedAt,
           valid: true,
@@ -608,7 +616,8 @@ export class ProjectStorage {
           id: null,
           name: "Invalid project",
           description: "This project could not be read.",
-          documentCount: 0,
+          deckCount: 0,
+          screenCount: 0,
           createdAt: null,
           updatedAt: fileStats?.mtime.toISOString() ?? null,
           valid: false,
@@ -665,11 +674,19 @@ export class ProjectStorage {
     const source = await this.loadProject(slug);
     const targetSlug = assertProjectSlug(newSlug);
     const now = nowIso();
-    const documents: Document[] = source.documents.map((document, index) => ({
-      ...document,
-      id: createId("doc"),
-      slug: `${slugify(document.name)}-${index + 1}`,
-      elements: document.elements.map((element: SceneElement) => ({ ...element, id: createId(element.type) })),
+    const decks = source.decks.map((deck, deckIndex) => ({
+      ...deck,
+      id: createId("deck"),
+      slug: `${slugify(deck.name)}-${deckIndex + 1}`,
+      screens: deck.screens.map((screen, screenIndex) => ({
+        ...screen,
+        id: createId("screen"),
+        slug: `${slugify(screen.name)}-${deckIndex + 1}-${screenIndex + 1}`,
+        exportSlug: `${slugify(screen.name)}-${deckIndex + 1}-${screenIndex + 1}`,
+        elements: screen.elements.map((element: SceneElement) => ({ ...element, id: createId(element.type) })),
+        createdAt: now,
+        updatedAt: now,
+      })),
       createdAt: now,
       updatedAt: now,
     }));
@@ -678,7 +695,7 @@ export class ProjectStorage {
       id: createId("project"),
       slug: targetSlug,
       name: name?.trim() || `${source.name} copy`,
-      documents,
+      decks,
       createdAt: now,
       updatedAt: now,
     };
@@ -693,10 +710,15 @@ export class ProjectStorage {
     }
   }
 
-  async addDocument(slug: string, preset: Parameters<typeof createDocumentPreset>[0], name?: string, options: Pick<AddDocumentOptions, "width" | "height"> = {}): Promise<Project> {
+  async addDeck(slug: string, options: AddDeckOptions): Promise<Project> {
     const project = await this.loadProject(slug);
-    const documentName = name?.trim() || `${preset[0]?.toUpperCase() ?? "D"}${preset.slice(1)} composition`;
-    return this.saveProject(addSceneDocument(project, preset, { ...options, name: documentName }));
+    return this.saveProject(addSceneDeck(project, options));
+  }
+
+  async addScreen(slug: string, deckId: string, preset: ScreenPreset, name?: string, options: AddScreenOptions = {}): Promise<Project> {
+    const project = await this.loadProject(slug);
+    const screenName = name?.trim() || `${preset[0]?.toUpperCase() ?? "S"}${preset.slice(1)} screen`;
+    return this.saveProject(addSceneScreen(project, deckId, preset, { ...options, name: screenName }));
   }
 
   private async createProjectFromValue(project: Project): Promise<Project> {

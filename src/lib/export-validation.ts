@@ -1,5 +1,5 @@
 import { PlinthError } from "./errors";
-import type { Document, Project } from "./schema";
+import type { Project, Screen } from "./schema";
 
 /** Keep a browser-generated export bounded before it reaches disk. */
 export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
@@ -13,8 +13,10 @@ export type PngDimensions = {
 };
 
 export type ExportPlanItem = PngDimensions & {
-  documentId: string;
-  documentName: string;
+  deckId: string;
+  deckName: string;
+  screenId: string;
+  screenName: string;
   exportName: string;
 };
 
@@ -121,35 +123,39 @@ export function assertExportFileName(fileName: string): string {
   return fileName;
 }
 
-export function exportFileName(document: Pick<Document, "exportSlug">, index: number): string {
+export function exportFileName(screen: Pick<Screen, "exportSlug">, index: number): string {
   if (!Number.isInteger(index) || index < 0) {
-    throw new PlinthError("EXPORT_FILE_INVALID", 400, "Export document index must be a non-negative integer.", { index });
+    throw new PlinthError("EXPORT_FILE_INVALID", 400, "Export screen index must be a non-negative integer.", { index });
   }
   const number = String(index + 1).padStart(2, "0");
-  return assertExportFileName(`${number}-${document.exportSlug}.png`);
+  return assertExportFileName(`${number}-${screen.exportSlug}.png`);
 }
 
 export function buildExportPlan(project: Project): ExportPlanItem[] {
   const names = new Set<string>();
-  return project.documents.map((document, index) => {
-    const exportName = exportFileName(document, index);
+  let index = 0;
+  return project.decks.flatMap((deck) => deck.screens.map((screen) => {
+    const exportName = exportFileName(screen, index);
+    index += 1;
     if (names.has(exportName)) {
-      throw new PlinthError("EXPORT_FILE_INVALID", 422, `Documents produce the duplicate export name "${exportName}". Rename the affected document slugs before exporting.`, { exportName });
+      throw new PlinthError("EXPORT_FILE_INVALID", 422, `Screens produce the duplicate export name "${exportName}". Rename the affected screen export slugs before exporting.`, { exportName });
     }
     names.add(exportName);
     return {
-      documentId: document.id,
-      documentName: document.name,
+      deckId: deck.id,
+      deckName: deck.name,
+      screenId: screen.id,
+      screenName: screen.name,
       exportName,
-      width: document.width,
-      height: document.height,
+      width: deck.width,
+      height: deck.height,
     };
-  });
+  }));
 }
 
 export function assertExportDimensions(actual: PngDimensions, expected: PngDimensions): void {
   if (actual.width !== expected.width || actual.height !== expected.height) {
-    throw new PlinthError("EXPORT_DIMENSION_MISMATCH", 422, `PNG dimensions ${actual.width}×${actual.height} do not match the document's required ${expected.width}×${expected.height}.`, {
+    throw new PlinthError("EXPORT_DIMENSION_MISMATCH", 422, `PNG dimensions ${actual.width}×${actual.height} do not match the screen's required ${expected.width}×${expected.height}.`, {
       actual,
       expected,
     });

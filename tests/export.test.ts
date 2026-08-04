@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { deflateSync } from "node:zlib";
 import { apiAction, handleCreateExport, handleCreateExportRun, handleGetExport, handleListExports } from "../src/lib/api";
-import { createDocumentPreset } from "../src/lib/defaults";
+import { createDeckPreset } from "../src/lib/defaults";
 import { buildExportPlan, decodePngDimensions, exportFileName, assertExportFileName } from "../src/lib/export-validation";
 import { ProjectStorage } from "../src/lib/storage";
 
@@ -65,9 +65,10 @@ afterEach(async () => {
 
 describe("export naming and PNG validation", () => {
   test("creates deterministic safe names from the export slug", () => {
-    const document = createDocumentPreset("custom", { name: "Home screen", slug: "internal-id", exportSlug: "home" });
-    expect(exportFileName(document, 0)).toBe("01-home.png");
-    expect(exportFileName(document, 11)).toBe("12-home.png");
+    const screen = createDeckPreset("custom", { name: "Export deck", screenName: "Home screen", screenSlug: "internal-id", screenExportSlug: "home" }).screens[0];
+    if (!screen) throw new Error("Missing screen");
+    expect(exportFileName(screen, 0)).toBe("01-home.png");
+    expect(exportFileName(screen, 11)).toBe("12-home.png");
     expect(assertExportFileName("02-speak.png")).toBe("02-speak.png");
     expect(() => assertExportFileName("../escape.png")).toThrow(/numbered/);
     expect(() => assertExportFileName("home.png")).toThrow(/numbered/);
@@ -89,17 +90,19 @@ describe("export API and storage", () => {
     const exportRoot = join(storage.rootDir, "configured-output");
     await mkdir(exportRoot, { recursive: true });
     const created = await storage.createProject({ name: "Configured export", slug: "configured-export", description: "Folder export" });
-    const document = createDocumentPreset("custom", {
-      id: "doc_configured",
-      name: "Configured document",
-      exportSlug: "configured",
+    const deck = createDeckPreset("custom", {
+      id: "deck_configured",
+      name: "Configured deck",
+      screenName: "Configured screen",
+      screenSlug: "configured-screen",
+      screenExportSlug: "configured",
       width: 320,
       height: 240,
     });
     await storage.saveProject({
       ...created,
       settings: { ...created.settings, exportDirectory: exportRoot },
-      documents: [document],
+      decks: [deck],
     });
 
     const runResponse = await handleCreateExportRun(new Request("http://plinth.test/api/projects/configured-export/export-runs", { method: "POST" }), storage);
@@ -109,7 +112,7 @@ describe("export API and storage", () => {
     expect(runPayload.data.exportRun.absolutePath).toBe(join(await realpath(exportRoot), runPayload.data.exportRun.id));
 
     const form = new FormData();
-    form.append("metadata", JSON.stringify({ documentId: document.id, fileName: "01-configured.png", width: 320, height: 240, exportRunId: runPayload.data.exportRun.id }));
+    form.append("metadata", JSON.stringify({ screenId: deck.screens[0]?.id, fileName: "01-configured.png", width: 320, height: 240, exportRunId: runPayload.data.exportRun.id }));
     form.append("file", fixtureFile(pngFixture(320, 240), "01-configured.png"), "01-configured.png");
     const response = await handleCreateExport(new Request("http://plinth.test/api/projects/configured-export/exports", { method: "POST", body: form }), storage);
     expect(response.status).toBe(201);
@@ -136,20 +139,37 @@ describe("export API and storage", () => {
   test("validates membership, metadata, dimensions, signature, and atomic persistence", async () => {
     const storage = await temporaryStorage();
     const created = await storage.createProject({ name: "Export fixture", slug: "export-fixture", description: "PNG export" });
-    const document = createDocumentPreset("custom", {
-      id: "doc_home",
-      name: "Home screen",
-      slug: "internal-home",
-      exportSlug: "home",
+    const deck = createDeckPreset("custom", {
+      id: "deck_home",
+      name: "Home deck",
+      screenName: "Home screen",
+      screenSlug: "internal-home",
+      screenExportSlug: "home",
       width: 640,
       height: 480,
     });
-    const project = await storage.saveProject({ ...created, documents: [document] });
+    const homeScreen = deck.screens[0];
+    if (!homeScreen) throw new Error("Missing home screen");
+    const secondDeck = createDeckPreset("custom", {
+      id: "deck_other",
+      name: "Other deck",
+      screenName: "Other screen",
+      screenSlug: "other-screen",
+      screenExportSlug: "other",
+      width: 320,
+      height: 240,
+    });
+    const otherScreen = secondDeck.screens[0];
+    if (!otherScreen) throw new Error("Missing other screen");
+    const project = await storage.saveProject({ ...created, decks: [deck, secondDeck] });
     const plan = buildExportPlan(project);
-    expect(plan).toEqual([{ documentId: "doc_home", documentName: "Home screen", exportName: "01-home.png", width: 640, height: 480 }]);
+    expect(plan).toEqual([
+      { deckId: "deck_home", deckName: "Home deck", screenId: homeScreen.id, screenName: "Home screen", exportName: "01-home.png", width: 640, height: 480 },
+      { deckId: "deck_other", deckName: "Other deck", screenId: otherScreen.id, screenName: "Other screen", exportName: "02-other.png", width: 320, height: 240 },
+    ]);
 
     const form = new FormData();
-    form.append("metadata", JSON.stringify({ documentId: "doc_home", fileName: "01-home.png", width: 640, height: 480 }));
+    form.append("metadata", JSON.stringify({ screenId: homeScreen.id, fileName: "01-home.png", width: 640, height: 480 }));
     form.append("file", fixtureFile(pngFixture(640, 480), "01-home.png"), "01-home.png");
     const response = await handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: form }), storage);
     expect(response.status).toBe(201);
@@ -158,7 +178,9 @@ describe("export API and storage", () => {
     expect(Array.from(await readFile(storage.exportFilePath("export-fixture", "01-home.png")))).toEqual(Array.from(pngFixture(640, 480)));
 
     const listed = await handleListExports(new Request("http://plinth.test/api/projects/export-fixture/exports"), storage);
-    expect(await listed.json()).toMatchObject({ data: { exports: [{ exportName: "01-home.png", documentId: "doc_home" }] } });
+    const listedPayload = await listed.json() as { data: { exports: Array<Record<string, unknown>> } };
+    expect(listedPayload.data.exports).toHaveLength(2);
+    expect(listedPayload.data.exports[0]).toMatchObject({ exportName: "01-home.png", screenId: homeScreen.id, deckId: "deck_home", deckName: "Home deck", screenName: "Home screen", width: 640, height: 480 });
 
     const downloaded = await handleGetExport(new Request("http://plinth.test/api/projects/export-fixture/exports/01-home.png"), storage);
     expect(downloaded.status).toBe(200);
@@ -166,35 +188,35 @@ describe("export API and storage", () => {
     expect(Array.from(new Uint8Array(await downloaded.arrayBuffer()))).toEqual(Array.from(pngFixture(640, 480)));
 
     const invalidName = new FormData();
-    invalidName.append("metadata", JSON.stringify({ documentId: "doc_home", fileName: "../escape.png", width: 640, height: 480 }));
+    invalidName.append("metadata", JSON.stringify({ screenId: homeScreen.id, fileName: "../escape.png", width: 640, height: 480 }));
     invalidName.append("file", fixtureFile(pngFixture(640, 480), "escape.png"), "escape.png");
     const invalidNameResponse = await apiAction(() => handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: invalidName }), storage));
     expect(invalidNameResponse.status).toBe(400);
     expect(await invalidNameResponse.json()).toMatchObject({ error: { code: "EXPORT_FILE_INVALID" } });
 
     const mismatchedUpload = new FormData();
-    mismatchedUpload.append("metadata", JSON.stringify({ documentId: "doc_home", fileName: "01-home.png", width: 640, height: 480 }));
+    mismatchedUpload.append("metadata", JSON.stringify({ screenId: homeScreen.id, fileName: "01-home.png", width: 640, height: 480 }));
     mismatchedUpload.append("file", fixtureFile(pngFixture(640, 480), "renamed.png"), "renamed.png");
     const mismatchedUploadResponse = await apiAction(() => handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: mismatchedUpload }), storage));
     expect(mismatchedUploadResponse.status).toBe(400);
     expect(await mismatchedUploadResponse.json()).toMatchObject({ error: { code: "EXPORT_FILE_INVALID" } });
 
     const wrongDimensions = new FormData();
-    wrongDimensions.append("metadata", JSON.stringify({ documentId: "doc_home", fileName: "01-home.png", width: 640, height: 480 }));
+    wrongDimensions.append("metadata", JSON.stringify({ screenId: homeScreen.id, fileName: "01-home.png", width: 640, height: 480 }));
     wrongDimensions.append("file", fixtureFile(pngFixture(320, 240), "01-home.png"), "01-home.png");
     const wrongDimensionsResponse = await apiAction(() => handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: wrongDimensions }), storage));
     expect(wrongDimensionsResponse.status).toBe(422);
     expect(await wrongDimensionsResponse.json()).toMatchObject({ error: { code: "EXPORT_DIMENSION_MISMATCH" } });
 
     const wrongDocument = new FormData();
-    wrongDocument.append("metadata", JSON.stringify({ documentId: "missing", fileName: "01-home.png", width: 640, height: 480 }));
+    wrongDocument.append("metadata", JSON.stringify({ screenId: "missing", fileName: "01-home.png", width: 640, height: 480 }));
     wrongDocument.append("file", fixtureFile(pngFixture(640, 480), "01-home.png"), "01-home.png");
     const wrongDocumentResponse = await apiAction(() => handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: wrongDocument }), storage));
     expect(wrongDocumentResponse.status).toBe(404);
-    expect(await wrongDocumentResponse.json()).toMatchObject({ error: { code: "EXPORT_DOCUMENT_NOT_FOUND" } });
+    expect(await wrongDocumentResponse.json()).toMatchObject({ error: { code: "EXPORT_SCREEN_NOT_FOUND" } });
 
     const invalidPng = new FormData();
-    invalidPng.append("metadata", JSON.stringify({ documentId: "doc_home", fileName: "01-home.png", width: 640, height: 480 }));
+    invalidPng.append("metadata", JSON.stringify({ screenId: homeScreen.id, fileName: "01-home.png", width: 640, height: 480 }));
     invalidPng.append("file", fixtureFile(new TextEncoder().encode("not png"), "01-home.png"), "01-home.png");
     const invalidPngResponse = await apiAction(() => handleCreateExport(new Request("http://plinth.test/api/projects/export-fixture/exports", { method: "POST", body: invalidPng }), storage));
     expect(invalidPngResponse.status).toBe(422);

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { apiAction, handleDeleteAsset, handleGetAsset, handleListAssets, handleUploadAsset } from "../src/lib/api";
 import { deriveAssetFileName, assertAssetPath, assetPathForFileName, MAX_ASSET_BYTES, validateImageBytes } from "../src/lib/asset-validation";
-import { createDocumentPreset } from "../src/lib/defaults";
+import { createScreenPreset } from "../src/lib/defaults";
 import { addElement } from "../src/scene/operations";
 import { calculateDeviceScreenGeometry, calculateImageFitGeometry, thumbnailSize } from "../src/devices/geometry";
 import { getDevicePreset } from "../src/devices/presets";
@@ -122,7 +122,7 @@ describe("asset validation and geometry", () => {
 describe("asset storage and API", () => {
   test("merges a completed asset mutation into a newer local scene snapshot", async () => {
     const project = await (await temporaryStorage()).createProject({ name: "Merge fixture", slug: "merge-fixture", description: "Asset merge" });
-    const latest = { ...project, documents: project.documents.map((document) => ({ ...document, notes: "edited while uploading" })) };
+    const latest = { ...project, decks: project.decks.map((deck) => ({ ...deck, screens: deck.screens.map((screen) => ({ ...screen, notes: "edited while uploading" })) })) };
     const asset: AssetMetadata = {
       id: "asset_merge",
       kind: "image",
@@ -135,7 +135,7 @@ describe("asset storage and API", () => {
     };
     const server = { ...project, assets: [asset] };
     const merged = mergeAssetMutationProject(latest, server, true);
-    expect(merged.documents[0]?.notes).toBe("edited while uploading");
+    expect(merged.decks[0]?.screens[0]?.notes).toBe("edited while uploading");
     expect(merged.assets).toEqual([asset]);
     expect(mergeAssetMutationProject(latest, server, false)).toBe(server);
   });
@@ -143,8 +143,8 @@ describe("asset storage and API", () => {
   test("flushes an immediately unsaved scene mutation before upload and delete", async () => {
     const storage = await temporaryStorage();
     const initial = await storage.createProject({ name: "Mutation queue", slug: "mutation-queue", description: "Queue fixture" });
-    const documentId = initial.documents[0]?.id;
-    if (!documentId) throw new Error("Missing starter document");
+    const screenId = initial.decks[0]?.screens[0]?.id;
+    if (!screenId) throw new Error("Missing starter screen");
     const unsavedShape = {
       id: "unsaved-before-upload",
       type: "shape" as const,
@@ -165,14 +165,14 @@ describe("asset storage and API", () => {
       strokeWidth: 1,
       radius: 18,
     };
-    let current = addElement(initial, documentId, unsavedShape);
+    let current = addElement(initial, screenId, unsavedShape);
     const queue = createAssetMutationQueue();
     const flushCurrentProject = async () => {
       current = await storage.saveProject(current);
     };
 
     const uploaded = await queue(flushCurrentProject, () => storage.ingestAsset("mutation-queue", fixtureFile(pngFixture(16, 12), "queued.png", "image/png")));
-    expect(uploaded.project.documents[0]?.elements.some((element) => element.id === unsavedShape.id)).toBe(true);
+    expect(uploaded.project.decks[0]?.screens[0]?.elements.some((element) => element.id === unsavedShape.id)).toBe(true);
 
     const unsavedBeforeDelete = {
       ...unsavedShape,
@@ -180,10 +180,10 @@ describe("asset storage and API", () => {
       name: "Unsaved before delete",
       x: 320,
     };
-    current = addElement(uploaded.project, documentId, unsavedBeforeDelete);
+    current = addElement(uploaded.project, screenId, unsavedBeforeDelete);
     const deleted = await queue(flushCurrentProject, () => storage.deleteAsset("mutation-queue", uploaded.asset.path, true));
-    expect(deleted.project.documents[0]?.elements.some((element) => element.id === unsavedShape.id)).toBe(true);
-    expect(deleted.project.documents[0]?.elements.some((element) => element.id === unsavedBeforeDelete.id)).toBe(true);
+    expect(deleted.project.decks[0]?.screens[0]?.elements.some((element) => element.id === unsavedShape.id)).toBe(true);
+    expect(deleted.project.decks[0]?.screens[0]?.elements.some((element) => element.id === unsavedBeforeDelete.id)).toBe(true);
   });
 
   test("uploads, de-duplicates, lists, serves, and protects referenced deletion", async () => {
@@ -204,7 +204,7 @@ describe("asset storage and API", () => {
     const legacyDuplicate = await storage.ingestAsset("assets", fixtureFile(bytes, "Legacy-name.png", "image/png"));
     expect(legacyDuplicate.duplicate).toBe(true);
 
-    const document = createDocumentPreset("blank", { id: "doc_asset", name: "Asset document" });
+    const screen = createScreenPreset("blank", { id: "screen_asset", name: "Asset screen" });
     const image = {
       id: "image_asset",
       type: "image" as const,
@@ -225,9 +225,11 @@ describe("asset storage and API", () => {
       cornerRadius: 12,
       alt: "Placed asset",
     };
-    const baseProject = { ...legacyDuplicate.project, documents: [document] };
-    const project = await storage.saveProject({ ...baseProject, documents: [addElement(baseProject, "doc_asset", image).documents[0]!] });
-    expect(project.documents[0]?.elements[0]?.type).toBe("image");
+    const baseDeck = legacyDuplicate.project.decks[0];
+    if (!baseDeck) throw new Error("Missing starter deck");
+    const baseProject = { ...legacyDuplicate.project, decks: [{ ...baseDeck, screens: [screen] }] };
+    const project = await storage.saveProject(addElement(baseProject, "screen_asset", image));
+    expect(project.decks[0]?.screens[0]?.elements[0]?.type).toBe("image");
     await expect(storage.deleteAsset("assets", first.asset.path)).rejects.toMatchObject({ code: "ASSET_IN_USE" });
     const forced = await storage.deleteAsset("assets", first.asset.path, true);
     expect(forced.project.assets).toHaveLength(0);

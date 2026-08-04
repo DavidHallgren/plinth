@@ -21,7 +21,9 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AssetMetadata, Document, SceneElement } from "../../lib/schema";
+import type { AssetMetadata, SceneElement } from "../../lib/schema";
+import type { ResolvedScreen } from "../../scene/selectors";
+type Document = ResolvedScreen;
 import { selectSortedLayers } from "../../scene/selectors";
 import { DocumentThumbnail } from "../editor/document-thumbnail";
 import { Button } from "../ui/button";
@@ -85,11 +87,11 @@ export function DocumentNavigator({
       <section className="border-b border-white/[0.08] p-3">
         <div className="flex items-center justify-between gap-2">
           <button className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted hover:text-ink" onClick={() => setDocumentsOpen((open) => !open)} type="button">
-            {documentsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Documents
+            {documentsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Screens
           </button>
           <div className="flex items-center gap-0.5">
-            <Button aria-label="Preview all documents" onClick={onOpenPreview} size="icon" tooltip="Preview all documents" variant={previewMode ? "secondary" : "ghost"}><Columns3 size={15} /></Button>
-            <Button aria-label="Add document" onClick={onAddDocument} size="icon" tooltip="Add document" variant="ghost"><FilePlus2 size={15} /></Button>
+            <Button aria-label="Preview all screens" onClick={onOpenPreview} size="icon" tooltip="Preview all screens" variant={previewMode ? "secondary" : "ghost"}><Columns3 size={15} /></Button>
+            <Button aria-label="Add screen" onClick={onAddDocument} size="icon" tooltip="Add screen" variant="ghost"><FilePlus2 size={15} /></Button>
           </div>
         </div>
         {documentsOpen ? (

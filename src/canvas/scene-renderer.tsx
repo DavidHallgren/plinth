@@ -2,13 +2,16 @@ import type Konva from "konva";
 import type { ReactNode } from "react";
 import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import type { AssetMetadata, Document, GradientStop, SceneElement } from "../lib/schema";
+import type { AssetMetadata, GradientStop, SceneElement } from "../lib/schema";
 import { getDevicePreset } from "../devices/presets";
 import { deviceFrameSource } from "../devices/frame-assets";
 import { calculateDeviceScreenGeometry } from "../devices/geometry";
 import { AssetImageLayer, useLoadedImage } from "./image-loading";
 import { konvaFontStyle } from "./text-style";
 import { calculateTextAutoHeight } from "../scene/text-geometry";
+import type { ResolvedScreen } from "../scene/selectors";
+
+type Document = ResolvedScreen;
 
 export type SceneRendererProps = {
   document: Document;

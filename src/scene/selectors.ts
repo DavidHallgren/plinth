@@ -1,4 +1,11 @@
-import type { Document, Project, SceneElement } from "../lib/schema";
+import type { Deck, Project, SceneElement, Screen } from "../lib/schema";
+
+export type ResolvedScreen = Screen & {
+  deckId: string;
+  deckName: string;
+  width: number;
+  height: number;
+};
 
 export function sortLayerElements(elements: SceneElement[]): SceneElement[] {
   return elements
@@ -6,29 +13,58 @@ export function sortLayerElements(elements: SceneElement[]): SceneElement[] {
     .sort((left, right) => left.element.zIndex - right.element.zIndex || left.index - right.index)
     .map(({ element }) => element);
 }
-
-export function selectActiveDocument(project: Project, documentId: string | null | undefined): Document {
-  return project.documents.find((document) => document.id === documentId) ?? project.documents[0] as Document;
+export function selectActiveDeck(project: Project, deckId: string | null | undefined): Deck {
+  return project.decks.find((deck) => deck.id === deckId) ?? project.decks[0] as Deck;
 }
 
-export function selectSelectedElements(document: Document, selectedIds: readonly string[]): SceneElement[] {
+export function selectScreenWithDeck(project: Project, screenId: string | null | undefined): { deck: Deck; screen: Screen } | undefined {
+  if (!screenId) return undefined;
+  for (const deck of project.decks) {
+    const screen = deck.screens.find((candidate) => candidate.id === screenId);
+    if (screen) return { deck, screen };
+  }
+  return undefined;
+}
+
+export function selectActiveScreen(project: Project, deckId: string | null | undefined, screenId?: string | null): Screen {
+  const deck = selectActiveDeck(project, deckId);
+  return deck.screens.find((screen) => screen.id === screenId) ?? deck.screens[0] as Screen;
+}
+
+export function resolveScreen(project: Project, screenId: string | null | undefined): ResolvedScreen {
+  const selected = selectScreenWithDeck(project, screenId) ?? {
+    deck: project.decks[0] as Deck,
+    screen: project.decks[0]?.screens[0] as Screen,
+  };
+  return {
+    ...selected.screen,
+    deckId: selected.deck.id,
+    deckName: selected.deck.name,
+    width: selected.deck.width,
+    height: selected.deck.height,
+  };
+}
+
+export function selectSelectedElements(screen: Screen, selectedIds: readonly string[]): SceneElement[] {
   const selected = new Set(selectedIds);
-  return document.elements.filter((element) => selected.has(element.id));
+  return screen.elements.filter((element) => selected.has(element.id));
 }
 
-export function selectSortedLayers(document: Document): SceneElement[] {
-  return sortLayerElements(document.elements);
+export function selectSortedLayers(screen: Screen): SceneElement[] {
+  return sortLayerElements(screen.elements);
 }
 
 export function normalizeLayerOrder(elements: SceneElement[]): SceneElement[] {
   return sortLayerElements(elements).map((element, index) => ({ ...element, zIndex: index }));
 }
 
-export function selectAssetReferences(project: Project, documentId?: string): Map<string, number> {
-  const documents = documentId ? project.documents.filter((document) => document.id === documentId) : project.documents;
+export function selectAssetReferences(project: Project, screenId?: string): Map<string, number> {
+  const screens = screenId
+    ? project.decks.flatMap((deck) => deck.screens.filter((screen) => screen.id === screenId))
+    : project.decks.flatMap((deck) => deck.screens);
   const references = new Map<string, number>();
-  for (const document of documents) {
-    for (const element of document.elements) {
+  for (const screen of screens) {
+    for (const element of screen.elements) {
       const assetPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
       if (!assetPath) continue;
       references.set(assetPath, (references.get(assetPath) ?? 0) + 1);
@@ -38,8 +74,10 @@ export function selectAssetReferences(project: Project, documentId?: string): Ma
 }
 
 export type AssetUsage = {
-  documentId: string;
-  documentName: string;
+  deckId: string;
+  deckName: string;
+  screenId: string;
+  screenName: string;
   elementId: string;
   elementName: string;
   elementType: "image" | "device";
@@ -47,22 +85,26 @@ export type AssetUsage = {
 
 export function selectAssetUsages(project: Project, assetPath: string): AssetUsage[] {
   const usages: AssetUsage[] = [];
-  for (const document of project.documents) {
-    for (const element of document.elements) {
-      const referencedPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
-      if (referencedPath !== assetPath || (element.type !== "image" && element.type !== "device")) continue;
-      usages.push({
-        documentId: document.id,
-        documentName: document.name,
-        elementId: element.id,
-        elementName: element.name,
-        elementType: element.type,
-      });
+  for (const deck of project.decks) {
+    for (const screen of deck.screens) {
+      for (const element of screen.elements) {
+        const referencedPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
+        if (referencedPath !== assetPath || (element.type !== "image" && element.type !== "device")) continue;
+        usages.push({
+          deckId: deck.id,
+          deckName: deck.name,
+          screenId: screen.id,
+          screenName: screen.name,
+          elementId: element.id,
+          elementName: element.name,
+          elementType: element.type,
+        });
+      }
     }
   }
   return usages;
 }
 
-export function selectElementById(document: Document, elementId: string | null | undefined): SceneElement | undefined {
-  return elementId ? document.elements.find((element) => element.id === elementId) : undefined;
+export function selectElementById(screen: Screen, elementId: string | null | undefined): SceneElement | undefined {
+  return elementId ? screen.elements.find((element) => element.id === elementId) : undefined;
 }

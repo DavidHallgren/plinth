@@ -32,9 +32,11 @@ bun run tool help  # Show CLI commands
 
 Projects are stored under `data/projects/<slug>/` with a human-readable `project.json`, an `assets/` directory, and generated `exports/`. Image data is never embedded in project JSON.
 
+Each project contains ordered decks. A deck chooses its immutable pixel width and height at creation, and contains one or more ordered screens. A screen stores editable background, layers, notes, and export identity; its render and export dimensions are always resolved from the containing deck. The current editor can work on the active deck while the deck-level canvas and overflow-link workflow are developed in a later stage.
+
 ## Export
 
-Use the Export dialog to export the current document or every document. PNGs can be downloaded through the browser or written to a configured local folder.
+Use the Export dialog to export the current screen or every screen. PNGs can be downloaded through the browser or written to a configured local folder. Screens inherit their fixed dimensions from the deck that contains them.
 
 ## CLI
 

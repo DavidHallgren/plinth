@@ -1,20 +1,23 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 5 as const;
+export const CURRENT_SCHEMA_VERSION = 6 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
 const TimestampSchema = z.string().datetime({ offset: true });
-const DimensionSchema = z.number().int().positive().max(100_000);
-export const DocumentSlugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(96);
+export const DimensionSchema = z.number().int().positive().max(100_000);
+export const DeckSlugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(96);
+export const ScreenSlugSchema = DeckSlugSchema;
+/** @deprecated Use ScreenSlugSchema. */
+export const DocumentSlugSchema = ScreenSlugSchema;
 export const AssetPathSchema = z.string().regex(/^assets\/[a-z0-9][a-z0-9._-]{0,254}$/);
 export type AssetPath = z.infer<typeof AssetPathSchema>;
 export const ImageFitSchema = z.enum(["contain", "cover", "stretch"]);
 export type ImageFit = z.infer<typeof ImageFitSchema>;
 export const AssetMimeTypeSchema = z.enum(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 
-export const DocumentPresetSchema = z.enum([
+export const ScreenPresetSchema = z.enum([
   "iphone-6-9",
   "iphone-6-7",
   "iphone-6-5",
@@ -28,8 +31,14 @@ export const DocumentPresetSchema = z.enum([
   "phone",
   "social",
 ]);
-export type DocumentPreset = z.infer<typeof DocumentPresetSchema>;
-export type AppStoreDocumentPreset = (typeof APP_STORE_PRESETS)[number]["id"];
+export type ScreenPreset = z.infer<typeof ScreenPresetSchema>;
+export type AppStoreScreenPreset = (typeof APP_STORE_PRESETS)[number]["id"];
+/** @deprecated Use ScreenPresetSchema. */
+export const DocumentPresetSchema = ScreenPresetSchema;
+/** @deprecated Use ScreenPreset. */
+export type DocumentPreset = ScreenPreset;
+/** @deprecated Use AppStoreScreenPreset. */
+export type AppStoreDocumentPreset = AppStoreScreenPreset;
 
 export const ShadowSchema = z
   .object({
@@ -220,7 +229,7 @@ export const SettingsSchema = z
   .object({
     autosave: z.boolean(),
     autosaveDelayMs: z.number().int().min(100).max(60_000),
-    defaultDocumentPreset: DocumentPresetSchema,
+    defaultScreenPreset: ScreenPresetSchema,
     exportDirectory: z.string().trim().max(4096).nullable(),
     grid: z
       .object({
@@ -233,15 +242,13 @@ export const SettingsSchema = z
   .strict();
 export type Settings = z.infer<typeof SettingsSchema>;
 
-export const DocumentSchema = z
+export const ScreenSchema = z
   .object({
     id: IdSchema,
     slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(96),
-    exportSlug: DocumentSlugSchema,
+    exportSlug: ScreenSlugSchema,
     name: z.string().trim().min(1).max(120),
-    preset: DocumentPresetSchema,
-    width: DimensionSchema,
-    height: DimensionSchema,
+    preset: ScreenPresetSchema,
     background: BackgroundSchema,
     elements: z.array(SceneElementSchema),
     notes: z.string().max(10_000),
@@ -249,9 +256,9 @@ export const DocumentSchema = z
     updatedAt: TimestampSchema,
   })
   .strict()
-  .superRefine((document, context) => {
+  .superRefine((screen, context) => {
     const seen = new Set<number>();
-    document.elements.forEach((element, index) => {
+    screen.elements.forEach((element, index) => {
       if (seen.has(element.zIndex)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -262,7 +269,21 @@ export const DocumentSchema = z
       seen.add(element.zIndex);
     });
   });
-export type Document = z.infer<typeof DocumentSchema>;
+export type Screen = z.infer<typeof ScreenSchema>;
+
+export const DeckSchema = z
+  .object({
+    id: IdSchema,
+    slug: DeckSlugSchema,
+    name: z.string().trim().min(1).max(120),
+    width: DimensionSchema,
+    height: DimensionSchema,
+    screens: z.array(ScreenSchema).min(1),
+    createdAt: TimestampSchema,
+    updatedAt: TimestampSchema,
+  })
+  .strict();
+export type Deck = z.infer<typeof DeckSchema>;
 
 const ProjectBaseSchema = z
   .object({
@@ -274,7 +295,7 @@ const ProjectBaseSchema = z
     settings: SettingsSchema,
     background: BackgroundSchema,
     assets: z.array(AssetMetadataSchema),
-    documents: z.array(DocumentSchema).min(1),
+    decks: z.array(DeckSchema).min(1),
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
   })
@@ -315,18 +336,52 @@ const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) =
       assetPaths.set(asset.path, assetIndex);
     }
   });
-  project.documents.forEach((document, documentIndex) => {
-    checkIdentity(document.id, "document", ["documents", documentIndex, "id"]);
-    document.elements.forEach((element, elementIndex) => checkIdentity(
+  const deckSlugs = new Map<string, number>();
+  const screenSlugs = new Map<string, Array<string | number>>();
+  const screenExportSlugs = new Map<string, Array<string | number>>();
+
+  function checkUniqueValue(
+    values: Map<string, Array<string | number> | number>,
+    value: string,
+    namespace: string,
+    path: Array<string | number>,
+  ): void {
+    if (values.has(value)) {
+      const previous = values.get(value);
+      const previousPath = Array.isArray(previous) ? identityPath(previous) : `project.decks[${previous}]`;
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path,
+        message: `Duplicate ${namespace} "${value}"; already used at ${previousPath}. Project-owned ${namespace}s must be unique.`,
+      });
+      return;
+    }
+    values.set(value, path);
+  }
+
+  project.decks.forEach((deck, deckIndex) => {
+    checkIdentity(deck.id, "deck", ["decks", deckIndex, "id"]);
+    checkUniqueValue(deckSlugs, deck.slug, "deck slug", ["decks", deckIndex, "slug"]);
+    deck.screens.forEach((screen, screenIndex) => {
+      checkIdentity(screen.id, "screen", ["decks", deckIndex, "screens", screenIndex, "id"]);
+      checkUniqueValue(screenSlugs, screen.slug, "screen slug", ["decks", deckIndex, "screens", screenIndex, "slug"]);
+      checkUniqueValue(screenExportSlugs, screen.exportSlug, "screen export slug", ["decks", deckIndex, "screens", screenIndex, "exportSlug"]);
+      screen.elements.forEach((element, elementIndex) => checkIdentity(
       element.id,
       "scene element",
-      ["documents", documentIndex, "elements", elementIndex, "id"],
-    ));
+        ["decks", deckIndex, "screens", screenIndex, "elements", elementIndex, "id"],
+      ));
+    });
   });
 });
 
 export const ProjectSchema = ProjectIdentitySchema;
 export type Project = z.infer<typeof ProjectSchema>;
+
+/** @deprecated Use ScreenSchema. */
+export const DocumentSchema = ScreenSchema;
+/** @deprecated Use Screen. */
+export type Document = Screen;
 
 export type ProjectInput = Pick<Project, "name" | "description"> &
   Partial<Pick<Project, "slug">>;

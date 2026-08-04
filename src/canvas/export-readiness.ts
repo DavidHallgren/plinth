@@ -1,4 +1,4 @@
-import type { AssetMetadata, Document, Project } from "../lib/schema";
+import type { AssetMetadata, Project, Screen } from "../lib/schema";
 import { deviceFrameSource } from "../devices/frame-assets";
 import { assetUrl } from "./image-loading";
 import { imageResourceState, loadImageResource } from "./image-cache";
@@ -10,27 +10,27 @@ export type SceneReadiness = {
   fontSpecs: string[];
 };
 
-function referencedAssetPaths(sceneDocument: Document): string[] {
+function referencedAssetPaths(sceneScreen: Screen): string[] {
   const paths = new Set<string>();
-  for (const element of sceneDocument.elements) {
+  for (const element of sceneScreen.elements) {
     if (element.type === "image") paths.add(element.assetPath);
     if (element.type === "device" && element.screenshotPath) paths.add(element.screenshotPath);
   }
   return [...paths];
 }
 
-function referencedFontFamilies(sceneDocument: Document): string[] {
+function referencedFontFamilies(sceneScreen: Screen): string[] {
   const families = new Set<string>();
-  for (const element of sceneDocument.elements) {
+  for (const element of sceneScreen.elements) {
     if (element.type === "text") families.add(element.style.fontFamily);
     if (element.type === "device") families.add("Inter, ui-sans-serif, system-ui, sans-serif");
   }
   return [...families];
 }
 
-function referencedBuiltInImageSources(sceneDocument: Document): string[] {
+function referencedBuiltInImageSources(sceneScreen: Screen): string[] {
   const sources = new Set<string>();
-  for (const element of sceneDocument.elements) {
+  for (const element of sceneScreen.elements) {
     if (element.type !== "device" || !element.showCamera) continue;
     const source = deviceFrameSource(element.preset, element.frameColor);
     if (source) sources.add(source);
@@ -38,26 +38,26 @@ function referencedBuiltInImageSources(sceneDocument: Document): string[] {
   return [...sources];
 }
 
-function referencedFontSpecs(sceneDocument: Document): string[] {
+function referencedFontSpecs(sceneScreen: Screen): string[] {
   const specs = new Set<string>(["400 16px Inter, ui-sans-serif, system-ui, sans-serif"]);
-  for (const element of sceneDocument.elements) {
+  for (const element of sceneScreen.elements) {
     if (element.type !== "text") continue;
     specs.add(`${element.style.italic ? "italic " : ""}${element.style.fontWeight} ${element.style.fontSize}px ${element.style.fontFamily}`);
   }
   return [...specs];
 }
 
-export function sceneReadiness(sceneDocument: Document): SceneReadiness {
+export function sceneReadiness(sceneScreen: Screen): SceneReadiness {
   return {
-    assetPaths: referencedAssetPaths(sceneDocument),
-    builtInImageSources: referencedBuiltInImageSources(sceneDocument),
-    fontFamilies: referencedFontFamilies(sceneDocument),
-    fontSpecs: referencedFontSpecs(sceneDocument),
+    assetPaths: referencedAssetPaths(sceneScreen),
+    builtInImageSources: referencedBuiltInImageSources(sceneScreen),
+    fontFamilies: referencedFontFamilies(sceneScreen),
+    fontSpecs: referencedFontSpecs(sceneScreen),
   };
 }
 
-export async function waitForSceneReady(project: Pick<Project, "slug">, sceneDocument: Document, assets: readonly AssetMetadata[]): Promise<void> {
-  const readiness = sceneReadiness(sceneDocument);
+export async function waitForSceneReady(project: Pick<Project, "slug">, sceneScreen: Screen, assets: readonly AssetMetadata[]): Promise<void> {
+  const readiness = sceneReadiness(sceneScreen);
   const missing = readiness.assetPaths.filter((path) => !assets.some((asset) => asset.path === path));
   if (missing.length > 0) {
     throw new Error(`Export cannot start: missing project asset${missing.length === 1 ? "" : "s"} ${missing.join(", ")}. Re-upload or remove the missing asset reference.`);

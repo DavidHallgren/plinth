@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "id": "project_example",
   "slug": "example",
   "name": "Example",
@@ -7,7 +7,7 @@
   "settings": {
     "autosave": true,
     "autosaveDelayMs": 800,
-    "defaultDocumentPreset": "iphone-6-9",
+    "defaultScreenPreset": "iphone-6-9",
     "exportDirectory": null,
     "grid": {
       "enabled": true,
@@ -65,563 +65,590 @@
       "contentHash": "2ca4d006ab51aee58351f150ead124776a54d895f9d80e9ad7f74eb1937e8805"
     }
   ],
-  "documents": [
+  "decks": [
     {
-      "id": "doc_iphone_69",
-      "slug": "example-home",
-      "exportSlug": "example-home",
-      "name": "Example home",
-      "preset": "iphone-6-9",
+      "id": "deck_example_home",
+      "slug": "example-home-deck",
+      "name": "Example home deck",
       "width": 1320,
       "height": 2868,
-      "background": {
-        "type": "linear-gradient",
-        "stops": [
-          {
-            "offset": 0,
-            "color": "#102047"
-          },
-          {
-            "offset": 0.58,
-            "color": "#3158b9"
-          },
-          {
-            "offset": 1,
-            "color": "#b9caff"
-          }
-        ],
-        "start": {
-          "x": 0,
-          "y": 0
-        },
-        "end": {
-          "x": 1,
-          "y": 1
-        }
-      },
-      "elements": [
+      "screens": [
         {
-          "id": "iphone_shape_1",
-          "x": 112,
-          "y": 2409,
-          "width": 1096,
-          "height": 158,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 0,
-          "locked": false,
-          "visible": true,
-          "name": "Decorative surface",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 18,
-            "offsetX": 0,
-            "offsetY": 8,
-            "opacity": 0.12
+          "id": "doc_iphone_69",
+          "slug": "example-home",
+          "exportSlug": "example-home",
+          "name": "Example home",
+          "preset": "iphone-6-9",
+          "background": {
+            "type": "linear-gradient",
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#102047"
+              },
+              {
+                "offset": 0.58,
+                "color": "#3158b9"
+              },
+              {
+                "offset": 1,
+                "color": "#b9caff"
+              }
+            ],
+            "start": {
+              "x": 0,
+              "y": 0
+            },
+            "end": {
+              "x": 1,
+              "y": 1
+            }
           },
-          "type": "shape",
-          "shape": "rounded-rectangle",
-          "fill": "#ffffff",
-          "stroke": "#ffffff",
-          "strokeWidth": 1,
-          "radius": 26
-        },
-        {
-          "id": "iphone_device_2",
-          "x": 357,
-          "y": 975,
-          "width": 607,
-          "height": 1239,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 1,
-          "locked": false,
-          "visible": true,
-          "name": "iPhone 17 Pro Max",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 28,
-            "offsetX": 0,
-            "offsetY": 14,
-            "opacity": 0.24
-          },
-          "type": "device",
-          "preset": "iphone-17-pro-max",
-          "deviceId": "iphone-17-pro-max",
-          "deviceName": "iPhone 17 Pro Max",
-          "frame": "phone",
-          "frameColor": "#182d55",
-          "screenColor": "#f7f8fc",
-          "screenshotPath": "assets/asset_phone.svg",
-          "screenshotFit": "cover",
-          "screenshotPosition": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "bezelStyle": "metallic",
-          "cornerRadius": null,
-          "screenCornerRadius": null,
-          "showGlare": true,
-          "showCamera": true
-        },
-        {
-          "id": "iphone_text_3",
-          "x": 112,
-          "y": 244,
-          "width": 1096,
-          "height": 65,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 2,
-          "locked": false,
-          "visible": true,
-          "name": "Headline",
-          "shadow": null,
-          "type": "text",
-          "text": "Example",
-          "style": {
-            "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 63,
-            "fontWeight": 750,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1.02,
-            "letterSpacing": -3,
-            "color": "#ffffff",
-            "align": "left",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": true
-          }
-        },
-        {
-          "id": "iphone_text_4",
-          "x": 112,
-          "y": 545,
-          "width": 950,
-          "height": 49,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 3,
-          "locked": false,
-          "visible": true,
-          "name": "Subheadline",
-          "shadow": null,
-          "type": "text",
-          "text": "A simple place for your day.",
-          "style": {
-            "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 36,
-            "fontWeight": 500,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1.35,
-            "letterSpacing": 0,
-            "color": "#e7ecff",
-            "align": "left",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": true
-          }
-        },
-        {
-          "id": "doc_iphone_69_cta",
-          "x": 112,
-          "y": 2409,
-          "width": 1096,
-          "height": 158,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 4,
-          "locked": false,
-          "visible": true,
-          "name": "Primary action",
-          "shadow": null,
-          "type": "text",
-          "text": "Open Example",
-          "style": {
-            "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 29,
-            "fontWeight": 700,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1,
-            "letterSpacing": -0.2,
-            "color": "#182039",
-            "align": "center",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": false
-          }
-        },
-        {
-          "id": "image_beachball",
-          "x": 860,
-          "y": 560,
-          "width": 360,
-          "height": 360,
-          "rotation": 12,
-          "opacity": 1,
-          "zIndex": 5,
-          "locked": false,
-          "visible": true,
-          "name": "Colorful placeholder decoration",
-          "shadow": null,
-          "type": "image",
-          "assetPath": "assets/beachball-2ca4d006ab51.png",
-          "fit": "contain",
-          "position": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "cornerRadius": 0,
-          "alt": "Colorful placeholder decoration"
+          "elements": [
+            {
+              "id": "iphone_shape_1",
+              "x": 112,
+              "y": 2409,
+              "width": 1096,
+              "height": 158,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 0,
+              "locked": false,
+              "visible": true,
+              "name": "Decorative surface",
+              "shadow": {
+                "color": "#05060a",
+                "blur": 18,
+                "offsetX": 0,
+                "offsetY": 8,
+                "opacity": 0.12
+              },
+              "type": "shape",
+              "shape": "rounded-rectangle",
+              "fill": "#ffffff",
+              "stroke": "#ffffff",
+              "strokeWidth": 1,
+              "radius": 26
+            },
+            {
+              "id": "iphone_device_2",
+              "x": 357,
+              "y": 975,
+              "width": 607,
+              "height": 1239,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 1,
+              "locked": false,
+              "visible": true,
+              "name": "iPhone 17 Pro Max",
+              "shadow": {
+                "color": "#05060a",
+                "blur": 28,
+                "offsetX": 0,
+                "offsetY": 14,
+                "opacity": 0.24
+              },
+              "type": "device",
+              "preset": "iphone-17-pro-max",
+              "deviceId": "iphone-17-pro-max",
+              "deviceName": "iPhone 17 Pro Max",
+              "frame": "phone",
+              "frameColor": "#182d55",
+              "screenColor": "#f7f8fc",
+              "screenshotPath": "assets/asset_phone.svg",
+              "screenshotFit": "cover",
+              "screenshotPosition": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "bezelStyle": "metallic",
+              "cornerRadius": null,
+              "screenCornerRadius": null,
+              "showGlare": true,
+              "showCamera": true
+            },
+            {
+              "id": "iphone_text_3",
+              "x": 112,
+              "y": 244,
+              "width": 1096,
+              "height": 65,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 2,
+              "locked": false,
+              "visible": true,
+              "name": "Headline",
+              "shadow": null,
+              "type": "text",
+              "text": "Example",
+              "style": {
+                "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 63,
+                "fontWeight": 750,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1.02,
+                "letterSpacing": -3,
+                "color": "#ffffff",
+                "align": "left",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": true
+              }
+            },
+            {
+              "id": "iphone_text_4",
+              "x": 112,
+              "y": 545,
+              "width": 950,
+              "height": 49,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 3,
+              "locked": false,
+              "visible": true,
+              "name": "Subheadline",
+              "shadow": null,
+              "type": "text",
+              "text": "A simple place for your day.",
+              "style": {
+                "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 36,
+                "fontWeight": 500,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1.35,
+                "letterSpacing": 0,
+                "color": "#e7ecff",
+                "align": "left",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": true
+              }
+            },
+            {
+              "id": "doc_iphone_69_cta",
+              "x": 112,
+              "y": 2409,
+              "width": 1096,
+              "height": 158,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 4,
+              "locked": false,
+              "visible": true,
+              "name": "Primary action",
+              "shadow": null,
+              "type": "text",
+              "text": "Open Example",
+              "style": {
+                "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 29,
+                "fontWeight": 700,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1,
+                "letterSpacing": -0.2,
+                "color": "#182039",
+                "align": "center",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": false
+              }
+            },
+            {
+              "id": "image_beachball",
+              "x": 860,
+              "y": 560,
+              "width": 360,
+              "height": 360,
+              "rotation": 12,
+              "opacity": 1,
+              "zIndex": 5,
+              "locked": false,
+              "visible": true,
+              "name": "Colorful placeholder decoration",
+              "shadow": null,
+              "type": "image",
+              "assetPath": "assets/beachball-2ca4d006ab51.png",
+              "fit": "contain",
+              "position": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "cornerRadius": 0,
+              "alt": "Colorful placeholder decoration"
+            }
+          ],
+          "notes": "",
+          "createdAt": "2026-08-02T00:00:00.000Z",
+          "updatedAt": "2026-08-02T00:00:00.000Z"
         }
       ],
-      "notes": "",
       "createdAt": "2026-08-02T00:00:00.000Z",
       "updatedAt": "2026-08-02T00:00:00.000Z"
     },
     {
-      "id": "doc_iphone_65",
-      "slug": "example-overview",
-      "exportSlug": "example-overview",
-      "name": "Example overview",
-      "preset": "iphone-6-5",
+      "id": "deck_example_overview",
+      "slug": "example-overview-deck",
+      "name": "Example overview deck",
       "width": 1284,
       "height": 2778,
-      "background": {
-        "type": "linear-gradient",
-        "stops": [
-          {
-            "offset": 0,
-            "color": "#17213b"
-          },
-          {
-            "offset": 0.55,
-            "color": "#397a91"
-          },
-          {
-            "offset": 1,
-            "color": "#bde5df"
-          }
-        ],
-        "start": {
-          "x": 0,
-          "y": 1
-        },
-        "end": {
-          "x": 1,
-          "y": 0
-        }
-      },
-      "elements": [
+      "screens": [
         {
-          "id": "iphone-fallback_shape_1",
-          "x": 109,
-          "y": 2334,
-          "width": 1066,
-          "height": 153,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 0,
-          "locked": false,
-          "visible": true,
-          "name": "Decorative surface",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 18,
-            "offsetX": 0,
-            "offsetY": 8,
-            "opacity": 0.12
+          "id": "doc_iphone_65",
+          "slug": "example-overview",
+          "exportSlug": "example-overview",
+          "name": "Example overview",
+          "preset": "iphone-6-5",
+          "background": {
+            "type": "linear-gradient",
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#17213b"
+              },
+              {
+                "offset": 0.55,
+                "color": "#397a91"
+              },
+              {
+                "offset": 1,
+                "color": "#bde5df"
+              }
+            ],
+            "start": {
+              "x": 0,
+              "y": 1
+            },
+            "end": {
+              "x": 1,
+              "y": 0
+            }
           },
-          "type": "shape",
-          "shape": "rounded-rectangle",
-          "fill": "#ffffff",
-          "stroke": "#ffffff",
-          "strokeWidth": 1,
-          "radius": 26
-        },
-        {
-          "id": "iphone-fallback_device_2",
-          "x": 347,
-          "y": 945,
-          "width": 591,
-          "height": 1206,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 1,
-          "locked": false,
-          "visible": true,
-          "name": "iPhone 17 Pro",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 28,
-            "offsetX": 0,
-            "offsetY": 14,
-            "opacity": 0.24
-          },
-          "type": "device",
-          "preset": "iphone-17-pro",
-          "deviceId": "iphone-17-pro",
-          "deviceName": "iPhone 17 Pro",
-          "frame": "phone",
-          "frameColor": "#d9dce2",
-          "screenColor": "#f7f8fc",
-          "screenshotPath": "assets/asset_phone.svg",
-          "screenshotFit": "cover",
-          "screenshotPosition": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "bezelStyle": "metallic",
-          "cornerRadius": null,
-          "screenCornerRadius": null,
-          "showGlare": true,
-          "showCamera": true
-        },
-        {
-          "id": "iphone-fallback_text_3",
-          "x": 109,
-          "y": 236,
-          "width": 1066,
-          "height": 64,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 2,
-          "locked": false,
-          "visible": true,
-          "name": "Headline",
-          "shadow": null,
-          "type": "text",
-          "text": "Everything in view.",
-          "style": {
-            "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 62,
-            "fontWeight": 750,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1.02,
-            "letterSpacing": -3,
-            "color": "#ffffff",
-            "align": "left",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": true
-          }
-        },
-        {
-          "id": "iphone-fallback_text_4",
-          "x": 109,
-          "y": 528,
-          "width": 924,
-          "height": 48,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 3,
-          "locked": false,
-          "visible": true,
-          "name": "Subheadline",
-          "shadow": null,
-          "type": "text",
-          "text": "Simple tools for notes, lists, and plans.",
-          "style": {
-            "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 35,
-            "fontWeight": 500,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1.35,
-            "letterSpacing": 0,
-            "color": "#e1f1ef",
-            "align": "left",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": true
-          }
-        },
-        {
-          "id": "doc_iphone_65_cta",
-          "x": 109,
-          "y": 2334,
-          "width": 1066,
-          "height": 153,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 4,
-          "locked": false,
-          "visible": true,
-          "name": "Primary action",
-          "shadow": null,
-          "type": "text",
-          "text": "Open Example",
-          "style": {
-            "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 28,
-            "fontWeight": 700,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1,
-            "letterSpacing": -0.2,
-            "color": "#182039",
-            "align": "center",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": false
-          }
+          "elements": [
+            {
+              "id": "iphone-fallback_shape_1",
+              "x": 109,
+              "y": 2334,
+              "width": 1066,
+              "height": 153,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 0,
+              "locked": false,
+              "visible": true,
+              "name": "Decorative surface",
+              "shadow": {
+                "color": "#05060a",
+                "blur": 18,
+                "offsetX": 0,
+                "offsetY": 8,
+                "opacity": 0.12
+              },
+              "type": "shape",
+              "shape": "rounded-rectangle",
+              "fill": "#ffffff",
+              "stroke": "#ffffff",
+              "strokeWidth": 1,
+              "radius": 26
+            },
+            {
+              "id": "iphone-fallback_device_2",
+              "x": 347,
+              "y": 945,
+              "width": 591,
+              "height": 1206,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 1,
+              "locked": false,
+              "visible": true,
+              "name": "iPhone 17 Pro",
+              "shadow": {
+                "color": "#05060a",
+                "blur": 28,
+                "offsetX": 0,
+                "offsetY": 14,
+                "opacity": 0.24
+              },
+              "type": "device",
+              "preset": "iphone-17-pro",
+              "deviceId": "iphone-17-pro",
+              "deviceName": "iPhone 17 Pro",
+              "frame": "phone",
+              "frameColor": "#d9dce2",
+              "screenColor": "#f7f8fc",
+              "screenshotPath": "assets/asset_phone.svg",
+              "screenshotFit": "cover",
+              "screenshotPosition": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "bezelStyle": "metallic",
+              "cornerRadius": null,
+              "screenCornerRadius": null,
+              "showGlare": true,
+              "showCamera": true
+            },
+            {
+              "id": "iphone-fallback_text_3",
+              "x": 109,
+              "y": 236,
+              "width": 1066,
+              "height": 64,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 2,
+              "locked": false,
+              "visible": true,
+              "name": "Headline",
+              "shadow": null,
+              "type": "text",
+              "text": "Everything in view.",
+              "style": {
+                "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 62,
+                "fontWeight": 750,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1.02,
+                "letterSpacing": -3,
+                "color": "#ffffff",
+                "align": "left",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": true
+              }
+            },
+            {
+              "id": "iphone-fallback_text_4",
+              "x": 109,
+              "y": 528,
+              "width": 924,
+              "height": 48,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 3,
+              "locked": false,
+              "visible": true,
+              "name": "Subheadline",
+              "shadow": null,
+              "type": "text",
+              "text": "Simple tools for notes, lists, and plans.",
+              "style": {
+                "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 35,
+                "fontWeight": 500,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1.35,
+                "letterSpacing": 0,
+                "color": "#e1f1ef",
+                "align": "left",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": true
+              }
+            },
+            {
+              "id": "doc_iphone_65_cta",
+              "x": 109,
+              "y": 2334,
+              "width": 1066,
+              "height": 153,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 4,
+              "locked": false,
+              "visible": true,
+              "name": "Primary action",
+              "shadow": null,
+              "type": "text",
+              "text": "Open Example",
+              "style": {
+                "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 28,
+                "fontWeight": 700,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1,
+                "letterSpacing": -0.2,
+                "color": "#182039",
+                "align": "center",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": false
+              }
+            }
+          ],
+          "notes": "",
+          "createdAt": "2026-08-02T00:00:00.000Z",
+          "updatedAt": "2026-08-02T00:00:00.000Z"
         }
       ],
-      "notes": "",
       "createdAt": "2026-08-02T00:00:00.000Z",
       "updatedAt": "2026-08-02T00:00:00.000Z"
     },
     {
-      "id": "doc_ipad_13",
-      "slug": "example-workspace",
-      "exportSlug": "example-workspace",
-      "name": "Example workspace",
-      "preset": "ipad-13",
+      "id": "deck_example_workspace",
+      "slug": "example-workspace-deck",
+      "name": "Example workspace deck",
       "width": 2064,
       "height": 2752,
-      "background": {
-        "type": "radial-gradient",
-        "stops": [
-          {
-            "offset": 0,
-            "color": "#3c6981"
-          },
-          {
-            "offset": 0.55,
-            "color": "#839cc6"
-          },
-          {
-            "offset": 1,
-            "color": "#18283f"
-          }
-        ],
-        "center": {
-          "x": 0.2,
-          "y": 0.16
-        },
-        "radius": 1
-      },
-      "elements": [
+      "screens": [
         {
-          "id": "ipad_device_2",
-          "x": 296,
-          "y": 680,
-          "width": 1486,
-          "height": 1981,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 0,
-          "locked": false,
-          "visible": true,
-          "name": "Generic modern iPad",
-          "shadow": {
-            "color": "#05060a",
-            "blur": 28,
-            "offsetX": 0,
-            "offsetY": 14,
-            "opacity": 0.24
+          "id": "doc_ipad_13",
+          "slug": "example-workspace",
+          "exportSlug": "example-workspace",
+          "name": "Example workspace",
+          "preset": "ipad-13",
+          "background": {
+            "type": "radial-gradient",
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#3c6981"
+              },
+              {
+                "offset": 0.55,
+                "color": "#839cc6"
+              },
+              {
+                "offset": 1,
+                "color": "#18283f"
+              }
+            ],
+            "center": {
+              "x": 0.2,
+              "y": 0.16
+            },
+            "radius": 1
           },
-          "type": "device",
-          "preset": "generic-modern-ipad",
-          "deviceId": "generic-modern-ipad",
-          "deviceName": "Generic modern iPad",
-          "frame": "tablet",
-          "frameColor": "#242833",
-          "screenColor": "#f6f7fb",
-          "screenshotPath": "assets/asset_social.svg",
-          "screenshotFit": "cover",
-          "screenshotPosition": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "bezelStyle": "metallic",
-          "cornerRadius": null,
-          "screenCornerRadius": null,
-          "showGlare": true,
-          "showCamera": true
-        },
-        {
-          "id": "ipad_text_3",
-          "x": 175,
-          "y": 234,
-          "width": 1714,
-          "height": 74,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 1,
-          "locked": false,
-          "visible": true,
-          "name": "Headline",
-          "shadow": null,
-          "type": "text",
-          "text": "Make room for ideas.",
-          "style": {
-            "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 72,
-            "fontWeight": 750,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1.02,
-            "letterSpacing": -3,
-            "color": "#ffffff",
-            "align": "left",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": true
-          }
-        },
-        {
-          "id": "ipad_text_4",
-          "x": 175,
-          "y": 523,
-          "width": 1486,
-          "height": 76,
-          "rotation": 0,
-          "opacity": 1,
-          "zIndex": 2,
-          "locked": false,
-          "visible": true,
-          "name": "Subheadline",
-          "shadow": null,
-          "type": "text",
-          "text": "A calm, flexible home for your workspace.",
-          "style": {
-            "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
-            "fontSize": 56,
-            "fontWeight": 500,
-            "italic": false,
-            "underline": false,
-            "lineHeight": 1.35,
-            "letterSpacing": 0,
-            "color": "#e8f2f5",
-            "align": "left",
-            "backgroundColor": null,
-            "padding": 0,
-            "backgroundRadius": 0,
-            "shadow": null,
-            "autoHeight": true
-          }
+          "elements": [
+            {
+              "id": "ipad_device_2",
+              "x": 296,
+              "y": 680,
+              "width": 1486,
+              "height": 1981,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 0,
+              "locked": false,
+              "visible": true,
+              "name": "Generic modern iPad",
+              "shadow": {
+                "color": "#05060a",
+                "blur": 28,
+                "offsetX": 0,
+                "offsetY": 14,
+                "opacity": 0.24
+              },
+              "type": "device",
+              "preset": "generic-modern-ipad",
+              "deviceId": "generic-modern-ipad",
+              "deviceName": "Generic modern iPad",
+              "frame": "tablet",
+              "frameColor": "#242833",
+              "screenColor": "#f6f7fb",
+              "screenshotPath": "assets/asset_social.svg",
+              "screenshotFit": "cover",
+              "screenshotPosition": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "bezelStyle": "metallic",
+              "cornerRadius": null,
+              "screenCornerRadius": null,
+              "showGlare": true,
+              "showCamera": true
+            },
+            {
+              "id": "ipad_text_3",
+              "x": 175,
+              "y": 234,
+              "width": 1714,
+              "height": 74,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 1,
+              "locked": false,
+              "visible": true,
+              "name": "Headline",
+              "shadow": null,
+              "type": "text",
+              "text": "Make room for ideas.",
+              "style": {
+                "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 72,
+                "fontWeight": 750,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1.02,
+                "letterSpacing": -3,
+                "color": "#ffffff",
+                "align": "left",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": true
+              }
+            },
+            {
+              "id": "ipad_text_4",
+              "x": 175,
+              "y": 523,
+              "width": 1486,
+              "height": 76,
+              "rotation": 0,
+              "opacity": 1,
+              "zIndex": 2,
+              "locked": false,
+              "visible": true,
+              "name": "Subheadline",
+              "shadow": null,
+              "type": "text",
+              "text": "A calm, flexible home for your workspace.",
+              "style": {
+                "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                "fontSize": 56,
+                "fontWeight": 500,
+                "italic": false,
+                "underline": false,
+                "lineHeight": 1.35,
+                "letterSpacing": 0,
+                "color": "#e8f2f5",
+                "align": "left",
+                "backgroundColor": null,
+                "padding": 0,
+                "backgroundRadius": 0,
+                "shadow": null,
+                "autoHeight": true
+              }
+            }
+          ],
+          "notes": "",
+          "createdAt": "2026-08-02T00:00:00.000Z",
+          "updatedAt": "2026-08-03T19:31:56.937Z"
         }
       ],
-      "notes": "",
       "createdAt": "2026-08-02T00:00:00.000Z",
       "updatedAt": "2026-08-03T19:31:56.937Z"
     }

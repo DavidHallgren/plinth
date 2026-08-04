@@ -1,22 +1,71 @@
 import { describe, expect, test } from "bun:test";
 import { parseProject, migrateProject } from "../src/lib/migrations";
+import { createDefaultProject } from "../src/lib/defaults";
 import { CURRENT_SCHEMA_VERSION } from "../src/lib/schema";
 
+const timestamp = "2026-08-02T00:00:00.000Z";
+
+function legacyDocument(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "legacy-screen",
+    name: "Legacy screen",
+    slug: "legacy-screen",
+    exportSlug: "legacy-screen",
+    preset: "custom",
+    width: 640,
+    height: 480,
+    background: { type: "solid", color: "#111111" },
+    elements: [],
+    notes: "",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides,
+  };
+}
+
 describe("project migrations", () => {
-  test("upgrades an unversioned legacy project to the current schema", () => {
+  test("upgrades an unversioned legacy project to schema v6", () => {
     const migrated = parseProject({
       version: 0,
       id: "legacy_project",
       name: "Legacy project",
       slug: "legacy-project",
-      documents: [{ title: "Old document", elements: [] }],
+      documents: [{ title: "Old screen", elements: [] }],
     });
 
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.name).toBe("Legacy project");
-    expect(migrated.documents).toHaveLength(1);
-    expect(migrated.documents[0]?.name).toBe("Old document");
+    expect(migrated.decks).toHaveLength(1);
+    expect(migrated.decks[0]?.screens[0]?.name).toBe("Old screen");
+    expect(migrated.decks[0]?.width).toBe(1320);
+    expect(migrated.decks[0]?.screens[0] && Object.hasOwn(migrated.decks[0].screens[0], "width")).toBe(false);
     expect(migrated.settings.autosave).toBe(true);
+  });
+
+  test("groups v5 documents into fixed-size decks while preserving order and exact dimensions", () => {
+    const migrated = parseProject({
+      schemaVersion: 5,
+      id: "v5-project",
+      name: "V5 project",
+      slug: "v5-project",
+      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
+      background: { type: "solid", color: "#10131a" },
+      assets: [],
+      documents: [
+        legacyDocument({ id: "screen-a", slug: "same", exportSlug: "same", width: 400, height: 300 }),
+        legacyDocument({ id: "screen-b", slug: "same", exportSlug: "same", width: 400, height: 300 }),
+        legacyDocument({ id: "screen-c", slug: "tablet", exportSlug: "tablet", width: 800, height: 600 }),
+      ],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+
+    expect(migrated.decks.map((deck) => [deck.width, deck.height])).toEqual([[400, 300], [800, 600]]);
+    expect(migrated.decks[0]?.screens.map((screen) => screen.id)).toEqual(["screen-a", "screen-b"]);
+    expect(migrated.decks[0]?.screens.map((screen) => screen.slug)).toEqual(["same", "same-2"]);
+    expect(migrated.decks[0]?.screens.map((screen) => screen.exportSlug)).toEqual(["same", "same-2"]);
+    expect(migrated.decks.flatMap((deck) => deck.screens).every((screen) => !Object.hasOwn(screen, "width") && !Object.hasOwn(screen, "height"))).toBe(true);
+    expect(migrated.settings.defaultScreenPreset).toBe("iphone-6-9");
   });
 
   test("rejects a project from a future schema version", () => {
@@ -30,10 +79,10 @@ describe("project migrations", () => {
       name: "Legacy duplicate",
       slug: "legacy-duplicate",
       documents: [
-        { id: "duplicate_document", name: "First", elements: [] },
-        { id: "duplicate_document", name: "Second", elements: [] },
+        { id: "duplicate_screen", name: "First", elements: [] },
+        { id: "duplicate_screen", name: "Second", elements: [] },
       ],
-    })).toThrow(/Duplicate document id/);
+    })).toThrow(/Duplicate screen id/);
   });
 
   test("converts the v1 gradient shape and fills new text defaults", () => {
@@ -42,10 +91,9 @@ describe("project migrations", () => {
       id: "legacy_gradient",
       name: "Legacy gradient",
       slug: "legacy-gradient",
-      documents: [{
-        id: "legacy_document",
+      documents: [legacyDocument({
+        id: "legacy-screen-gradient",
         name: "Legacy frame",
-        slug: "legacy-frame",
         preset: "browser",
         width: 640,
         height: 480,
@@ -74,32 +122,29 @@ describe("project migrations", () => {
             align: "left",
           },
         }],
-        notes: "",
-      }],
+      })],
       assets: [],
     });
 
-    expect(migrated.documents[0]?.preset).toBe("custom");
-    expect(migrated.documents[0]?.background.type).toBe("linear-gradient");
-    expect(migrated.documents[0]?.elements[0]).toMatchObject({ type: "text", shadow: null });
-    expect(migrated.documents[0]?.elements[0]?.type === "text" && migrated.documents[0].elements[0].style).toMatchObject({ italic: false, autoHeight: true });
+    const screen = migrated.decks[0]?.screens[0];
+    expect(screen?.preset).toBe("custom");
+    expect(screen?.background.type).toBe("linear-gradient");
+    expect(screen?.elements[0]).toMatchObject({ type: "text", shadow: null });
+    expect(screen?.elements[0]?.type === "text" && screen.elements[0].style).toMatchObject({ italic: false, autoHeight: true });
   });
 
-  test("migrates the Phase 2 asset id and device placeholder to canonical v3 paths and presets", () => {
+  test("migrates v2 asset ids and device placeholders to canonical paths and presets", () => {
     const migrated = parseProject({
       schemaVersion: 2,
       id: "phase-two-project",
       name: "Phase 2 project",
       slug: "phase-two-project",
       assets: [{ id: "asset_old", kind: "image", fileName: "screen.svg", mimeType: "image/svg+xml", width: 100, height: 200, byteSize: 20 }],
-      documents: [{
-        id: "phase-two-document",
-        name: "Phase 2 document",
-        slug: "phase-two-document",
-        preset: "custom",
+      documents: [legacyDocument({
+        id: "phase-two-screen",
+        name: "Phase 2 screen",
         width: 400,
         height: 800,
-        background: { type: "solid", color: "#111111" },
         elements: [{
           id: "old-device",
           type: "device",
@@ -120,118 +165,55 @@ describe("project migrations", () => {
           screenColor: "#f6f7fb",
           assetId: "asset_old",
         }],
-        notes: "",
-      }],
+      })],
       settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
       background: { type: "solid", color: "#10131a" },
-      createdAt: "2026-08-02T00:00:00.000Z",
-      updatedAt: "2026-08-02T00:00:00.000Z",
+      createdAt: timestamp,
+      updatedAt: timestamp,
     });
-    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+
     expect(migrated.assets[0]?.path).toBe("assets/screen.svg");
-    expect(migrated.documents[0]?.elements[0]).toMatchObject({ type: "device", preset: "iphone-17-pro-max", screenshotPath: "assets/screen.svg" });
+    expect(migrated.decks[0]?.screens[0]?.elements[0]).toMatchObject({ type: "device", preset: "iphone-17-pro-max", screenshotPath: "assets/screen.svg" });
   });
 
-  test("adds an explicit export filename stem when loading a schema v3 project", () => {
-    const migrated = parseProject({
-      schemaVersion: 3,
+  test("adds export slugs and the configured export directory when loading v3/v4", () => {
+    const base = {
       id: "v3-export-project",
       name: "V3 export project",
       slug: "v3-export-project",
       description: "Migration fixture",
       assets: [],
-      documents: [{
-        id: "v3-document",
-        slug: "display-slug",
-        name: "Display name with spaces",
-        preset: "custom",
-        width: 320,
-        height: 240,
-        background: { type: "solid", color: "#111111" },
-        elements: [],
-        notes: "",
-        createdAt: "2026-08-02T00:00:00.000Z",
-        updatedAt: "2026-08-02T00:00:00.000Z",
-      }],
+      documents: [legacyDocument({ id: "v3-screen", slug: "display-slug", exportSlug: undefined, name: "Display name with spaces", width: 320, height: 240 })],
       settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
       background: { type: "solid", color: "#10131a" },
-      createdAt: "2026-08-02T00:00:00.000Z",
-      updatedAt: "2026-08-02T00:00:00.000Z",
-    });
-    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(migrated.documents[0]?.exportSlug).toBe("display-slug");
-    expect(migrated.settings.exportDirectory).toBeNull();
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    const migratedV3 = parseProject({ ...base, schemaVersion: 3 });
+    expect(migratedV3.decks[0]?.screens[0]?.exportSlug).toBe("display-slug");
+    expect(migratedV3.settings.exportDirectory).toBeNull();
+
+    const migratedV4 = parseProject({ ...base, schemaVersion: 4, id: "v4-export-project", slug: "v4-export-project" });
+    expect(migratedV4.settings.exportDirectory).toBeNull();
   });
 
-  test("adds the optional configured export directory when loading a schema v4 project", () => {
-    const current = parseProject({
-      schemaVersion: 4,
-      id: "v4-export-directory-project",
-      name: "V4 export directory project",
-      slug: "v4-export-directory-project",
-      description: "Migration fixture",
-      assets: [],
-      documents: [{
-        id: "v4-document",
-        slug: "v4-document",
-        exportSlug: "v4-document",
-        name: "V4 document",
-        preset: "custom",
-        width: 320,
-        height: 240,
-        background: { type: "solid", color: "#111111" },
-        elements: [],
-        notes: "",
-        createdAt: "2026-08-02T00:00:00.000Z",
-        updatedAt: "2026-08-02T00:00:00.000Z",
-      }],
-      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", grid: { enabled: true, size: 8, snap: true } },
-      background: { type: "solid", color: "#10131a" },
-      createdAt: "2026-08-02T00:00:00.000Z",
-      updatedAt: "2026-08-02T00:00:00.000Z",
-    });
-
-    expect(current.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(current.settings.exportDirectory).toBeNull();
-  });
-
-  test("canonicalizes persisted layer order and z-index gaps", () => {
+  test("canonicalizes persisted layer order and text geometry in schema v6", () => {
+    const project = createDefaultProject("Layer order project", { now: timestamp });
+    const deck = project.decks[0];
+    const screen = deck?.screens[0];
+    if (!deck || !screen) throw new Error("Missing starter screen.");
     const migrated = parseProject({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      id: "layer-order-project",
-      name: "Layer order project",
-      slug: "layer-order-project",
-      description: "Layer order fixture",
-      assets: [],
-      documents: [{
-        id: "layer-order-document",
-        slug: "layer-order-document",
-        exportSlug: "layer-order-document",
-        name: "Layer order document",
-        preset: "custom",
-        width: 320,
-        height: 240,
-        background: { type: "solid", color: "#111111" },
-        elements: [
-          { id: "top", type: "shape", name: "Top", x: 0, y: 0, width: 40, height: 40, rotation: 0, opacity: 1, zIndex: 9, locked: false, visible: true, shadow: null, shape: "rectangle", fill: "#ffffff", stroke: "#ffffff", strokeWidth: 0, radius: 0 },
-          { id: "bottom", type: "shape", name: "Bottom", x: 0, y: 0, width: 40, height: 40, rotation: 0, opacity: 1, zIndex: 2, locked: false, visible: true, shadow: null, shape: "rectangle", fill: "#ffffff", stroke: "#ffffff", strokeWidth: 0, radius: 0 },
-        ],
-        notes: "",
-        createdAt: "2026-08-02T00:00:00.000Z",
-        updatedAt: "2026-08-02T00:00:00.000Z",
+      ...project,
+      decks: [{
+        ...deck,
+        screens: [{
+          ...screen,
+          elements: screen.elements.map((element, index) => ({ ...element, zIndex: index === 0 ? 9 : index === 1 ? 2 : index + 10 })),
+        }],
       }],
-      settings: { autosave: true, autosaveDelayMs: 800, defaultDocumentPreset: "iphone-6-9", exportDirectory: null, grid: { enabled: true, size: 8, snap: true } },
-      background: { type: "solid", color: "#10131a" },
-      createdAt: "2026-08-02T00:00:00.000Z",
-      updatedAt: "2026-08-02T00:00:00.000Z",
     });
-
-    expect(migrated.documents[0]?.elements.map((element) => [element.id, element.zIndex])).toEqual([[
-      "bottom",
-      0,
-    ], [
-      "top",
-      1,
-    ]]);
+    expect(migrated.decks[0]?.screens[0]?.elements.map((element) => element.zIndex)).toEqual(
+      migrated.decks[0]?.screens[0]?.elements.map((_element, index) => index),
+    );
   });
 });

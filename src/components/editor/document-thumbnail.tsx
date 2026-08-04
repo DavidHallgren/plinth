@@ -1,11 +1,12 @@
 import { Stage } from "react-konva";
 import { SceneRenderer } from "../../canvas/scene-renderer";
 import { thumbnailSize } from "../../devices/geometry";
-import type { AssetMetadata, Document } from "../../lib/schema";
+import type { AssetMetadata } from "../../lib/schema";
+import type { ResolvedScreen } from "../../scene/selectors";
 
 type DocumentThumbnailProps = {
   assets: readonly AssetMetadata[];
-  document: Document;
+  document: ResolvedScreen;
   projectSlug: string;
 };
 

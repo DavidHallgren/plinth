@@ -2,7 +2,7 @@ import { z } from "zod";
 import { PlinthError, toPlinthError } from "./errors";
 import { MAX_EXPORT_BYTES } from "./export-validation";
 import { parseProject } from "./migrations";
-import { CURRENT_SCHEMA_VERSION, DocumentPresetSchema } from "./schema";
+import { CURRENT_SCHEMA_VERSION, ScreenPresetSchema } from "./schema";
 import { assetPathFromRequestName, ProjectStorage } from "./storage";
 
 const CreateProjectRequestSchema = z
@@ -28,18 +28,28 @@ const DuplicateProjectRequestSchema = z
   })
   .strict();
 
-const AddDocumentRequestSchema = z
+const AddDeckRequestSchema = z
   .object({
-    preset: DocumentPresetSchema,
     name: z.string().trim().min(1).max(120).optional(),
+    slug: z.string().trim().min(1).max(96).optional(),
     width: z.number().int().positive().max(100_000).optional(),
     height: z.number().int().positive().max(100_000).optional(),
+    screenPreset: ScreenPresetSchema.optional(),
+  })
+  .strict();
+
+const AddScreenRequestSchema = z
+  .object({
+    preset: ScreenPresetSchema,
+    name: z.string().trim().min(1).max(120).optional(),
+    slug: z.string().trim().min(1).max(96).optional(),
+    exportSlug: z.string().trim().min(1).max(96).optional(),
   })
   .strict();
 
 const ExportMetadataSchema = z
   .object({
-    documentId: z.string().min(1).max(96),
+    screenId: z.string().min(1).max(96),
     fileName: z.string().min(1).max(180),
     width: z.number().int().positive().max(100_000),
     height: z.number().int().positive().max(100_000),
@@ -185,10 +195,30 @@ export async function handleDuplicateProject(request: Request, storage: ProjectS
   return success({ project }, 201);
 }
 
-export async function handleAddDocument(request: Request, storage: ProjectStorage): Promise<Response> {
+export async function handleAddDeck(request: Request, storage: ProjectStorage): Promise<Response> {
   const slug = pathSegment(request, 3);
-  const body = parseBody(AddDocumentRequestSchema, await jsonBody(request));
-  const project = await storage.addDocument(slug, body.preset, body.name, { width: body.width, height: body.height });
+  const body = parseBody(AddDeckRequestSchema, await jsonBody(request));
+  if (!body.width || !body.height) {
+    throw new PlinthError("INVALID_REQUEST", 400, "Deck width and height are required when creating a deck.");
+  }
+  const project = await storage.addDeck(slug, {
+    name: body.name,
+    slug: body.slug,
+    width: body.width,
+    height: body.height,
+    screenPreset: body.screenPreset,
+  });
+  return success({ project });
+}
+
+export async function handleAddScreen(request: Request, storage: ProjectStorage): Promise<Response> {
+  const slug = pathSegment(request, 3);
+  const deckId = pathSegment(request, 5);
+  const body = parseBody(AddScreenRequestSchema, await jsonBody(request));
+  const project = await storage.addScreen(slug, deckId, body.preset, body.name, {
+    slug: body.slug,
+    exportSlug: body.exportSlug,
+  });
   return success({ project });
 }
 
@@ -279,7 +309,7 @@ async function parseExportMultipart(request: Request): Promise<{ metadata: z.inf
     }
   } else {
     metadata = {
-      documentId: formData.get("documentId"),
+      screenId: formData.get("screenId"),
       fileName: formData.get("fileName") ?? (typeof (file as { name?: unknown }).name === "string" ? (file as { name: string }).name : null),
       width: parseNumberField(formData.get("width"), "width"),
       height: parseNumberField(formData.get("height"), "height"),

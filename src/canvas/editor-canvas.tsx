@@ -1,7 +1,8 @@
 import type Konva from "konva";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Stage, Transformer } from "react-konva";
-import type { AssetMetadata, Document } from "../lib/schema";
+import type { AssetMetadata } from "../lib/schema";
+import type { ResolvedScreen } from "../scene/selectors";
 import { SceneRenderer } from "./scene-renderer";
 
 export type CanvasTransform = {
@@ -14,7 +15,7 @@ export type CanvasTransform = {
 };
 
 export type EditorCanvasProps = {
-  document: Document;
+  document: ResolvedScreen;
   projectSlug: string;
   assets: readonly AssetMetadata[];
   selectedElementIds: readonly string[];

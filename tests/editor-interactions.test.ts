@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
-import { previewDocumentZoom } from "../src/components/editor/project-preview";
+import { previewScreenZoom } from "../src/components/editor/project-preview";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
@@ -31,16 +31,16 @@ describe("editor interaction guards and geometry", () => {
     expect(calculateTextAutoHeight("Many words", 220, { ...style, autoHeight: false })).toBe(1);
   });
 
-  test("fits project preview documents within the available vertical space", () => {
-    expect(previewDocumentZoom(2868, 839)).toBeCloseTo(727 / 2868);
-    expect(previewDocumentZoom(600, 839)).toBe(1);
-    expect(previewDocumentZoom(2868, 0)).toBeCloseTo(120 / 2868);
+  test("fits project preview screens within the available vertical space", () => {
+    expect(previewScreenZoom(2868, 839)).toBeCloseTo(727 / 2868);
+    expect(previewScreenZoom(600, 839)).toBe(1);
+    expect(previewScreenZoom(2868, 0)).toBeCloseTo(120 / 2868);
   });
 
   test("reorder normalizes z-index and retains the moved selection identity", () => {
     const seed = createDefaultProject("Reorder fixture");
-    const document = seed.documents[0];
-    if (!document) throw new Error("Missing document");
+    const screen = seed.decks[0]?.screens[0];
+    if (!screen) throw new Error("Missing screen");
     const text: TextElement = {
       id: "text-reorder",
       type: "text",
@@ -51,7 +51,7 @@ describe("editor interaction guards and geometry", () => {
       height: 80,
       rotation: 0,
       opacity: 1,
-      zIndex: document.elements.length,
+      zIndex: screen.elements.length,
       locked: false,
       visible: true,
       shadow: null,
@@ -73,10 +73,10 @@ describe("editor interaction guards and geometry", () => {
         autoHeight: false,
       },
     };
-    const project = addElement(seed, document.id, text);
-    const reordered = reorderElements(project, document.id, [text.id], 0);
+    const project = addElement(seed, screen.id, text);
+    const reordered = reorderElements(project, screen.id, [text.id], 0);
     const parsed = ProjectSchema.parse(reordered);
-    expect(parsed.documents[0]?.elements.find((element) => element.id === text.id)?.zIndex).toBe(0);
-    expect(parsed.documents[0]?.elements.map((element) => element.zIndex)).toEqual(parsed.documents[0]?.elements.map((_element, index) => index));
+    expect(parsed.decks[0]?.screens[0]?.elements.find((element) => element.id === text.id)?.zIndex).toBe(0);
+    expect(parsed.decks[0]?.screens[0]?.elements.map((element) => element.zIndex)).toEqual(parsed.decks[0]?.screens[0]?.elements.map((_element, index) => index));
   });
 });

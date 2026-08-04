@@ -2,7 +2,7 @@ import { createDefaultProject, DEFAULT_BACKGROUND } from "./defaults";
 import { PlinthError } from "./errors";
 import { createId, slugify } from "./ids";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
-import type { AssetMetadata, Background, Document, Project, SceneElement, Shadow } from "./schema";
+import type { AssetMetadata, Background, Deck, Project, SceneElement, Screen, Shadow } from "./schema";
 import { isAppStorePreset } from "../scene/presets";
 import { isDevicePreset, getDevicePreset } from "../devices/presets";
 import { sanitizeAssetStem } from "./asset-validation";
@@ -106,7 +106,7 @@ function migrateBackground(value: unknown): Background {
   return DEFAULT_BACKGROUND;
 }
 
-function migratePreset(value: unknown): Document["preset"] {
+function migratePreset(value: unknown): Screen["preset"] {
   if (typeof value === "string" && isAppStorePreset(value)) return value;
   return "custom";
 }
@@ -256,7 +256,14 @@ function migrateElement(value: unknown, index: number, assets: AssetMetadata[]):
   return null;
 }
 
-function legacyDocument(value: unknown, index: number, now: string, assets: AssetMetadata[]): Document {
+type LegacyDocument = Omit<Screen, "createdAt" | "updatedAt"> & {
+  width: number;
+  height: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function legacyDocument(value: unknown, index: number, now: string, assets: AssetMetadata[]): LegacyDocument {
   const source = isRecord(value) ? value : {};
   const name = asString(source.name, asString(source.title, `Composition ${index + 1}`));
   const width = Math.round(asPositiveNumber(source.width, 1320));
@@ -286,12 +293,14 @@ function legacyDocument(value: unknown, index: number, now: string, assets: Asse
 function normalizeSettings(value: unknown, starter: Project["settings"]): Project["settings"] {
   if (!isRecord(value)) return starter;
   const grid = isRecord(value.grid) ? value.grid : {};
-  const presetCandidate = typeof value.defaultDocumentPreset === "string" ? value.defaultDocumentPreset : "";
-  const defaultDocumentPreset = isAppStorePreset(presetCandidate) ? presetCandidate : "iphone-6-9";
+  const presetCandidate = typeof value.defaultScreenPreset === "string"
+    ? value.defaultScreenPreset
+    : typeof value.defaultDocumentPreset === "string" ? value.defaultDocumentPreset : "";
+  const defaultScreenPreset = isAppStorePreset(presetCandidate) ? presetCandidate : "iphone-6-9";
   return {
     autosave: asBoolean(value.autosave, starter.autosave),
     autosaveDelayMs: Math.min(60_000, Math.max(100, Math.round(asFiniteNumber(value.autosaveDelayMs, starter.autosaveDelayMs)))),
-    defaultDocumentPreset,
+    defaultScreenPreset,
     exportDirectory: typeof value.exportDirectory === "string" && value.exportDirectory.trim()
       ? value.exportDirectory.trim()
       : null,
@@ -312,17 +321,29 @@ function migrateVersionOne(source: Record<string, unknown>): Record<string, unkn
     slug: typeof source.slug === "string" ? slugify(source.slug) : slugify(name),
     documentCount: 1,
   });
+  const starterDeck = starter.decks[0];
+  const starterScreen = starterDeck?.screens[0];
+  if (!starterDeck || !starterScreen) throw new Error("The default project did not contain a starter screen.");
   const assets = normalizeAssets(source.assets);
   const rawDocuments = Array.isArray(source.documents) ? source.documents : [];
+  const fallbackDocument: LegacyDocument = {
+    ...starterScreen,
+    width: starterDeck.width,
+    height: starterDeck.height,
+  };
+  const documents = rawDocuments.length > 0
+    ? rawDocuments.map((document, index) => legacyDocument(document, index, now, assets))
+    : [fallbackDocument];
+  const { decks: _decks, ...starterWithoutDecks } = starter;
 
   return {
-    ...starter,
-    schemaVersion: CURRENT_SCHEMA_VERSION,
+    ...starterWithoutDecks,
+    schemaVersion: 5,
     description: typeof source.description === "string" ? source.description : starter.description,
     settings: normalizeSettings(source.settings, starter.settings),
     background: migrateBackground(source.background),
     assets,
-    documents: rawDocuments.length > 0 ? rawDocuments.map((document, index) => legacyDocument(document, index, now, assets)) : starter.documents,
+    documents,
     updatedAt: asString(source.updatedAt, now),
   };
 }
@@ -360,13 +381,98 @@ function migrateVersionFour(source: Record<string, unknown>): Record<string, unk
   const settings = isRecord(source.settings) ? source.settings : {};
   return {
     ...source,
-    schemaVersion: CURRENT_SCHEMA_VERSION,
+    schemaVersion: 5,
     settings: {
       ...settings,
       exportDirectory: typeof settings.exportDirectory === "string" && settings.exportDirectory.trim()
         ? settings.exportDirectory.trim()
         : null,
     },
+  };
+}
+
+function uniqueMigrationSlug(proposed: string, used: Set<string>, fallback: string): string {
+  const base = slugify(proposed, fallback);
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+function migrateVersionFive(source: Record<string, unknown>): Record<string, unknown> {
+  const now = new Date().toISOString();
+  const name = asString(source.name, "Migrated project");
+  const starter = createDefaultProject(name, {
+    now,
+    id: typeof source.id === "string" ? source.id : undefined,
+    slug: typeof source.slug === "string" ? slugify(source.slug) : slugify(name),
+  });
+  const assets = normalizeAssets(source.assets);
+  const rawDocuments = Array.isArray(source.documents) ? source.documents : [];
+  const documents = rawDocuments.length > 0
+    ? rawDocuments.map((document, index) => legacyDocument(document, index, now, assets))
+    : (() => {
+      const deck = starter.decks[0];
+      const screen = deck?.screens[0];
+      if (!deck || !screen) throw new Error("The default project did not contain a starter screen.");
+      return [{ ...screen, width: deck.width, height: deck.height } satisfies LegacyDocument];
+    })();
+
+  const groups = new Map<string, { width: number; height: number; documents: LegacyDocument[] }>();
+  for (const document of documents) {
+    const width = Math.round(asPositiveNumber(document.width, 1320));
+    const height = Math.round(asPositiveNumber(document.height, 2868));
+    const key = `${width}x${height}`;
+    const group = groups.get(key) ?? { width, height, documents: [] };
+    group.documents.push({ ...document, width, height });
+    groups.set(key, group);
+  }
+
+  const deckSlugs = new Set<string>();
+  const screenSlugs = new Set<string>();
+  const screenExportSlugs = new Set<string>();
+  const decks: Deck[] = [...groups.values()].map((group, groupIndex) => {
+    const first = group.documents[0];
+    if (!first) throw new Error("A migrated deck did not contain a screen.");
+    const deckName = groups.size === 1 ? `${name} deck` : `${name} ${group.width}×${group.height}`;
+    const deckSlug = uniqueMigrationSlug(`${source.slug ?? name}-${group.width}x${group.height}`, deckSlugs, `deck-${groupIndex + 1}`);
+    const screens = group.documents.map((document, screenIndex) => {
+      const { width: _width, height: _height, ...screen } = document;
+      return {
+        ...screen,
+        slug: uniqueMigrationSlug(screen.slug, screenSlugs, `screen-${screenIndex + 1}`),
+        exportSlug: uniqueMigrationSlug(screen.exportSlug, screenExportSlugs, `screen-${screenIndex + 1}`),
+      } satisfies Screen;
+    });
+    const createdAt = first.createdAt;
+    const updatedAt = group.documents.reduce((latest, document) => document.updatedAt > latest ? document.updatedAt : latest, first.updatedAt);
+    return {
+      id: `deck_${slugify(`${source.id ?? name}-${group.width}x${group.height}`, `deck-${groupIndex + 1}`)}`,
+      slug: deckSlug,
+      name: deckName,
+      width: group.width,
+      height: group.height,
+      screens,
+      createdAt,
+      updatedAt,
+    };
+  });
+
+  const { decks: _starterDecks, ...starterWithoutDecks } = starter;
+  return {
+    ...starterWithoutDecks,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    description: typeof source.description === "string" ? source.description : starter.description,
+    settings: normalizeSettings(source.settings, starter.settings),
+    background: migrateBackground(source.background),
+    assets,
+    decks,
+    createdAt: asString(source.createdAt, now),
+    updatedAt: asString(source.updatedAt, now),
   };
 }
 
@@ -389,11 +495,12 @@ export function migrateProject(input: unknown): unknown {
     );
   }
 
-  if (versionValue === 0) return migrateVersionZero(input);
-  if (versionValue === 1) return migrateVersionOne(input);
-  if (versionValue === 2) return migrateVersionTwo(input);
-  if (versionValue === 3) return migrateVersionThree(input);
-  if (versionValue === 4) return migrateVersionFour(input);
+  if (versionValue === 0) return migrateVersionFive(migrateVersionZero(input));
+  if (versionValue === 1) return migrateVersionFive(migrateVersionOne(input));
+  if (versionValue === 2) return migrateVersionFive(migrateVersionTwo(input));
+  if (versionValue === 3) return migrateVersionFive(migrateVersionThree(input));
+  if (versionValue === 4) return migrateVersionFive(migrateVersionFour(input));
+  if (versionValue === 5) return migrateVersionFive(input);
   return input;
 }
 
@@ -413,11 +520,14 @@ export function parseProject(input: unknown): Project {
 
   return {
     ...result.data,
-    documents: result.data.documents.map((document) => ({
-      ...document,
-      elements: normalizeLayerOrder(document.elements.map((element) => element.type === "text"
-        ? normalizeTextElementGeometry(element, document.width, document.height)
-        : element)),
+    decks: result.data.decks.map((deck) => ({
+      ...deck,
+      screens: deck.screens.map((screen) => ({
+        ...screen,
+        elements: normalizeLayerOrder(screen.elements.map((element) => element.type === "text"
+          ? normalizeTextElementGeometry(element, deck.width, deck.height)
+          : element)),
+      })),
     })),
   };
 }

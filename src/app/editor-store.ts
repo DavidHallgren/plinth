@@ -1,28 +1,31 @@
 import { createId } from "../lib/ids";
-import type { Project, SceneElement } from "../lib/schema";
+import type { Project, SceneElement, Screen, ScreenPreset } from "../lib/schema";
 import {
+  addDeck,
   addElement,
-  addDocument,
-  duplicateDocument,
+  addScreen,
+  duplicateDeck,
   duplicateElements,
+  duplicateScreen,
   moveElements,
-  removeDocument,
+  removeDeck,
   removeElements,
-  reorderDocuments,
+  removeScreen,
+  reorderDecks,
   reorderElements,
+  reorderScreens,
   resizeElement,
-  updateDocument,
   updateElement,
   updateElements,
+  updateScreen,
 } from "../scene/operations";
-import type { DocumentPatch, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput } from "../scene/operations";
-import type { AddDocumentOptions } from "../scene/operations";
+import type { AddDeckOptions, AddScreenOptions, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput, ScreenPatch } from "../scene/operations";
 import { ProjectHistory, type ProjectOperation } from "../scene/history";
-import type { DocumentPreset } from "../lib/schema";
 
 export type EditorSnapshot = {
   project: Project;
-  activeDocumentId: string;
+  activeDeckId: string;
+  activeScreenId: string;
   selectedElementIds: string[];
   zoom: number;
   clipboardCount: number;
@@ -43,10 +46,12 @@ export class EditorStore {
 
   constructor(project: Project, onCommit: ProjectCommit) {
     this.history = new ProjectHistory(project, 100);
+    const deck = project.decks[0];
     this.commit = onCommit;
     this.snapshot = {
       project,
-      activeDocumentId: project.documents[0]?.id ?? "",
+      activeDeckId: deck?.id ?? "",
+      activeScreenId: deck?.screens[0]?.id ?? "",
       selectedElementIds: [],
       zoom: 0.45,
       clipboardCount: 0,
@@ -71,30 +76,41 @@ export class EditorStore {
     if (project === this.history.project) return;
     this.history.replaceProject(project);
     this.transactionBefore = null;
-    const activeDocumentId = project.documents.some((document) => document.id === this.snapshot.activeDocumentId)
-      ? this.snapshot.activeDocumentId
-      : project.documents[0]?.id ?? "";
+    const deck = project.decks.some((candidate) => candidate.id === this.snapshot.activeDeckId)
+      ? project.decks.find((candidate) => candidate.id === this.snapshot.activeDeckId)
+      : project.decks[0];
+    const activeDeckId = deck?.id ?? "";
+    const activeScreenId = deck?.screens.some((screen) => screen.id === this.snapshot.activeScreenId)
+      ? this.snapshot.activeScreenId
+      : deck?.screens[0]?.id ?? "";
     this.updateSnapshot({
       project,
-      activeDocumentId,
-      selectedElementIds: this.validSelection(project, activeDocumentId, this.snapshot.selectedElementIds),
+      activeDeckId,
+      activeScreenId,
+      selectedElementIds: this.validSelection(project, activeScreenId, this.snapshot.selectedElementIds),
       canUndo: this.history.canUndo,
       canRedo: this.history.canRedo,
       isInTransaction: false,
     });
   }
 
-  setActiveDocument(documentId: string): void {
-    if (!this.history.project.documents.some((document) => document.id === documentId)) return;
-    this.updateSnapshot({
-      activeDocumentId: documentId,
-      selectedElementIds: [],
-    });
+  setActiveDeck(deckId: string): void {
+    const deck = this.history.project.decks.find((candidate) => candidate.id === deckId);
+    if (!deck) return;
+    this.updateSnapshot({ activeDeckId: deckId, activeScreenId: deck.screens[0]?.id ?? "", selectedElementIds: [] });
+  }
+
+  setActiveScreen(screenId: string): void {
+    for (const deck of this.history.project.decks) {
+      if (deck.screens.some((screen) => screen.id === screenId)) {
+        this.updateSnapshot({ activeDeckId: deck.id, activeScreenId: screenId, selectedElementIds: [] });
+        return;
+      }
+    }
   }
 
   setSelection(elementIds: readonly string[]): void {
-    const selectedElementIds = this.validSelection(this.history.project, this.snapshot.activeDocumentId, elementIds);
-    this.updateSnapshot({ selectedElementIds });
+    this.updateSnapshot({ selectedElementIds: this.validSelection(this.history.project, this.snapshot.activeScreenId, elementIds) });
   }
 
   toggleSelection(elementId: string, additive = false): void {
@@ -105,8 +121,7 @@ export class EditorStore {
   }
 
   selectAll(): void {
-    const document = this.history.project.documents.find((candidate) => candidate.id === this.snapshot.activeDocumentId);
-    this.setSelection(document?.elements.map((element) => element.id) ?? []);
+    this.setSelection(this.activeScreen()?.elements.map((element) => element.id) ?? []);
   }
 
   setZoom(zoom: number): void {
@@ -118,7 +133,7 @@ export class EditorStore {
     if (project === this.snapshot.project) return;
     this.updateSnapshot({
       project,
-      selectedElementIds: this.validSelection(project, this.snapshot.activeDocumentId, this.snapshot.selectedElementIds),
+      selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds),
       canUndo: this.history.canUndo,
       canRedo: this.history.canRedo,
     });
@@ -135,12 +150,7 @@ export class EditorStore {
     const before = this.transactionBefore;
     const project = this.history.commitTransaction();
     this.transactionBefore = null;
-    this.updateSnapshot({
-      project,
-      canUndo: this.history.canUndo,
-      canRedo: this.history.canRedo,
-      isInTransaction: false,
-    });
+    this.updateSnapshot({ project, canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
     if (before && project !== before) this.commit(project);
   }
 
@@ -155,13 +165,7 @@ export class EditorStore {
     const before = this.history.project;
     const project = this.history.undo();
     if (project === before) return;
-    this.updateSnapshot({
-      project,
-      selectedElementIds: this.validSelection(project, this.snapshot.activeDocumentId, this.snapshot.selectedElementIds),
-      canUndo: this.history.canUndo,
-      canRedo: this.history.canRedo,
-      isInTransaction: false,
-    });
+    this.updateSnapshot({ project, selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds), canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
     this.commit(project);
   }
 
@@ -170,28 +174,22 @@ export class EditorStore {
     const before = this.history.project;
     const project = this.history.redo();
     if (project === before) return;
-    this.updateSnapshot({
-      project,
-      selectedElementIds: this.validSelection(project, this.snapshot.activeDocumentId, this.snapshot.selectedElementIds),
-      canUndo: this.history.canUndo,
-      canRedo: this.history.canRedo,
-      isInTransaction: false,
-    });
+    this.updateSnapshot({ project, selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds), canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
     this.commit(project);
   }
 
   copy(): void {
-    const document = this.activeDocument();
-    const selected = document?.elements.filter((element) => this.snapshot.selectedElementIds.includes(element.id)) ?? [];
+    const screen = this.activeScreen();
+    const selected = screen?.elements.filter((element) => this.snapshot.selectedElementIds.includes(element.id)) ?? [];
     this.clipboard = selected.map((element) => ({ ...element }));
     this.updateSnapshot({ clipboardCount: this.clipboard.length });
   }
 
   paste(): void {
     if (this.clipboard.length === 0) return;
-    const documentId = this.snapshot.activeDocumentId;
+    const screenId = this.snapshot.activeScreenId;
     const clipboard = this.clipboard.map((element) => ({ ...element, id: createId(element.type) }));
-    this.apply("Paste", (project) => clipboard.reduce((current, element, index) => addElement(current, documentId, {
+    this.apply("Paste", (project) => clipboard.reduce((current, element, index) => addElement(current, screenId, {
       ...element,
       x: element.x + 24 + index * 8,
       y: element.y + 24 + index * 8,
@@ -202,47 +200,41 @@ export class EditorStore {
   deleteSelection(): void {
     const ids = this.snapshot.selectedElementIds;
     if (ids.length === 0) return;
-    const documentId = this.snapshot.activeDocumentId;
-    this.apply("Delete selection", (project) => removeElements(project, documentId, ids));
+    this.apply("Delete selection", (project) => removeElements(project, this.snapshot.activeScreenId, ids));
     this.setSelection([]);
   }
 
   duplicateSelection(): void {
     const ids = this.snapshot.selectedElementIds;
     if (ids.length === 0) return;
-    const documentId = this.snapshot.activeDocumentId;
-    const beforeIds = new Set(this.activeDocument()?.elements.map((element) => element.id) ?? []);
-    this.apply("Duplicate selection", (project) => duplicateElements(project, documentId, ids));
-    const duplicatedIds = this.activeDocument()?.elements.filter((element) => !beforeIds.has(element.id)).map((element) => element.id) ?? [];
-    this.setSelection(duplicatedIds);
+    const screenId = this.snapshot.activeScreenId;
+    const beforeIds = new Set(this.activeScreen()?.elements.map((element) => element.id) ?? []);
+    this.apply("Duplicate selection", (project) => duplicateElements(project, screenId, ids));
+    this.setSelection(this.activeScreen()?.elements.filter((element) => !beforeIds.has(element.id)).map((element) => element.id) ?? []);
   }
 
   duplicateElement(elementId: string): void {
-    const documentId = this.snapshot.activeDocumentId;
-    const beforeIds = new Set(this.activeDocument()?.elements.map((element) => element.id) ?? []);
-    this.apply("Duplicate layer", (project) => duplicateElements(project, documentId, [elementId]));
-    const duplicated = this.activeDocument()?.elements.find((element) => !beforeIds.has(element.id));
-    if (duplicated) this.setSelection([duplicated.id]);
+    const screenId = this.snapshot.activeScreenId;
+    const beforeIds = new Set(this.activeScreen()?.elements.map((element) => element.id) ?? []);
+    this.apply("Duplicate layer", (project) => duplicateElements(project, screenId, [elementId]));
+    const duplicate = this.activeScreen()?.elements.find((element) => !beforeIds.has(element.id));
+    if (duplicate) this.setSelection([duplicate.id]);
   }
 
   reorderElementByDirection(elementId: string, direction: -1 | 1): void {
-    const document = this.activeDocument();
-    if (!document) return;
-    const ordered = [...document.elements].sort((left, right) => left.zIndex - right.zIndex);
+    const screen = this.activeScreen();
+    if (!screen) return;
+    const ordered = [...screen.elements].sort((left, right) => left.zIndex - right.zIndex);
     const index = ordered.findIndex((element) => element.id === elementId);
     if (index < 0) return;
-    const documentId = document.id;
-    this.apply("Reorder layer", (project) => reorderElements(project, documentId, [elementId], index + direction));
+    this.apply("Reorder layer", (project) => reorderElements(project, screen.id, [elementId], index + direction));
   }
 
   reorderElementToIndex(elementId: string, targetIndex: number): void {
-    const document = this.activeDocument();
-    if (!document) return;
-    const selectedIds = this.snapshot.selectedElementIds.includes(elementId)
-      ? this.snapshot.selectedElementIds
-      : [elementId];
-    const documentId = document.id;
-    this.apply("Reorder layer", (project) => reorderElements(project, documentId, selectedIds, targetIndex));
+    const screen = this.activeScreen();
+    if (!screen) return;
+    const selectedIds = this.snapshot.selectedElementIds.includes(elementId) ? this.snapshot.selectedElementIds : [elementId];
+    this.apply("Reorder layer", (project) => reorderElements(project, screen.id, selectedIds, targetIndex));
   }
 
   bringForward(): void { this.reorderSelection(1, "Bring forward"); }
@@ -253,111 +245,120 @@ export class EditorStore {
   nudge(delta: MoveDelta): void {
     const ids = this.editableSelectedIds();
     if (ids.length === 0) return;
-    const documentId = this.snapshot.activeDocumentId;
-    this.apply("Nudge selection", (project) => moveElements(project, documentId, ids, delta));
+    this.apply("Nudge selection", (project) => moveElements(project, this.snapshot.activeScreenId, ids, delta));
   }
 
   updateElement(elementId: string, patch: ElementPatch): void {
-    const documentId = this.snapshot.activeDocumentId;
-    this.apply("Update element", (project) => updateElement(project, documentId, elementId, patch));
+    this.apply("Update element", (project) => updateElement(project, this.snapshot.activeScreenId, elementId, patch));
   }
 
   updateElements(updates: ElementUpdate[] | Record<string, ElementPatch>): void {
-    const documentId = this.snapshot.activeDocumentId;
-    this.apply("Update elements", (project) => updateElements(project, documentId, updates));
+    this.apply("Update elements", (project) => updateElements(project, this.snapshot.activeScreenId, updates));
   }
 
   moveSelection(delta: MoveDelta): void {
     const ids = this.editableSelectedIds();
     if (ids.length === 0) return;
-    const documentId = this.snapshot.activeDocumentId;
-    this.apply("Move selection", (project) => moveElements(project, documentId, ids, delta));
+    this.apply("Move selection", (project) => moveElements(project, this.snapshot.activeScreenId, ids, delta));
   }
 
   resizeElement(elementId: string, input: ResizeElementInput): void {
-    const documentId = this.snapshot.activeDocumentId;
-    this.apply("Resize element", (project) => resizeElement(project, documentId, elementId, input));
+    this.apply("Resize element", (project) => resizeElement(project, this.snapshot.activeScreenId, elementId, input));
   }
 
-  updateCurrentDocument(patch: DocumentPatch): void {
-    const documentId = this.snapshot.activeDocumentId;
-    this.apply("Update document", (project) => updateDocument(project, documentId, patch));
+  updateCurrentScreen(patch: ScreenPatch): void {
+    this.apply("Update screen", (project) => updateScreen(project, this.snapshot.activeScreenId, patch));
   }
 
-  addDocument(preset: DocumentPreset, options?: AddDocumentOptions): void {
-    this.apply("Add document", (project) => addDocument(project, preset, options));
+  addDeck(options: AddDeckOptions): void {
+    this.apply("Add deck", (project) => addDeck(project, options));
   }
 
-  duplicateCurrentDocument(): void {
-    this.duplicateDocumentById(this.snapshot.activeDocumentId);
+  duplicateDeckById(deckId: string): void {
+    const before = this.history.project.decks.map((deck) => deck.id);
+    this.apply("Duplicate deck", (project) => duplicateDeck(project, deckId));
+    const added = this.history.project.decks.find((deck) => !before.includes(deck.id));
+    if (added) this.setActiveDeck(added.id);
   }
 
-  duplicateDocumentById(documentId: string): void {
-    const before = this.history.project.documents.map((document) => document.id);
-    this.apply("Duplicate document", (project) => duplicateDocument(project, documentId));
-    const added = this.history.project.documents.find((document) => !before.includes(document.id));
-    if (added) this.setActiveDocument(added.id);
-  }
-
-  removeCurrentDocument(): void {
-    this.removeDocumentById(this.snapshot.activeDocumentId);
-  }
-
-  removeDocumentById(documentId: string): void {
-    const index = this.history.project.documents.findIndex((document) => document.id === documentId);
-    const wasActive = documentId === this.snapshot.activeDocumentId;
-    this.apply("Delete document", (project) => removeDocument(project, documentId));
+  removeDeckById(deckId: string): void {
+    const index = this.history.project.decks.findIndex((deck) => deck.id === deckId);
+    const wasActive = deckId === this.snapshot.activeDeckId;
+    this.apply("Delete deck", (project) => removeDeck(project, deckId));
     if (!wasActive) return;
-    const next = this.history.project.documents[Math.min(Math.max(index - 1, 0), this.history.project.documents.length - 1)];
-    if (next) this.setActiveDocument(next.id);
+    const next = this.history.project.decks[Math.min(Math.max(index - 1, 0), this.history.project.decks.length - 1)];
+    if (next) this.setActiveDeck(next.id);
   }
 
-  reorderCurrentDocuments(documentIds: string[], targetIndex: number): void {
-    this.apply("Reorder documents", (project) => reorderDocuments(project, documentIds, targetIndex));
+  reorderCurrentDecks(deckIds: string[], targetIndex: number): void {
+    this.apply("Reorder decks", (project) => reorderDecks(project, deckIds, targetIndex));
   }
 
-  reorderElementTo(elementId: string, targetElementId: string): void {
-    const document = this.activeDocument();
-    if (!document || elementId === targetElementId) return;
-    const ordered = [...document.elements].sort((left, right) => left.zIndex - right.zIndex);
-    const remaining = ordered.filter((element) => element.id !== elementId);
-    const targetIndex = remaining.findIndex((element) => element.id === targetElementId);
+  addScreen(preset: ScreenPreset, options?: AddScreenOptions): void {
+    this.apply("Add screen", (project) => addScreen(project, this.snapshot.activeDeckId, preset, options));
+  }
+
+  duplicateCurrentScreen(): void {
+    this.duplicateScreenById(this.snapshot.activeDeckId, this.snapshot.activeScreenId);
+  }
+
+  duplicateScreenById(deckId: string, screenId: string): void {
+    const before = this.history.project.decks.flatMap((deck) => deck.screens.map((screen) => screen.id));
+    this.apply("Duplicate screen", (project) => duplicateScreen(project, deckId, screenId));
+    const added = this.history.project.decks.flatMap((deck) => deck.screens).find((screen) => !before.includes(screen.id));
+    if (added) this.setActiveScreen(added.id);
+  }
+
+  removeCurrentScreen(): void {
+    this.removeScreenById(this.snapshot.activeDeckId, this.snapshot.activeScreenId);
+  }
+
+  removeScreenById(deckId: string, screenId: string): void {
+    const deck = this.history.project.decks.find((candidate) => candidate.id === deckId);
+    const index = deck?.screens.findIndex((screen) => screen.id === screenId) ?? -1;
+    const wasActive = screenId === this.snapshot.activeScreenId;
+    this.apply("Delete screen", (project) => removeScreen(project, deckId, screenId));
+    if (!wasActive || !deck) return;
+    const next = this.history.project.decks.find((candidate) => candidate.id === deckId)?.screens[Math.min(Math.max(index - 1, 0), (deck.screens.length - 2))];
+    if (next) this.setActiveScreen(next.id);
+  }
+
+  reorderCurrentScreens(screenIds: string[], targetIndex: number): void {
+    this.apply("Reorder screens", (project) => reorderScreens(project, this.snapshot.activeDeckId, screenIds, targetIndex));
+  }
+
+  reorderScreenTo(screenId: string, targetScreenId: string): void {
+    if (screenId === targetScreenId) return;
+    const deck = this.history.project.decks.find((candidate) => candidate.id === this.snapshot.activeDeckId);
+    if (!deck) return;
+    const remaining = deck.screens.filter((screen) => screen.id !== screenId);
+    const targetIndex = remaining.findIndex((screen) => screen.id === targetScreenId);
     if (targetIndex < 0) return;
-    const documentId = document.id;
-    this.apply("Reorder layer", (project) => reorderElements(project, documentId, [elementId], targetIndex));
-  }
-
-  reorderDocumentTo(documentId: string, targetDocumentId: string): void {
-    if (documentId === targetDocumentId) return;
-    const remaining = this.history.project.documents.filter((document) => document.id !== documentId);
-    const targetIndex = remaining.findIndex((document) => document.id === targetDocumentId);
-    if (targetIndex < 0) return;
-    this.reorderCurrentDocuments([documentId], targetIndex);
+    this.reorderCurrentScreens([screenId], targetIndex);
   }
 
   private reorderSelection(direction: number, label: string): void {
-    const document = this.activeDocument();
-    if (!document || this.snapshot.selectedElementIds.length === 0) return;
-    const ordered = [...document.elements].sort((left, right) => left.zIndex - right.zIndex);
+    const screen = this.activeScreen();
+    if (!screen || this.snapshot.selectedElementIds.length === 0) return;
+    const ordered = [...screen.elements].sort((left, right) => left.zIndex - right.zIndex);
     const selected = new Set(this.snapshot.selectedElementIds);
     const currentIndex = Math.min(...ordered.filter((element) => selected.has(element.id)).map((element) => element.zIndex));
     const target = direction === 9999 ? ordered.length : direction === 0 ? 0 : currentIndex + direction;
-    const documentId = document.id;
-    this.apply(label, (project) => reorderElements(project, documentId, this.snapshot.selectedElementIds, target));
+    this.apply(label, (project) => reorderElements(project, screen.id, this.snapshot.selectedElementIds, target));
   }
 
-  private activeDocument() {
-    return this.history.project.documents.find((document) => document.id === this.snapshot.activeDocumentId);
+  private activeScreen(): Screen | undefined {
+    return this.history.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === this.snapshot.activeScreenId);
   }
 
   private editableSelectedIds(): string[] {
     const selected = new Set(this.snapshot.selectedElementIds);
-    return this.activeDocument()?.elements.filter((element) => selected.has(element.id) && !element.locked).map((element) => element.id) ?? [];
+    return this.activeScreen()?.elements.filter((element) => selected.has(element.id) && !element.locked).map((element) => element.id) ?? [];
   }
 
-  private validSelection(project: Project, documentId: string, ids: readonly string[]): string[] {
-    const document = project.documents.find((candidate) => candidate.id === documentId);
-    const available = new Set(document?.elements.map((element) => element.id) ?? []);
+  private validSelection(project: Project, screenId: string, ids: readonly string[]): string[] {
+    const screen = project.decks.flatMap((deck) => deck.screens).find((candidate) => candidate.id === screenId);
+    const available = new Set(screen?.elements.map((element) => element.id) ?? []);
     return ids.filter((id) => available.has(id));
   }
 

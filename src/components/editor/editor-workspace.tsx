@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { AssetMetadata, DeviceElement, DocumentPreset, ImageElement, Project, ShapeElement, TextElement } from "../../lib/schema";
+import type { AssetMetadata, DeviceElement, Project, ScreenPreset, ImageElement, ShapeElement, TextElement } from "../../lib/schema";
 import { createId, nowIso } from "../../lib/ids";
 import { apiFetch, ApiClientError } from "../../lib/client-api";
 import { EditorStore } from "../../app/editor-store";
-import { selectActiveDocument, selectAssetReferences, selectSelectedElements } from "../../scene/selectors";
+import { resolveScreen, selectActiveDeck, selectSelectedElements } from "../../scene/selectors";
+import { selectAssetReferences } from "../../scene/selectors";
 import { addElement } from "../../scene/operations";
 import { EditorCanvas } from "../../canvas/editor-canvas";
 import { DocumentNavigator } from "../sidebar/document-navigator";
@@ -54,10 +55,8 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const [fitRequest, setFitRequest] = useState(0);
   const [previewMode, setPreviewMode] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [addPreset, setAddPreset] = useState<DocumentPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
+  const [addPreset, setAddPreset] = useState<ScreenPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
   const [addName, setAddName] = useState("");
-  const [addWidth, setAddWidth] = useState("1320");
-  const [addHeight, setAddHeight] = useState("2868");
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameName, setRenameName] = useState(project.name);
   const [renameSlug, setRenameSlug] = useState(project.slug);
@@ -82,7 +81,8 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     setRenameExportDirectory(project.settings.exportDirectory ?? "");
   }, [project.name, project.settings.exportDirectory, project.slug]);
 
-  const activeDocument = selectActiveDocument(snapshot.project, snapshot.activeDocumentId);
+  const activeDeck = selectActiveDeck(snapshot.project, snapshot.activeDeckId);
+  const activeDocument = resolveScreen(snapshot.project, snapshot.activeScreenId);
   const selectedElements = selectSelectedElements(activeDocument, snapshot.selectedElementIds);
   const reportError = useCallback((reason: unknown) => {
     setLocalError(reason instanceof Error ? reason.message : "The editor could not apply that change.");
@@ -369,8 +369,8 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       applyAssetMutationProject(result.project, flushedRevision);
     } catch (reason) {
       if (!(reason instanceof ApiClientError) || reason.code !== "ASSET_IN_USE") throw reason;
-      const details = reason.details as { usages?: Array<{ documentName: string; elementName: string }> } | undefined;
-      const usages = details?.usages?.map((usage) => `${usage.documentName} / ${usage.elementName}`).join(", ") ?? "another element";
+      const details = reason.details as { usages?: Array<{ screenName: string; deckName?: string; elementName: string }> } | undefined;
+      const usages = details?.usages?.map((usage) => `${usage.deckName ? `${usage.deckName} / ` : ""}${usage.screenName} / ${usage.elementName}`).join(", ") ?? "another element";
       if (!window.confirm(`${asset.fileName} is used by ${usages}. Force delete it? References will show missing-asset errors.`)) throw reason;
       let flushedRevision = localCommitRevisionRef.current;
       const result = await assetMutationQueueRef.current(
@@ -400,19 +400,16 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     else onProjectSynced(nextProject);
   }
 
-  function submitAddDocument(event: React.FormEvent<HTMLFormElement>) {
+  function submitAddScreen(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     run(() => {
-      const width = Math.min(100000, Math.max(1, Math.round(Number(addWidth) || 1320)));
-      const height = Math.min(100000, Math.max(1, Math.round(Number(addHeight) || 2868)));
-      store.addDocument(addPreset, { name: addName.trim() || undefined, ...(addPreset === "custom" ? { width, height } : {}) });
-      const added = store.history.project.documents[store.history.project.documents.length - 1];
-      if (added) store.setActiveDocument(added.id);
+      const before = store.history.project.decks.flatMap((deck) => deck.screens.map((screen) => screen.id));
+      store.addScreen(addPreset, { name: addName.trim() || undefined });
+      const added = store.history.project.decks.flatMap((deck) => deck.screens).find((screen) => !before.includes(screen.id));
+      if (added) store.setActiveScreen(added.id);
       setPreviewMode(false);
       setAddOpen(false);
       setAddName("");
-      setAddWidth("1320");
-      setAddHeight("2868");
     });
   }
 
@@ -432,15 +429,16 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     }
   }
 
-  function deleteDocument(documentId = snapshot.activeDocumentId) {
-    const target = snapshot.project.documents.find((document) => document.id === documentId);
+  function deleteScreen(screenId = snapshot.activeScreenId) {
+    const target = snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === screenId);
     if (!target) return;
-    if (snapshot.project.documents.length <= 1) {
-      setLocalError("A project must keep at least one document.");
+    const targetDeck = snapshot.project.decks.find((deck) => deck.screens.some((screen) => screen.id === screenId));
+    if (!targetDeck || targetDeck.screens.length <= 1) {
+      setLocalError("A deck must keep at least one screen.");
       return;
     }
     if (!window.confirm(`Delete “${target.name}”?`)) return;
-    run(() => store.removeDocumentById(documentId));
+    run(() => store.removeScreenById(targetDeck.id, screenId));
   }
 
   async function flushPendingSave(): Promise<Project> {
@@ -485,32 +483,32 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       {visibleError ? <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-300/20 bg-red-400/[0.08] px-4 py-2 text-xs text-red-100" role="alert"><span>{visibleError}</span><button className="text-red-100/70 hover:text-red-50" onClick={() => setLocalError(null)} type="button">Dismiss</button></div> : null}
       <div className="flex min-h-0 flex-1">
         <DocumentNavigator
-          activeDocumentId={snapshot.activeDocumentId}
+          activeDocumentId={snapshot.activeScreenId}
           assets={snapshot.project.assets}
-          documents={snapshot.project.documents}
+          documents={activeDeck.screens.map((screen) => resolveScreen(snapshot.project, screen.id))}
           onAddDocument={() => setAddOpen(true)}
-          onDeleteDocument={deleteDocument}
-          onDuplicateDocument={(documentId) => run(() => store.duplicateDocumentById(documentId))}
+          onDeleteDocument={deleteScreen}
+          onDuplicateDocument={(screenId) => run(() => store.duplicateScreenById(activeDeck.id, screenId))}
           onOpenPreview={() => { commitInspectorTransaction(); store.setSelection([]); setPreviewMode(true); }}
           onDeleteElement={(elementId) => run(() => { store.setSelection([elementId]); store.deleteSelection(); })}
           onDuplicateElement={(elementId) => run(() => store.duplicateElement(elementId))}
-          onMoveDocument={(documentId, direction) => run(() => {
-            const index = snapshot.project.documents.findIndex((document) => document.id === documentId);
-            store.reorderCurrentDocuments([documentId], index + direction);
+          onMoveDocument={(screenId, direction) => run(() => {
+            const index = activeDeck.screens.findIndex((screen) => screen.id === screenId);
+            store.reorderCurrentScreens([screenId], index + direction);
           })}
-          onReorderDocument={(documentId, targetIndex) => run(() => {
-            const sourceIndex = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
-            store.reorderCurrentDocuments([documentId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
+          onReorderDocument={(screenId, targetIndex) => run(() => {
+            const sourceIndex = activeDeck.screens.findIndex((screen) => screen.id === screenId);
+            store.reorderCurrentScreens([screenId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
           })}
           onMoveElement={(elementId, direction) => run(() => store.reorderElementByDirection(elementId, direction))}
           onReorderElement={(elementId, targetIndex) => run(() => {
-            const currentDocument = selectActiveDocument(store.getSnapshot().project, store.getSnapshot().activeDocumentId);
+            const currentDocument = resolveScreen(store.getSnapshot().project, store.getSnapshot().activeScreenId);
             const ordered = [...currentDocument.elements].sort((left, right) => left.zIndex - right.zIndex);
             const sourceIndex = ordered.findIndex((element) => element.id === elementId);
             store.reorderElementToIndex(elementId, sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
           })}
           onRenameElement={(elementId, name) => run(() => store.updateElement(elementId, { name }))}
-          onSelectDocument={(documentId) => { store.setActiveDocument(documentId); setPreviewMode(false); }}
+          onSelectDocument={(screenId) => { store.setActiveScreen(screenId); setPreviewMode(false); }}
           onSelectElement={(elementId, additive) => store.toggleSelection(elementId, additive)}
           onToggleLocked={(element) => run(() => store.updateElement(element.id, { locked: !element.locked }))}
           onToggleVisible={(element) => run(() => store.updateElement(element.id, { visible: !element.visible }))}
@@ -528,15 +526,15 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           >
             {exportRendering ? <div className="grid min-h-0 flex-1 place-items-center text-xs text-muted">Rendering export…</div> : previewMode ? <ProjectPreview
               assets={snapshot.project.assets}
-              documents={snapshot.project.documents}
-              onMoveDocument={(documentId, direction) => run(() => {
-                const index = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
-                store.reorderCurrentDocuments([documentId], index + direction);
+              screens={activeDeck.screens.map((screen) => resolveScreen(snapshot.project, screen.id))}
+              onMoveScreen={(screenId, direction) => run(() => {
+                const index = activeDeck.screens.findIndex((screen) => screen.id === screenId);
+                store.reorderCurrentScreens([screenId], index + direction);
               })}
-              onOpenDocument={(documentId) => { store.setActiveDocument(documentId); setPreviewMode(false); }}
-              onReorderDocument={(documentId, targetIndex) => run(() => {
-                const sourceIndex = store.getSnapshot().project.documents.findIndex((document) => document.id === documentId);
-                store.reorderCurrentDocuments([documentId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
+              onOpenScreen={(screenId) => { store.setActiveScreen(screenId); setPreviewMode(false); }}
+              onReorderScreen={(screenId, targetIndex) => run(() => {
+                const sourceIndex = activeDeck.screens.findIndex((screen) => screen.id === screenId);
+                store.reorderCurrentScreens([screenId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex);
               })}
               projectSlug={project.slug}
             /> : <EditorCanvas
@@ -548,7 +546,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
               onGestureStart={(label) => { commitInspectorTransaction(); store.beginTransaction(label); }}
               onMoveEnd={(elementId, x, y) => run(() => {
                 const currentSnapshot = store.getSnapshot();
-                const currentDocument = selectActiveDocument(currentSnapshot.project, currentSnapshot.activeDocumentId);
+                const currentDocument = resolveScreen(currentSnapshot.project, currentSnapshot.activeScreenId);
                 const current = currentDocument.elements.find((element) => element.id === elementId);
                 if (!current) return;
                 const dx = x - current.x;
@@ -570,17 +568,17 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           </div>
         </main>
         {!previewMode ? <aside className="flex min-h-0 w-[256px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
-          <Inspector document={activeDocument} onUpdateDocument={(patch) => queueInspectorChange("Edit document", () => store.updateCurrentDocument(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
+          <Inspector document={activeDocument} onUpdateDocument={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} selectedElements={selectedElements} />
         </aside> : null}
       </div>
 
-      <Dialog footer={<><Button onClick={() => setAddOpen(false)} variant="ghost">Cancel</Button><Button form="add-document" type="submit" variant="primary">Add document</Button></>} onOpenChange={setAddOpen} open={addOpen} title="New document">
-        <form className="space-y-3" id="add-document" onSubmit={submitAddDocument}>
-          <label className="block text-xs font-medium text-muted" htmlFor="new-document-preset">Preset</label>
-          <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-accent/70" id="new-document-preset" onChange={(event) => setAddPreset(event.target.value as DocumentPreset)} value={addPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Custom size</option></select>
-          {addPreset === "custom" ? <div className="grid grid-cols-2 gap-2 pt-2"><label className="block space-y-1 text-xs font-medium text-muted" htmlFor="new-document-width"><span>Width</span><Input id="new-document-width" max={100000} min={1} onChange={(event) => setAddWidth(event.target.value)} type="number" value={addWidth} /></label><label className="block space-y-1 text-xs font-medium text-muted" htmlFor="new-document-height"><span>Height</span><Input id="new-document-height" max={100000} min={1} onChange={(event) => setAddHeight(event.target.value)} type="number" value={addHeight} /></label></div> : null}
-          <label className="block pt-2 text-xs font-medium text-muted" htmlFor="new-document-name">Name</label>
-          <Input id="new-document-name" onChange={(event) => setAddName(event.target.value)} placeholder="Product launch" value={addName} />
+      <Dialog footer={<><Button onClick={() => setAddOpen(false)} variant="ghost">Cancel</Button><Button form="add-screen" type="submit" variant="primary">Add screen</Button></>} onOpenChange={setAddOpen} open={addOpen} title="New screen">
+        <form className="space-y-3" id="add-screen" onSubmit={submitAddScreen}>
+          <label className="block text-xs font-medium text-muted" htmlFor="new-screen-preset">Starter preset</label>
+          <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-accent/70" id="new-screen-preset" onChange={(event) => setAddPreset(event.target.value as ScreenPreset)} value={addPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Blank screen</option></select>
+          <p className="text-[10px] leading-4 text-muted">This screen inherits {activeDeck.width} × {activeDeck.height} from the active deck.</p>
+          <label className="block pt-2 text-xs font-medium text-muted" htmlFor="new-screen-name">Name</label>
+          <Input id="new-screen-name" onChange={(event) => setAddName(event.target.value)} placeholder="Product launch" value={addName} />
         </form>
       </Dialog>
 
@@ -609,7 +607,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         usageCounts={selectAssetReferences(snapshot.project)}
       />
       <ExportDialog
-        activeDocumentId={snapshot.activeDocumentId}
+        activeScreenId={snapshot.activeScreenId}
         onBeforeExport={flushPendingSave}
         onError={setLocalError}
         onExportDirectoryChange={(directory) => run(() => {

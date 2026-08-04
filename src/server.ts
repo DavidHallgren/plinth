@@ -1,7 +1,8 @@
 import index from "./index.html";
 import {
   apiAction,
-  handleAddDocument,
+  handleAddDeck,
+  handleAddScreen,
   handleApiNotFound,
   handleCreateProject,
   handleDeleteProject,
@@ -43,8 +44,11 @@ const routes = {
   "/api/projects/:slug/duplicate": {
     POST: (request: Request) => apiAction(() => handleDuplicateProject(request, storage)),
   },
-  "/api/projects/:slug/documents": {
-    POST: (request: Request) => apiAction(() => handleAddDocument(request, storage)),
+  "/api/projects/:slug/decks": {
+    POST: (request: Request) => apiAction(() => handleAddDeck(request, storage)),
+  },
+  "/api/projects/:slug/decks/:deckId/screens": {
+    POST: (request: Request) => apiAction(() => handleAddScreen(request, storage)),
   },
   "/api/projects/:slug/assets": {
     GET: (request: Request) => apiAction(() => handleListAssets(request, storage)),

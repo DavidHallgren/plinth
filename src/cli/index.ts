@@ -1,6 +1,6 @@
 import { ProjectStorage } from "../lib/storage";
 import { PlinthError, isPlinthError } from "../lib/errors";
-import { DocumentPresetSchema } from "../lib/schema";
+import { ScreenPresetSchema } from "../lib/schema";
 
 const HELP = `Plinth CLI
 
@@ -10,12 +10,13 @@ Usage:
 Commands:
   list                                  List project metadata
   new <name> [--slug <slug>]            Create a project (never overwrites)
-  inspect <slug>                        Print a project document
+  inspect <slug>                        Print a project with decks and screens
   validate [slug]                       Validate one project or all projects
   duplicate <slug> <new-slug>           Copy a project (never overwrites)
   rename <slug> <name> [--slug <slug>]  Rename a project and optionally its slug
   delete <slug> --yes                   Delete a project directory
-  add-document <slug> <preset> [name]   Add an App Store or custom document
+  add-deck <slug> [name]                 Add a fixed-size deck with a starter screen
+  add-screen <slug> <deck-id> <preset>  Add an App Store or custom screen
   export <slug>                         Explain the browser-required export workflow
   help                                  Show this help
 
@@ -23,8 +24,13 @@ Options:
   --json                                Emit machine-readable output
   --yes                                 Confirm destructive operations
   --slug <slug>                         Set a project slug
-  --width <pixels>                      Set a custom document width
-  --height <pixels>                     Set a custom document height
+  --preset <preset>                     Set the starter screen preset
+  --deck-slug <slug>                    Set a deck slug for add-deck
+  --screen-slug <slug>                  Set a screen slug for add-screen
+  --export-slug <slug>                  Set an export slug for add-screen
+  --name <name>                         Set a project, deck, or screen name
+  --width <pixels>                      Set the deck width at creation
+  --height <pixels>                     Set the deck height at creation
 `;
 
 type ParsedArgs = {
@@ -171,27 +177,50 @@ async function run(parsed: ParsedArgs, storage: ProjectStorage): Promise<{ value
       return { value: { deleted: slug } };
     }
 
-    case "add-document": {
+    case "add-deck": {
       const slug = required(parsed.positionals[0], "project slug");
-      const presetValue = required(parsed.positionals[1] ?? parsed.options.get("preset"), "document preset");
-      const presetResult = DocumentPresetSchema.safeParse(presetValue);
+      const width = optionalDimension(parsed.options.get("width"), "Deck width");
+      const height = optionalDimension(parsed.options.get("height"), "Deck height");
+      if (!width || !height) throw new PlinthError("INVALID_REQUEST", 400, "add-deck requires --width and --height.");
+      const presetValue = parsed.options.get("preset") ?? "blank";
+      const presetResult = ScreenPresetSchema.safeParse(presetValue);
       if (!presetResult.success) {
-        throw new PlinthError("INVALID_REQUEST", 400, `Unknown document preset "${presetValue}".`, {
-          allowed: DocumentPresetSchema.options,
+        throw new PlinthError("INVALID_REQUEST", 400, `Unknown screen preset "${presetValue}".`, {
+          allowed: ScreenPresetSchema.options,
         });
       }
-      const project = await storage.addDocument(slug, presetResult.data, parsed.positionals[2] ?? parsed.options.get("name"), {
-        width: optionalDimension(parsed.options.get("width"), "Document width"),
-        height: optionalDimension(parsed.options.get("height"), "Document height"),
+      const project = await storage.addDeck(slug, {
+        name: parsed.positionals[1] ?? parsed.options.get("name"),
+        slug: parsed.options.get("deck-slug"),
+        width,
+        height,
+        screenPreset: presetResult.data,
+      });
+      return { value: { project } };
+    }
+
+    case "add-screen": {
+      const slug = required(parsed.positionals[0], "project slug");
+      const deckId = required(parsed.positionals[1], "deck id");
+      const presetValue = required(parsed.positionals[2] ?? parsed.options.get("preset"), "screen preset");
+      const presetResult = ScreenPresetSchema.safeParse(presetValue);
+      if (!presetResult.success) {
+        throw new PlinthError("INVALID_REQUEST", 400, `Unknown screen preset "${presetValue}".`, {
+          allowed: ScreenPresetSchema.options,
+        });
+      }
+      const project = await storage.addScreen(slug, deckId, presetResult.data, parsed.positionals[3] ?? parsed.options.get("name"), {
+        slug: parsed.options.get("screen-slug"),
+        exportSlug: parsed.options.get("export-slug"),
       });
       return { value: { project } };
     }
 
     case "export":
-      throw new PlinthError("NOT_IMPLEMENTED", 501, "CLI export requires browser rendering. Open the local Plinth editor, choose Export, and use Current document or All documents; the browser writes exact PNGs to the project's exports/ directory. The CLI deliberately does not duplicate the shared Konva renderer.", {
+      throw new PlinthError("NOT_IMPLEMENTED", 501, "CLI export requires browser rendering. Open the local Plinth editor, choose Export, and use Current screen or All screens; the browser writes exact PNGs to the project's exports/ directory. The CLI deliberately does not duplicate the shared Konva renderer.", {
         browserRequired: true,
         projectSlug: parsed.positionals[0],
-        workflow: "Open the editor -> Export -> choose documents -> render/download.",
+        workflow: "Open the editor -> Export -> choose screens -> render/download.",
       });
 
     default:

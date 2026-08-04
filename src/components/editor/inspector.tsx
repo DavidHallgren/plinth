@@ -1,8 +1,9 @@
 import { ChevronDown, Lock, Unlock, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EDITABLE_DEVICE_PRESETS, getDevicePreset } from "../../devices/presets";
-import type { Background, Document, SceneElement, Shadow, TextElement } from "../../lib/schema";
-import type { DocumentPatch, ElementPatch, ElementUpdate } from "../../scene/operations";
+import type { Background, SceneElement, Shadow, TextElement } from "../../lib/schema";
+import type { ResolvedScreen } from "../../scene/selectors";
+import type { ElementPatch, ElementUpdate, ScreenPatch } from "../../scene/operations";
 import { APP_STORE_PRESETS } from "../../scene/presets";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -16,6 +17,9 @@ const FONT_OPTIONS = [
   "Georgia, serif",
   "ui-monospace, SFMono-Regular, Menlo, monospace",
 ];
+
+type Document = ResolvedScreen;
+type DocumentPatch = ScreenPatch;
 
 type InspectorProps = {
   document: Document;
@@ -44,12 +48,12 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
       return;
     }
     const preset = APP_STORE_PRESETS.find((candidate) => candidate.id === value);
-    if (preset) onUpdate({ preset: preset.id, width: preset.width, height: preset.height });
+    if (preset) onUpdate({ preset: preset.id });
   }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
-      <InspectorHeading title="Document" detail={`${document.width} × ${document.height}`} />
+      <InspectorHeading title="Screen" detail={`${document.width} × ${document.height} · ${document.deckName}`} />
       <Section title="Identity">
         <Field label="Name"><Input onChange={(event) => onUpdate({ name: event.target.value })} value={document.name} /></Field>
         <Field label="Export name"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={document.exportSlug} /></Field>
@@ -59,10 +63,7 @@ function DocumentInspector({ document, onUpdate }: { document: Document; onUpdat
             <option value="custom">Custom size</option>
           </select>
         </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Width"><NumberField min={1} onChange={(value) => onUpdate({ width: value, preset: "custom" })} value={document.width} /></Field>
-          <Field label="Height"><NumberField min={1} onChange={(value) => onUpdate({ height: value, preset: "custom" })} value={document.height} /></Field>
-        </div>
+        <p className="text-[10px] leading-4 text-muted">Screen dimensions are fixed by the containing deck.</p>
       </Section>
       <Section title="Background">
         <BackgroundControls background={document.background} onChange={(background) => onUpdate({ background })} />

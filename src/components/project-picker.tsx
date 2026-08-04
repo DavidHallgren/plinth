@@ -97,7 +97,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDe
                             {!project.valid ? <span className="text-[11px] font-medium text-red-200">Invalid</span> : null}
                           </div>
                           <p className="mt-0.5 truncate text-xs text-muted">
-                            {project.valid ? `${project.documentCount} ${project.documentCount === 1 ? "document" : "documents"}` : project.error}
+                            {project.valid ? `${project.deckCount} ${project.deckCount === 1 ? "deck" : "decks"} · ${project.screenCount} ${project.screenCount === 1 ? "screen" : "screens"}` : project.error}
                           </p>
                         </div>
                         <ArrowUpRight className="shrink-0 text-muted transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent-soft" size={17} />
