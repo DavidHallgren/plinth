@@ -196,7 +196,20 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
                 </SceneRenderer>
               ))}
               <Layer listening={false}>
-                <Rect fill="transparent" height={deck.height} listening={false} stroke="#ffffff" strokeWidth={2 / Math.max(0.01, zoom)} width={deck.width} x={focusedIndex * (deck.width + SCREEN_GAP / zoom)} y={0} />
+                {screens.map((screen, index) => {
+                  const focused = screen.id === focusedScreenId;
+                  return <Rect
+                    fill="transparent"
+                    height={deck.height}
+                    key={`screen-outline-${screen.id}`}
+                    listening={false}
+                    stroke={focused ? "#ffffff" : "#ffffff40"}
+                    strokeWidth={1 / Math.max(0.01, zoom)}
+                    width={deck.width}
+                    x={index * (deck.width + SCREEN_GAP / zoom)}
+                    y={0}
+                  />;
+                })}
               </Layer>
             </Stage>
           </div>
