@@ -81,7 +81,7 @@ export function EditorToolbar({
         <span className="mx-2 hidden h-5 w-px bg-white/10 lg:block" />
         <div className="hidden items-center gap-0.5 rounded-lg border border-line bg-panel-strong p-0.5 lg:flex">
           <Button aria-label="Zoom out" onClick={() => onZoomChange(zoom - 0.05)} size="icon" tooltip="Zoom out" variant="ghost"><ZoomOut size={14} /></Button>
-          <button className="h-7 min-w-12 px-1 text-[11px] text-muted hover:text-ink" onClick={onFitDeck} type="button">{Math.round(zoom * 100)}%</button>
+          <button aria-label="Fit focused screen" className="h-7 min-w-12 px-1 text-[11px] text-muted hover:text-ink" onClick={onFitScreen} title="Fit focused screen" type="button">{Math.round(zoom * 100)}%</button>
           <Button aria-label="Zoom in" onClick={() => onZoomChange(zoom + 0.05)} size="icon" tooltip="Zoom in" variant="ghost"><ZoomIn size={14} /></Button>
         </div>
         <Button aria-label="Fit deck" onClick={onFitDeck} size="sm" tooltip="Fit deck" variant="ghost"><Maximize2 size={14} /> Fit deck</Button>

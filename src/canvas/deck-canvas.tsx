@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Layer, Line, Rect, Stage, Transformer } from "react-konva";
+import { Layer, Rect, Stage, Transformer } from "react-konva";
 import type { AssetMetadata, Deck } from "../lib/schema";
 import type { ResolvedScreen } from "../scene/selectors";
 import { projectionKey } from "../scene/overflow";
@@ -17,15 +17,19 @@ export type CanvasTransform = {
 
 export type DeckFitMode = "deck" | "focused-screen";
 
+const CANVAS_PADDING = 32;
+const SCREEN_GAP = 6;
+
 export function fitDeckZoom(deckWidth: number, deckHeight: number, screenCount: number, viewportWidth: number, viewportHeight: number): number {
-  const availableWidth = Math.max(120, viewportWidth - 64);
-  const availableHeight = Math.max(120, viewportHeight - 64);
+  const gapWidth = Math.max(0, screenCount - 1) * SCREEN_GAP;
+  const availableWidth = Math.max(120, viewportWidth - CANVAS_PADDING * 2 - gapWidth);
+  const availableHeight = Math.max(120, viewportHeight - CANVAS_PADDING * 2);
   return Math.min(1, availableWidth / Math.max(1, deckWidth * Math.max(1, screenCount)), availableHeight / Math.max(1, deckHeight));
 }
 
 export function fitFocusedScreenZoom(deckWidth: number, deckHeight: number, viewportWidth: number, viewportHeight: number): number {
-  const availableWidth = Math.max(120, viewportWidth - 64);
-  const availableHeight = Math.max(120, viewportHeight - 64);
+  const availableWidth = Math.max(120, viewportWidth - CANVAS_PADDING * 2);
+  const availableHeight = Math.max(120, viewportHeight - CANVAS_PADDING * 2);
   return Math.min(1, availableWidth / Math.max(1, deckWidth), availableHeight / Math.max(1, deckHeight));
 }
 
@@ -57,7 +61,7 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
   const panRef = useRef<{ pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const totalWidth = deck.width * Math.max(1, screens.length);
-  const scaledWidth = totalWidth * zoom;
+  const scaledWidth = totalWidth * zoom + Math.max(0, screens.length - 1) * SCREEN_GAP;
   const scaledHeight = deck.height * zoom;
   const focusedIndex = Math.max(0, screens.findIndex((screen) => screen.id === focusedScreenId));
   const focusedScreen = screens[focusedIndex] ?? screens[0];
@@ -84,7 +88,8 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
       const viewport = viewportRef.current;
       if (!viewport || fitMode !== "focused-screen") return;
       const screenWidth = deck.width * nextZoom;
-      viewport.scrollTo({ left: Math.max(0, focusedIndex * screenWidth - (viewport.clientWidth - screenWidth) / 2), top: Math.max(0, (deck.height * nextZoom - viewport.clientHeight) / 2), behavior: "smooth" });
+      const screenLeft = CANVAS_PADDING + focusedIndex * (screenWidth + SCREEN_GAP);
+      viewport.scrollTo({ left: Math.max(0, screenLeft - (viewport.clientWidth - screenWidth) / 2), top: Math.max(0, (deck.height * nextZoom - viewport.clientHeight) / 2), behavior: "smooth" });
     });
   }, [deck.height, deck.width, fitMode, fitRequest, focusedIndex, onFitZoom, screens.length, viewportSize.height, viewportSize.width]);
 
@@ -155,45 +160,46 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
   return (
     <div className="relative flex min-h-0 flex-1 overflow-auto bg-[#101010]" onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} ref={viewportRef}>
       <div className="plinth-grid pointer-events-none absolute inset-0 opacity-40" />
-      <div className="relative z-10 flex min-h-full min-w-full items-center justify-center p-8">
-        <div className="relative shrink-0 border border-white/15 bg-[#1a1a1a] shadow-2xl shadow-black/50" style={{ height: scaledHeight + 2, width: scaledWidth + 2 }}>
-          <Stage
-            height={scaledHeight}
-            onMouseDown={(event) => {
-              if (event.target === event.target.getStage()) onClearSelection(focusedScreenId);
-            }}
-            scaleX={zoom}
-            scaleY={zoom}
-            width={scaledWidth}
-          >
-            {screens.map((screen, index) => (
-              <SceneRenderer
-                assets={assets}
-                interactive
-                key={screen.id}
-                offsetX={index * deck.width}
-                onClearSelection={(targetScreenId) => { onFocusScreen(targetScreenId); onClearSelection(targetScreenId); }}
-                onGestureStart={onGestureStart}
-                onMoveEnd={onMoveEnd}
-                onSelect={(targetScreenId, elementId, additive) => { onFocusScreen(targetScreenId); onSelect(targetScreenId, elementId, additive); }}
-                projectSlug={projectSlug}
-                register={(targetScreenId, elementId, node) => {
-                  const key = projectionKey(targetScreenId, elementId);
-                  if (node) nodeRefs.current.set(key, node);
-                  else nodeRefs.current.delete(key);
-                }}
-                screen={screen}
-                selectedElementIds={selectedElementIds}
-                targetScreenId={screen.id}
-              >
-                {screen.id === focusedScreenId ? transformer : null}
-              </SceneRenderer>
-            ))}
-            <Layer listening={false}>
-              {screens.slice(0, -1).map((_screen, index) => <Line key={`seam-${index}`} dash={[6, 8]} opacity={0.55} points={[((index + 1) * deck.width), 0, ((index + 1) * deck.width), deck.height]} stroke="#ffffff" strokeWidth={1 / Math.max(0.01, zoom)} />)}
-              <Rect dash={[10, 8]} fill="transparent" height={deck.height} listening={false} opacity={0.75} stroke="#a99eff" strokeWidth={2 / Math.max(0.01, zoom)} width={deck.width} x={focusedIndex * deck.width} y={0} />
-            </Layer>
-          </Stage>
+      <div className="relative z-10 flex min-h-full min-w-full">
+        <div className="relative m-auto shrink-0" style={{ height: scaledHeight + 2 + CANVAS_PADDING * 2, width: scaledWidth + 2 + CANVAS_PADDING * 2 }}>
+          <div className="absolute border border-white/15 bg-[#1a1a1a] shadow-2xl shadow-black/50" style={{ height: scaledHeight + 2, left: CANVAS_PADDING, top: CANVAS_PADDING, width: scaledWidth + 2 }}>
+            <Stage
+              height={scaledHeight}
+              onMouseDown={(event) => {
+                if (event.target === event.target.getStage()) onClearSelection(focusedScreenId);
+              }}
+              scaleX={zoom}
+              scaleY={zoom}
+              width={scaledWidth}
+            >
+              {screens.map((screen, index) => (
+                <SceneRenderer
+                  assets={assets}
+                  interactive
+                  key={screen.id}
+                  offsetX={index * (deck.width + SCREEN_GAP / zoom)}
+                  onClearSelection={(targetScreenId) => { onFocusScreen(targetScreenId); onClearSelection(targetScreenId); }}
+                  onGestureStart={onGestureStart}
+                  onMoveEnd={onMoveEnd}
+                  onSelect={(targetScreenId, elementId, additive) => { onFocusScreen(targetScreenId); onSelect(targetScreenId, elementId, additive); }}
+                  projectSlug={projectSlug}
+                  register={(targetScreenId, elementId, node) => {
+                    const key = projectionKey(targetScreenId, elementId);
+                    if (node) nodeRefs.current.set(key, node);
+                    else nodeRefs.current.delete(key);
+                  }}
+                  screen={screen}
+                  selectedElementIds={selectedElementIds}
+                  targetScreenId={screen.id}
+                >
+                  {screen.id === focusedScreenId ? transformer : null}
+                </SceneRenderer>
+              ))}
+              <Layer listening={false}>
+                <Rect fill="transparent" height={deck.height} listening={false} stroke="#ffffff" strokeWidth={2 / Math.max(0.01, zoom)} width={deck.width} x={focusedIndex * (deck.width + SCREEN_GAP / zoom)} y={0} />
+              </Layer>
+            </Stage>
+          </div>
         </div>
       </div>
     </div>

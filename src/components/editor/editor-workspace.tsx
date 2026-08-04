@@ -52,7 +52,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   store.setCommitHandler(handleProjectCommit);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [fitRequest, setFitRequest] = useState(0);
-  const [fitMode, setFitMode] = useState<DeckFitMode>("deck");
+  const [fitMode, setFitMode] = useState<DeckFitMode>("focused-screen");
   const [addOpen, setAddOpen] = useState(false);
   const [deckOpen, setDeckOpen] = useState(false);
   const [deckEditId, setDeckEditId] = useState<string | null>(null);

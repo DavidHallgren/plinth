@@ -42,6 +42,7 @@ describe("editor interaction guards and geometry", () => {
     expect(fitFocusedScreenZoom(1320, 2868, 900, 839)).toBeCloseTo(775 / 2868);
     expect(fitFocusedScreenZoom(600, 400, 839, 839)).toBe(1);
     expect(fitDeckZoom(1320, 2868, 2, 900, 839)).toBeCloseTo(775 / 2868);
+    expect(fitDeckZoom(100, 100, 2, 250, 500)).toBeCloseTo(0.9);
   });
 
   test("reorder keeps layer order and retains the moved selection identity", () => {
