@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
-import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom } from "../src/canvas/deck-canvas";
+import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom, horizontalVisibilityRatio, shouldRevealScreenHorizontally } from "../src/canvas/deck-canvas";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
@@ -45,6 +45,15 @@ describe("editor interaction guards and geometry", () => {
     expect(fitScreenWidthZoom(100, 250)).toBe(1);
     expect(fitDeckZoom(1320, 2868, 2, 900, 839)).toBeCloseTo(775 / 2868);
     expect(fitDeckZoom(100, 100, 2, 250, 500)).toBeCloseTo(0.9);
+  });
+
+  test("reveals a screen only when less than a quarter is horizontally visible", () => {
+    expect(horizontalVisibilityRatio(-74, 100, 0, 100)).toBeCloseTo(0.26);
+    expect(shouldRevealScreenHorizontally(-74, 100, 0, 100)).toBe(false);
+    expect(horizontalVisibilityRatio(-75, 100, 0, 100)).toBeCloseTo(0.25);
+    expect(shouldRevealScreenHorizontally(-75, 100, 0, 100)).toBe(false);
+    expect(horizontalVisibilityRatio(-76, 100, 0, 100)).toBeCloseTo(0.24);
+    expect(shouldRevealScreenHorizontally(-76, 100, 0, 100)).toBe(true);
   });
 
   test("reorder keeps layer order and retains the moved selection identity", () => {

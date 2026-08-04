@@ -4,7 +4,6 @@ import { EDITABLE_DEVICE_PRESETS, getDevicePreset } from "../../devices/presets"
 import type { Background, SceneElement, Shadow } from "../../lib/schema";
 import type { ResolvedScreen } from "../../scene/selectors";
 import type { ElementPatch, ElementUpdate, ScreenPatch } from "../../scene/operations";
-import { APP_STORE_PRESETS } from "../../scene/presets";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
@@ -45,28 +44,12 @@ export function Inspector({ screen, selectedElements, onUpdateScreen, onUpdateEl
 }
 
 function ScreenInspector({ screen, onUpdate }: { screen: ResolvedScreen; onUpdate: (patch: ScreenPatch) => void }) {
-  function changePreset(value: string) {
-    if (value === "custom") {
-      onUpdate({ preset: "custom" });
-      return;
-    }
-    const preset = APP_STORE_PRESETS.find((candidate) => candidate.id === value);
-    if (preset) onUpdate({ preset: preset.id });
-  }
-
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <InspectorHeading title="Screen" detail={`${screen.width} × ${screen.height} · ${screen.deckName}`} />
       <Section title="Identity">
         <Field label="Name"><Input onChange={(event) => onUpdate({ name: event.target.value })} value={screen.name} /></Field>
         <Field label="Export name"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={screen.exportSlug} /></Field>
-        <Field label="Preset">
-          <select className={selectClass} onChange={(event) => changePreset(event.target.value)} value={APP_STORE_PRESETS.some((preset) => preset.id === screen.preset) ? screen.preset : "custom"}>
-            {APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
-            <option value="custom">Custom size</option>
-          </select>
-        </Field>
-        <p className="text-[10px] leading-4 text-muted">Screen dimensions are fixed by the containing deck.</p>
       </Section>
       <Section title="Background">
         <BackgroundControls background={screen.background} onChange={(background) => onUpdate({ background })} />

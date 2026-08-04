@@ -19,6 +19,18 @@ export type DeckFitMode = "deck" | "focused-screen" | "screen-width";
 
 const CANVAS_PADDING = 32;
 const SCREEN_GAP = 6;
+const SCREEN_REVEAL_THRESHOLD = 0.25;
+
+export function horizontalVisibilityRatio(screenLeft: number, screenWidth: number, viewportLeft: number, viewportWidth: number): number {
+  if (screenWidth <= 0 || viewportWidth <= 0) return 0;
+  const visibleLeft = Math.max(screenLeft, viewportLeft);
+  const visibleRight = Math.min(screenLeft + screenWidth, viewportLeft + viewportWidth);
+  return Math.max(0, visibleRight - visibleLeft) / screenWidth;
+}
+
+export function shouldRevealScreenHorizontally(screenLeft: number, screenWidth: number, viewportLeft: number, viewportWidth: number): boolean {
+  return horizontalVisibilityRatio(screenLeft, screenWidth, viewportLeft, viewportWidth) < SCREEN_REVEAL_THRESHOLD;
+}
 
 export function fitDeckZoom(deckWidth: number, deckHeight: number, screenCount: number, viewportWidth: number, viewportHeight: number): number {
   const gapWidth = Math.max(0, screenCount - 1) * SCREEN_GAP;
@@ -48,6 +60,7 @@ type DeckCanvasProps = {
   zoom: number;
   fitRequest: string;
   fitMode: DeckFitMode;
+  revealScreenRequest: number;
   onFitZoom: (zoom: number) => void;
   onFocusScreen: (screenId: string) => void;
   onSelect: (targetScreenId: string, elementId: string, additive: boolean) => void;
@@ -59,8 +72,9 @@ type DeckCanvasProps = {
 
 const MIN_TRANSFORM_SIZE = 8;
 
-export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets, selectedElementIds, zoom, fitRequest, fitMode, onFitZoom, onFocusScreen, onSelect, onClearSelection, onGestureStart, onMoveEnd, onTransformEnd }: DeckCanvasProps) {
+export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets, selectedElementIds, zoom, fitRequest, fitMode, revealScreenRequest, onFitZoom, onFocusScreen, onSelect, onClearSelection, onGestureStart, onMoveEnd, onTransformEnd }: DeckCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodeRefs = useRef(new Map<string, Konva.Node>());
   const panRef = useRef<{ pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -99,6 +113,23 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
       viewport.scrollTo({ left: Math.max(0, screenLeft - (viewport.clientWidth - screenWidth) / 2), top: Math.max(0, (deck.height * nextZoom - viewport.clientHeight) / 2), behavior: "smooth" });
     });
   }, [deck.height, deck.width, fitMode, fitRequest, focusedIndex, onFitZoom, screens.length, viewportSize.height, viewportSize.width]);
+
+  useLayoutEffect(() => {
+    if (!revealScreenRequest || !viewportSize.width || !viewportSize.height) return;
+    const frame = requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      const canvasFrame = frameRef.current;
+      if (!viewport || !canvasFrame) return;
+      const screenWidth = deck.width * zoom;
+      const viewportBounds = viewport.getBoundingClientRect();
+      const frameBounds = canvasFrame.getBoundingClientRect();
+      const screenLeft = frameBounds.left + canvasFrame.clientLeft + focusedIndex * (screenWidth + SCREEN_GAP);
+      if (!shouldRevealScreenHorizontally(screenLeft, screenWidth, viewportBounds.left, viewport.clientWidth)) return;
+      const screenLeftInContent = viewport.scrollLeft + screenLeft - (viewportBounds.left + viewport.clientLeft);
+      viewport.scrollTo({ left: Math.max(0, screenLeftInContent - (viewport.clientWidth - screenWidth) / 2), top: Math.max(0, (deck.height * zoom - viewport.clientHeight) / 2), behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [deck.height, deck.width, focusedIndex, revealScreenRequest, viewportSize.height, viewportSize.width, zoom]);
 
   useLayoutEffect(() => {
     const transformer = transformerRef.current;
@@ -169,7 +200,7 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
       <div className="plinth-grid pointer-events-none absolute inset-0 opacity-40" />
       <div className="relative z-10 flex min-h-full min-w-full">
         <div className="relative m-auto shrink-0" style={{ height: scaledHeight + 2 + CANVAS_PADDING * 2, width: scaledWidth + 2 + CANVAS_PADDING * 2 }}>
-          <div className="absolute border border-white/15 bg-[#1a1a1a] shadow-2xl shadow-black/50" style={{ height: scaledHeight + 2, left: CANVAS_PADDING, top: CANVAS_PADDING, width: scaledWidth + 2 }}>
+          <div className="absolute border border-white/15 bg-[#1a1a1a] shadow-2xl shadow-black/50" ref={frameRef} style={{ height: scaledHeight + 2, left: CANVAS_PADDING, top: CANVAS_PADDING, width: scaledWidth + 2 }}>
             <Stage
               height={scaledHeight}
               onMouseDown={(event) => {

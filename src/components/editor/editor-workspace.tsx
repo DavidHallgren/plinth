@@ -53,7 +53,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [fitRequest, setFitRequest] = useState(0);
   const [fitMode, setFitMode] = useState<DeckFitMode>("focused-screen");
-  const [addOpen, setAddOpen] = useState(false);
+  const [revealScreenRequest, setRevealScreenRequest] = useState(0);
   const [deckOpen, setDeckOpen] = useState(false);
   const [deckEditId, setDeckEditId] = useState<string | null>(null);
   const [deckName, setDeckName] = useState("");
@@ -61,8 +61,6 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const [deckPreset, setDeckPreset] = useState<ScreenPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
   const [deckWidth, setDeckWidth] = useState(1320);
   const [deckHeight, setDeckHeight] = useState(2868);
-  const [addPreset, setAddPreset] = useState<ScreenPreset>(APP_STORE_PRESETS[0]?.id ?? "custom");
-  const [addName, setAddName] = useState("");
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameName, setRenameName] = useState(project.name);
   const [renameSlug, setRenameSlug] = useState(project.slug);
@@ -129,6 +127,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     }
   }, [reportError]);
   const fitZoom = useCallback((zoom: number) => store.setZoom(zoom), [store]);
+  const requestActiveScreenReveal = useCallback(() => setRevealScreenRequest((value) => value + 1), []);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -151,12 +150,20 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       }
       if (command && event.key.toLowerCase() === "v") {
         event.preventDefault();
-        run(() => store.paste());
+        run(() => {
+          if (store.getSnapshot().clipboardCount === 0) return;
+          store.paste();
+          requestActiveScreenReveal();
+        });
         return;
       }
       if (command && event.key.toLowerCase() === "d") {
         event.preventDefault();
-        run(() => store.duplicateSelection());
+        run(() => {
+          if (store.getSnapshot().selectedElementIds.length === 0) return;
+          store.duplicateSelection();
+          requestActiveScreenReveal();
+        });
         return;
       }
       if (!command && event.key === "]") {
@@ -187,7 +194,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [run, store]);
+  }, [requestActiveScreenReveal, run, store]);
 
   function addText() {
     const element: TextElement = {
@@ -224,6 +231,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     run(() => {
       store.apply("Add text", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
+      requestActiveScreenReveal();
     });
   }
 
@@ -250,6 +258,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     run(() => {
       store.apply("Add shape", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
+      requestActiveScreenReveal();
     });
   }
 
@@ -280,6 +289,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     run(() => {
       store.apply("Add image", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
+      requestActiveScreenReveal();
     });
   }
 
@@ -324,6 +334,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     run(() => {
       store.apply("Add device", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
+      requestActiveScreenReveal();
     });
   }
 
@@ -402,15 +413,12 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     else onProjectSynced(nextProject);
   }
 
-  function submitAddScreen(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function addNewScreen() {
+    commitInspectorTransaction();
     run(() => {
-      const before = store.history.project.decks.flatMap((deck) => deck.screens.map((screen) => screen.id));
-      store.addScreen(addPreset, { name: addName.trim() || undefined });
-      const added = store.history.project.decks.flatMap((deck) => deck.screens).find((screen) => !before.includes(screen.id));
+      store.addScreen("custom", { name: `Screen ${activeDeck.screens.length + 1}` });
+      const added = store.history.project.decks.find((deck) => deck.id === activeDeck.id)?.screens.at(-1);
       if (added) store.setActiveScreen(added.id);
-      setAddOpen(false);
-      setAddName("");
     });
   }
 
@@ -527,12 +535,12 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           activeScreenId={snapshot.activeScreenId}
           assets={snapshot.project.assets}
           onAddDeck={openNewDeck}
-          onAddScreen={() => setAddOpen(true)}
+          onAddScreen={addNewScreen}
           onDeleteDeck={(deckId) => run(() => { if (snapshot.project.decks.length <= 1) throw new Error("A project must keep at least one deck."); const deck = snapshot.project.decks.find((candidate) => candidate.id === deckId); if (deck && window.confirm(`Delete “${deck.name}”?`)) store.removeDeckById(deckId); })}
           onDeleteElement={(elementId) => run(() => { store.setSelection([elementId]); store.deleteSelection(); })}
           onDeleteScreen={deleteScreen}
           onDuplicateDeck={(deckId) => run(() => store.duplicateDeckById(deckId))}
-          onDuplicateElement={(elementId) => run(() => store.duplicateElement(elementId))}
+          onDuplicateElement={(elementId) => run(() => { store.duplicateElement(elementId); requestActiveScreenReveal(); })}
           onDuplicateScreen={(screenId) => run(() => store.duplicateScreenById(activeDeck.id, screenId))}
           onEditDeck={openDeckEdit}
           onGoToOwner={(ownerScreenId, elementId) => { commitInspectorTransaction(); store.setActiveScreen(ownerScreenId); store.setSelection([elementId]); }}
@@ -564,6 +572,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
               fitMode={fitMode}
               fitRequest={`${activeDeck.id}:${fitRequest}`}
               focusedScreenId={snapshot.activeScreenId}
+              revealScreenRequest={revealScreenRequest}
               onClearSelection={() => store.setSelection([])}
               onFitZoom={fitZoom}
               onFocusScreen={(screenId) => store.focusScreen(screenId)}
@@ -597,16 +606,6 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         </aside>
       </div>
 
-      <Dialog footer={<><Button onClick={() => setAddOpen(false)} variant="ghost">Cancel</Button><Button form="add-screen" type="submit" variant="primary">Add screen</Button></>} onOpenChange={setAddOpen} open={addOpen} title="New screen">
-        <form className="space-y-3" id="add-screen" onSubmit={submitAddScreen}>
-          <label className="block text-xs font-medium text-muted" htmlFor="new-screen-preset">Starter preset</label>
-          <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-accent/70" id="new-screen-preset" onChange={(event) => setAddPreset(event.target.value as ScreenPreset)} value={addPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Blank screen</option></select>
-          <p className="text-[10px] leading-4 text-muted">This screen inherits {activeDeck.width} × {activeDeck.height} from the active deck.</p>
-          <label className="block pt-2 text-xs font-medium text-muted" htmlFor="new-screen-name">Name</label>
-          <Input id="new-screen-name" onChange={(event) => setAddName(event.target.value)} placeholder="Product launch" value={addName} />
-        </form>
-      </Dialog>
-
       <Dialog footer={<><Button onClick={() => setDeckOpen(false)} variant="ghost">Cancel</Button><Button form="deck-editor" type="submit" variant="primary">{deckEditId ? "Save deck name" : "Create deck"}</Button></>} onOpenChange={setDeckOpen} open={deckOpen} title={deckEditId ? "Rename deck" : "New deck"}>
         <form className="space-y-3" id="deck-editor" onSubmit={submitDeck}>
           <label className="block text-xs font-medium text-muted" htmlFor="deck-name">Name</label>
@@ -620,7 +619,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
               <label className="block text-xs font-medium text-muted" htmlFor="deck-width"><span className="mb-1 block">Width</span><Input id="deck-width" min={1} onChange={(event) => { setDeckPreset("custom"); setDeckWidth(Number(event.target.value)); }} type="number" value={deckWidth} /></label>
               <label className="block text-xs font-medium text-muted" htmlFor="deck-height"><span className="mb-1 block">Height</span><Input id="deck-height" min={1} onChange={(event) => { setDeckPreset("custom"); setDeckHeight(Number(event.target.value)); }} type="number" value={deckHeight} /></label>
             </div>
-            <p className="text-[10px] leading-4 text-muted">Deck dimensions are immutable after creation. Screens in this deck inherit them.</p>
+            <p className="text-[10px] leading-4 text-muted">Deck dimensions are immutable after creation.</p>
           </> : <p className="text-[10px] leading-4 text-muted">{deckWidth} × {deckHeight}. Dimensions cannot be changed after creation.</p>}
         </form>
       </Dialog>
