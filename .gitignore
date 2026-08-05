@@ -25,4 +25,5 @@ src/styles.generated.css
 .bun/
 .idea/
 .vscode/
+asc/
 tmp/
