@@ -14,6 +14,7 @@ import { ProjectMutationLock } from "./project-mutation-lock";
 import { assertDirectoryContained, assertFileNotSymlink, resolveWithin } from "./path-policy";
 export { resolveWithin } from "./path-policy";
 import { createAssetMetadata } from "./asset-storage";
+import { removeAssetUsages } from "./asset-mutations";
 import { ExportRunRegistry } from "./export-storage";
 import { filesystemErrorCode, writePrettyJsonAtomic } from "./project-storage";
 export { writePrettyJsonAtomic } from "./project-storage";
@@ -371,14 +372,16 @@ export class ProjectStorage {
     }
   }
 
-  async ingestAsset(slug: string, file: Blob, originalName = "asset"): Promise<AssetMutation> {
+  async ingestAsset(slug: string, file: Blob, originalName?: string): Promise<AssetMutation> {
     if (file.size > MAX_ASSET_BYTES) {
       throw new PlinthError("ASSET_TOO_LARGE", 422, `Images must be ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} MB or smaller.`, { maxBytes: MAX_ASSET_BYTES, byteSize: file.size });
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const validated = await validateImageBytes(bytes, originalName, file.type);
+    const blobName = (file as Blob & { name?: unknown }).name;
+    const sourceName = originalName ?? (typeof blobName === "string" ? blobName : "asset");
+    const validated = await validateImageBytes(bytes, sourceName, file.type);
     const safeSlug = assertProjectSlug(slug);
-    return this.mutationLock.run(safeSlug, () => this.ingestAssetUnlocked(safeSlug, bytes, originalName, validated));
+    return this.mutationLock.run(safeSlug, () => this.ingestAssetUnlocked(safeSlug, bytes, sourceName, validated));
   }
 
   private async ingestAssetUnlocked(
@@ -426,12 +429,34 @@ export class ProjectStorage {
     }
   }
 
-  async deleteAsset(slug: string, assetPath: string, force = false): Promise<{ project: Project; deleted: AssetMetadata; usages: AssetUsage[] }> {
+  async renameAsset(slug: string, assetPath: string, name: string): Promise<{ project: Project; asset: AssetMetadata }> {
     const safeSlug = assertProjectSlug(slug);
-    return this.mutationLock.run(safeSlug, () => this.deleteAssetUnlocked(safeSlug, assetPath, force));
+    const safePath = assertAssetPath(assetPath);
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName.length > 120) {
+      throw new PlinthError("INVALID_REQUEST", 400, "Asset names must contain between 1 and 120 characters.");
+    }
+    return this.mutationLock.run(safeSlug, async () => {
+      const project = await this.loadProject(safeSlug);
+      const asset = project.assets.find((candidate) => candidate.path === safePath);
+      if (!asset) throw new PlinthError("ASSET_NOT_FOUND", 404, `Asset "${safePath}" was not found in project "${safeSlug}".`, { assetPath: safePath });
+      if (asset.name === trimmedName) return { project, asset };
+      const renamed = { ...asset, name: trimmedName };
+      const nextProject = await this.saveProjectUnlocked({
+        ...project,
+        assets: project.assets.map((candidate) => candidate.path === safePath ? renamed : candidate),
+        updatedAt: nowIso(),
+      });
+      return { project: nextProject, asset: renamed };
+    });
   }
 
-  private async deleteAssetUnlocked(slug: string, assetPath: string, force: boolean): Promise<{ project: Project; deleted: AssetMetadata; usages: AssetUsage[] }> {
+  async deleteAsset(slug: string, assetPath: string, deleteUsages = false): Promise<{ project: Project; deleted: AssetMetadata; usages: AssetUsage[] }> {
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, () => this.deleteAssetUnlocked(safeSlug, assetPath, deleteUsages));
+  }
+
+  private async deleteAssetUnlocked(slug: string, assetPath: string, deleteUsages: boolean): Promise<{ project: Project; deleted: AssetMetadata; usages: AssetUsage[] }> {
     const project = await this.loadProject(slug);
     const safePath = assertAssetPath(assetPath);
     const asset = project.assets.find((candidate) => candidate.path === safePath);
@@ -439,8 +464,8 @@ export class ProjectStorage {
       throw new PlinthError("ASSET_NOT_FOUND", 404, `Asset "${safePath}" was not found in project "${slug}".`, { assetPath: safePath });
     }
     const usages = selectAssetUsages(project, safePath);
-    if (usages.length > 0 && !force) {
-      throw new PlinthError("ASSET_IN_USE", 409, `Asset "${asset.fileName}" is still referenced by ${usages.length} element${usages.length === 1 ? "" : "s"}.`, {
+    if (usages.length > 0 && !deleteUsages) {
+      throw new PlinthError("ASSET_IN_USE", 409, `Asset "${asset.fileName}" is still referenced in ${usages.length} place${usages.length === 1 ? "" : "s"}.`, {
         assetPath: safePath,
         usages,
       });
@@ -459,7 +484,9 @@ export class ProjectStorage {
       if (errorCode(error) !== "ENOENT") throw error;
     });
     try {
-      const nextProject = await this.saveProjectUnlocked({ ...project, assets: project.assets.filter((candidate) => candidate.path !== safePath), updatedAt: nowIso() });
+      const nextProject = await this.saveProjectUnlocked(deleteUsages
+        ? removeAssetUsages(project, safePath)
+        : { ...project, assets: project.assets.filter((candidate) => candidate.path !== safePath), updatedAt: nowIso() });
       return { project: nextProject, deleted: asset, usages };
     } catch (error) {
       if (originalBytes) await this.writeAssetFileAtomic(slug, safePath, originalBytes).catch(() => undefined);

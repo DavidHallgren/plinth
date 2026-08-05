@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import Konva from "konva";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { Group, Image as KonvaImage, Rect, Text } from "react-konva";
 import type { AssetMetadata, ImageFit, Point } from "../lib/schema";
-import { calculateImageFitGeometry } from "../devices/geometry";
+import { calculateImageCoverCrop, calculateImageFitGeometry } from "../devices/geometry";
 import { clearImageCache as clearImageCacheEntries, imageCacheVersion, imageResourceState, loadImageResource, subscribeImageCache, type ImageResource } from "./image-cache";
 
 export type { ImageResource } from "./image-cache";
@@ -52,32 +53,55 @@ export type AssetImageLayerProps = {
   listening?: boolean;
   compact?: boolean;
   label?: string;
+  blur?: number;
+  cachePixelRatio?: number;
 };
 
-export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, fit, position, cornerRadius, backgroundColor, listening = false, compact = false, label }: AssetImageLayerProps) {
+export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, fit, position, cornerRadius, backgroundColor, listening = false, compact = false, label, blur = 0, cachePixelRatio = 1 }: AssetImageLayerProps) {
+  const imageNodeRef = useRef<Konva.Image>(null);
   const source = assetPath ? assetUrl(projectSlug, assetPath) : null;
   const resource = useLoadedImage(source);
+  const sourceWidth = asset?.width ?? resource.image?.naturalWidth ?? 1;
+  const sourceHeight = asset?.height ?? resource.image?.naturalHeight ?? 1;
   const geometry = useMemo(() => calculateImageFitGeometry(
-    asset?.width ?? resource.image?.naturalWidth ?? 1,
-    asset?.height ?? resource.image?.naturalHeight ?? 1,
+    sourceWidth,
+    sourceHeight,
     width,
     height,
     fit,
     position,
-  ), [asset?.height, asset?.width, fit, height, position, resource.image?.naturalHeight, resource.image?.naturalWidth, width]);
+  ), [fit, height, position, sourceHeight, sourceWidth, width]);
+  const coverCrop = useMemo(() => fit === "cover" && blur === 0
+    ? calculateImageCoverCrop(sourceWidth, sourceHeight, width, height, position)
+    : null, [blur, fit, height, position, sourceHeight, sourceWidth, width]);
   const statusLabel = resource.status === "loading" ? "Loading asset…" : resource.error ?? label ?? "Missing asset";
+  useEffect(() => {
+    const node = imageNodeRef.current;
+    if (!node) return;
+    node.clearCache();
+    if (blur > 0 && resource.status === "ready") node.cache({ pixelRatio: cachePixelRatio });
+    node.getLayer()?.batchDraw();
+    return () => { node.clearCache(); };
+  }, [blur, cachePixelRatio, geometry.height, geometry.width, geometry.x, geometry.y, resource.image, resource.status]);
+  const blurScale = blur > 0 ? 1 + (blur * 4) / Math.max(1, Math.min(geometry.width, geometry.height)) : 1;
+  const renderWidth = geometry.width * blurScale;
+  const renderHeight = geometry.height * blurScale;
   return (
     <Group clipFunc={(context) => roundedRectPath(context, width, height, cornerRadius)}>
       {listening ? <Rect fill="#000000" height={height} opacity={0.001} width={width} /> : null}
       {backgroundColor ? <Rect fill={backgroundColor} height={height} listening={false} width={width} /> : null}
       {resource.status === "ready" && resource.image ? (
         <KonvaImage
-          height={geometry.height}
+          blurRadius={blur * cachePixelRatio}
+          crop={coverCrop ?? undefined}
+          filters={blur > 0 ? [Konva.Filters.Blur] : undefined}
+          height={coverCrop ? height : renderHeight}
           image={resource.image}
           listening={listening}
-          width={geometry.width}
-          x={geometry.x}
-          y={geometry.y}
+          ref={imageNodeRef}
+          width={coverCrop ? width : renderWidth}
+          x={coverCrop ? 0 : geometry.x - (renderWidth - geometry.width) / 2}
+          y={coverCrop ? 0 : geometry.y - (renderHeight - geometry.height) / 2}
         />
       ) : (
         <>

@@ -59,6 +59,12 @@ const AddScreenRequestSchema = z
   })
   .strict();
 
+const RenameAssetRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+  })
+  .strict();
+
 const ExportMetadataSchema = z
   .object({
     screenId: z.string().min(1).max(96),
@@ -276,10 +282,15 @@ export async function handleGetAsset(request: Request, storage: ProjectStorage):
   return new Response(asset.bytes.buffer as ArrayBuffer, { headers });
 }
 
+export async function handleRenameAsset(request: Request, storage: ProjectStorage): Promise<Response> {
+  const body = parseBody(RenameAssetRequestSchema, await jsonBody(request));
+  return success(await storage.renameAsset(pathSegment(request, 3), assetPathSegment(request), body.name));
+}
+
 export async function handleDeleteAsset(request: Request, storage: ProjectStorage): Promise<Response> {
   const url = new URL(request.url);
-  const force = url.searchParams.get("force") === "true" || request.headers.get("x-plinth-force") === "true";
-  const result = await storage.deleteAsset(pathSegment(request, 3), assetPathSegment(request), force);
+  const deleteUsages = url.searchParams.get("deleteUsages") === "true";
+  const result = await storage.deleteAsset(pathSegment(request, 3), assetPathSegment(request), deleteUsages);
   return success({ deleted: result.deleted.path, project: result.project, usages: result.usages });
 }
 

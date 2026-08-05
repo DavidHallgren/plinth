@@ -70,7 +70,13 @@ export function selectAssetReferences(project: Project, screenId?: string): Map<
     ? project.decks.flatMap((deck) => deck.screens.filter((screen) => screen.id === screenId).map((screen) => ({ deck, screen })))
     : project.decks.flatMap((deck) => deck.screens.map((screen) => ({ deck, screen })));
   const references = new Map<string, number>();
+  if (!screenId && project.background.type === "asset") {
+    references.set(project.background.assetPath, 1);
+  }
   for (const { deck, screen } of screens) {
+    if (screen.background.type === "asset") {
+      references.set(screen.background.assetPath, (references.get(screen.background.assetPath) ?? 0) + 1);
+    }
     for (const element of resolveDeckScreen(deck, screen.id)) {
       const assetPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
       if (!assetPath) continue;
@@ -87,14 +93,40 @@ export type AssetUsage = {
   screenName: string;
   elementId: string;
   elementName: string;
-  elementType: "image" | "device";
+  elementType: "image" | "device" | "background";
   linked: boolean;
 };
 
 export function selectAssetUsages(project: Project, assetPath: string): AssetUsage[] {
   const usages: AssetUsage[] = [];
+  const firstDeck = project.decks[0];
+  const firstScreen = firstDeck?.screens[0];
+  if (project.background.type === "asset" && project.background.assetPath === assetPath && firstDeck && firstScreen) {
+    usages.push({
+      deckId: firstDeck.id,
+      deckName: project.name,
+      screenId: firstScreen.id,
+      screenName: "Project defaults",
+      elementId: `${project.id}:background`,
+      elementName: "Project background",
+      elementType: "background",
+      linked: false,
+    });
+  }
   for (const deck of project.decks) {
     for (const screen of deck.screens) {
+      if (screen.background.type === "asset" && screen.background.assetPath === assetPath) {
+        usages.push({
+          deckId: deck.id,
+          deckName: deck.name,
+          screenId: screen.id,
+          screenName: screen.name,
+          elementId: `${screen.id}:background`,
+          elementName: "Background",
+          elementType: "background",
+          linked: false,
+        });
+      }
       for (const element of resolveDeckScreen(deck, screen.id)) {
         const referencedPath = element.type === "image" ? element.assetPath : element.type === "device" ? element.screenshotPath : null;
         if (referencedPath !== assetPath || (element.type !== "image" && element.type !== "device")) continue;

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 7 as const;
+export const CURRENT_SCHEMA_VERSION = 9 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
@@ -97,11 +97,35 @@ const TransparentBackgroundSchema = z
   })
   .strict();
 
+export const BackgroundTextureSchema = z
+  .object({
+    type: z.enum(["noise", "texture"]),
+    seed: z.number().int().min(0).max(0xffff_ffff),
+    opacity: z.number().min(0).max(1),
+    scale: z.number().int().min(1).max(16),
+  })
+  .strict();
+export type BackgroundTexture = z.infer<typeof BackgroundTextureSchema>;
+
+export const AssetBackgroundSchema = z
+  .object({
+    type: z.literal("asset"),
+    assetPath: AssetPathSchema,
+    fit: z.enum(["cover", "contain"]),
+    position: NormalizedPointSchema,
+    blur: z.number().min(0).max(256).finite(),
+    overlayColor: ColorSchema,
+    overlayOpacity: z.number().min(0).max(1),
+    texture: BackgroundTextureSchema.nullable(),
+  })
+  .strict();
+
 export const BackgroundSchema = z.discriminatedUnion("type", [
   SolidBackgroundSchema,
   LinearGradientBackgroundSchema,
   RadialGradientBackgroundSchema,
   TransparentBackgroundSchema,
+  AssetBackgroundSchema,
 ]);
 export type Background = z.infer<typeof BackgroundSchema>;
 export type GradientStop = z.infer<typeof GradientStopSchema>;
@@ -202,6 +226,8 @@ export const AssetMetadataSchema = z
   .object({
     id: IdSchema,
     kind: z.literal("image"),
+    name: z.string().trim().min(1).max(120),
+    sourceFileName: z.string().trim().min(1).max(255),
     path: AssetPathSchema,
     fileName: z.string().min(1).max(255),
     mimeType: AssetMimeTypeSchema,

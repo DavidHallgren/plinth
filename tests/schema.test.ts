@@ -58,6 +58,24 @@ describe("project schema", () => {
     expect(JSON.stringify(image)).not.toContain("base64");
   });
 
+  test("accepts deterministic asset-backed screen backgrounds", () => {
+    const screen = createScreenPreset("blank", { name: "Background fixture" });
+    const background = {
+      type: "asset" as const,
+      assetPath: "assets/background.webp",
+      fit: "cover" as const,
+      position: { x: 0.25, y: 0.75 },
+      blur: 18,
+      overlayColor: "#182033",
+      overlayOpacity: 0.35,
+      texture: { type: "texture" as const, seed: 4_294_967_295, opacity: 0.08, scale: 3 },
+    };
+
+    expect(ScreenSchema.parse({ ...screen, background }).background).toEqual(background);
+    expect(ScreenSchema.safeParse({ ...screen, background: { ...background, texture: { ...background.texture, seed: -1 } } }).success).toBe(false);
+    expect(JSON.stringify(background)).not.toContain("data:image");
+  });
+
   test("normalizes names into safe ids and slugs", () => {
     expect(slugify("  Résumé / Spring 2026  ")).toBe("resume-spring-2026");
     expect(assertProjectSlug("valid-project-2")).toBe("valid-project-2");
@@ -110,6 +128,8 @@ describe("project schema", () => {
     const asset = {
       id: "asset_duplicate",
       kind: "image" as const,
+      name: "Fixture",
+      sourceFileName: "fixture.svg",
       path: "assets/fixture.svg",
       fileName: "fixture.svg",
       mimeType: "image/svg+xml" as const,
@@ -171,8 +191,8 @@ describe("project schema", () => {
     }
   });
 
-  test("keeps v7 strict while leaving legacy fields to the v6 migration", () => {
-    const project = createDefaultProject("Strict v7 fixture");
+  test("keeps the current schema strict while leaving legacy fields to the v6 migration", () => {
+    const project = createDefaultProject("Strict schema fixture");
     const deck = project.decks[0];
     const screen = deck?.screens[0];
     const element = screen && ownedElements(screen)[0];

@@ -2,6 +2,7 @@ import { PlinthError } from "./errors";
 import { decodeStructuredPng, hasPngSignature, PngStructureError } from "./png-validation";
 
 export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+export const MAX_ASSET_PIXELS = 100_000_000;
 export const ASSET_PATH_PREFIX = "assets/";
 
 export type SupportedImageFormat = "png" | "jpeg" | "webp" | "svg";
@@ -30,6 +31,18 @@ function assertDimension(value: number, label: string): number {
   return value;
 }
 
+function assertPixelCount(dimensions: { width: number; height: number }): { width: number; height: number } {
+  const pixelCount = dimensions.width * dimensions.height;
+  if (!Number.isSafeInteger(pixelCount) || pixelCount > MAX_ASSET_PIXELS) {
+    fail("ASSET_TOO_LARGE", `Images may contain at most ${Math.round(MAX_ASSET_PIXELS / 1_000_000)} megapixels.`, {
+      maxPixels: MAX_ASSET_PIXELS,
+      pixelCount,
+      ...dimensions,
+    });
+  }
+  return dimensions;
+}
+
 function bytesEqual(bytes: Uint8Array, offset: number, values: number[]): boolean {
   return values.every((value, index) => bytes[offset + index] === value);
 }
@@ -38,10 +51,27 @@ function readUint16LittleEndian(bytes: Uint8Array, offset: number): number {
   return (bytes[offset] ?? 0) + ((bytes[offset + 1] ?? 0) << 8);
 }
 
+function readUint32BigEndian(bytes: Uint8Array, offset: number): number {
+  return (((bytes[offset] ?? 0) * 0x1000000) + ((bytes[offset + 1] ?? 0) << 16) + ((bytes[offset + 2] ?? 0) << 8) + (bytes[offset + 3] ?? 0)) >>> 0;
+}
+
+function hasPngAnimation(bytes: Uint8Array): boolean {
+  let offset = 8;
+  while (offset + 12 <= bytes.length) {
+    const length = readUint32BigEndian(bytes, offset);
+    const type = String.fromCharCode(bytes[offset + 4] ?? 0, bytes[offset + 5] ?? 0, bytes[offset + 6] ?? 0, bytes[offset + 7] ?? 0);
+    if (type === "acTL") return true;
+    offset += 12 + length;
+  }
+  return false;
+}
+
 function parsePngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
   if (!hasPngSignature(bytes)) return null;
   try {
-    return decodeStructuredPng(bytes, MAX_ASSET_BYTES);
+    const dimensions = decodeStructuredPng(bytes, MAX_ASSET_BYTES);
+    if (hasPngAnimation(bytes)) fail("ASSET_UNSUPPORTED", "Animated PNG files are not supported. Export a single still frame and upload it instead.");
+    return dimensions;
   } catch (error) {
     if (error instanceof PngStructureError) {
       fail(error.kind === "too-large" ? "ASSET_TOO_LARGE" : "ASSET_INVALID_CONTENT", `The PNG is invalid: ${error.message}`, error.details);
@@ -50,9 +80,38 @@ function parsePngDimensions(bytes: Uint8Array): { width: number; height: number 
   }
 }
 
+function parseExifOrientation(bytes: Uint8Array, offset: number, length: number): number {
+  if (length < 14 || !bytesEqual(bytes, offset, [0x45, 0x78, 0x69, 0x66, 0, 0])) return 1;
+  const tiff = offset + 6;
+  const littleEndian = bytesEqual(bytes, tiff, [0x49, 0x49]);
+  const bigEndian = bytesEqual(bytes, tiff, [0x4d, 0x4d]);
+  if (!littleEndian && !bigEndian) return 1;
+  const limit = offset + length;
+  const read16 = (position: number) => littleEndian
+    ? (bytes[position] ?? 0) + ((bytes[position + 1] ?? 0) << 8)
+    : ((bytes[position] ?? 0) << 8) + (bytes[position + 1] ?? 0);
+  const read32 = (position: number) => littleEndian
+    ? (bytes[position] ?? 0) + ((bytes[position + 1] ?? 0) << 8) + ((bytes[position + 2] ?? 0) << 16) + ((bytes[position + 3] ?? 0) * 0x1000000)
+    : ((bytes[position] ?? 0) * 0x1000000) + ((bytes[position + 1] ?? 0) << 16) + ((bytes[position + 2] ?? 0) << 8) + (bytes[position + 3] ?? 0);
+  if (read16(tiff + 2) !== 42) return 1;
+  const ifd = tiff + read32(tiff + 4);
+  if (ifd < tiff || ifd + 2 > limit) return 1;
+  const count = read16(ifd);
+  for (let index = 0; index < count; index += 1) {
+    const entry = ifd + 2 + index * 12;
+    if (entry + 12 > limit) return 1;
+    if (read16(entry) !== 0x0112 || read16(entry + 2) !== 3 || read32(entry + 4) < 1) continue;
+    const orientation = read16(entry + 8);
+    return orientation >= 1 && orientation <= 8 ? orientation : 1;
+  }
+  return 1;
+}
+
 function parseJpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
   let offset = 2;
+  let orientation = 1;
+  let dimensions: { width: number; height: number } | null = null;
   while (offset + 4 < bytes.length) {
     while (bytes[offset] === 0xff) offset += 1;
     const marker = bytes[offset];
@@ -61,22 +120,25 @@ function parseJpegDimensions(bytes: Uint8Array): { width: number; height: number
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
     const segmentLength = ((bytes[offset] ?? 0) << 8) + (bytes[offset + 1] ?? 0);
     if (segmentLength < 2 || offset + segmentLength > bytes.length) return null;
+    if (marker === 0xe1) orientation = parseExifOrientation(bytes, offset + 2, segmentLength - 2);
     const isStartOfFrame = marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
     if (isStartOfFrame && segmentLength >= 7) {
-      return {
+      dimensions = {
         height: assertDimension(((bytes[offset + 3] ?? 0) << 8) + (bytes[offset + 4] ?? 0), "height"),
         width: assertDimension(((bytes[offset + 5] ?? 0) << 8) + (bytes[offset + 6] ?? 0), "width"),
       };
     }
     offset += segmentLength;
   }
-  return null;
+  if (!dimensions) return null;
+  return orientation >= 5 && orientation <= 8 ? { width: dimensions.height, height: dimensions.width } : dimensions;
 }
 
 function parseWebpDimensions(bytes: Uint8Array): { width: number; height: number } | null {
   if (bytes.length < 16 || !bytesEqual(bytes, 0, [0x52, 0x49, 0x46, 0x46]) || !bytesEqual(bytes, 8, [0x57, 0x45, 0x42, 0x50])) return null;
   const chunk = String.fromCharCode(bytes[12] ?? 0, bytes[13] ?? 0, bytes[14] ?? 0, bytes[15] ?? 0);
   if (chunk === "VP8X" && bytes.length >= 30) {
+    if (((bytes[20] ?? 0) & 0x02) !== 0) fail("ASSET_UNSUPPORTED", "Animated WebP files are not supported. Export a single still frame and upload it instead.");
     return {
       width: assertDimension(1 + (bytes[24] ?? 0) + ((bytes[25] ?? 0) << 8) + ((bytes[26] ?? 0) << 16), "width"),
       height: assertDimension(1 + (bytes[27] ?? 0) + ((bytes[28] ?? 0) << 8) + ((bytes[29] ?? 0) << 16), "height"),
@@ -154,6 +216,18 @@ export function sanitizeAssetStem(value: string): string {
   return stem || "asset";
 }
 
+export function normalizeSourceFileName(value: string): string {
+  const baseName = value.split(/[\\/]/).pop() ?? "asset";
+  const normalized = baseName.normalize("NFKC").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 255);
+  return normalized || "asset";
+}
+
+export function deriveAssetDisplayName(originalName: string): string {
+  const sourceFileName = normalizeSourceFileName(originalName);
+  const withoutExtension = sourceFileName.replace(/\.[^.]+$/, "").replace(/-[a-f0-9]{12,64}$/i, "").trim();
+  return (withoutExtension || "Asset").slice(0, 120);
+}
+
 export function assertSafeAssetFileName(fileName: string): string {
   if (!SAFE_FILE_NAME.test(fileName) || fileName.includes("..")) {
     throw new PlinthError("INVALID_PATH", 400, "Asset file name is not safe.", { fileName });
@@ -229,6 +303,7 @@ export async function validateImageBytes(bytes: Uint8Array, originalName: string
   }
 
   if (!dimensions) fail("ASSET_INVALID_CONTENT", "The image signature is recognized, but its dimensions could not be read.");
+  dimensions = assertPixelCount(dimensions);
   return {
     format,
     extension,

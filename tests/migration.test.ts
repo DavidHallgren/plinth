@@ -25,7 +25,7 @@ function legacyDocument(overrides: Record<string, unknown> = {}) {
 }
 
 describe("project migrations", () => {
-  test("upgrades an unversioned legacy project to schema v7", () => {
+  test("upgrades an unversioned legacy project to the current schema", () => {
     const migrated = parseProject({
       version: 0,
       id: "legacy_project",
@@ -41,6 +41,69 @@ describe("project migrations", () => {
     expect(migrated.decks[0]?.width).toBe(1320);
     expect(migrated.decks[0]?.screens[0] && Object.hasOwn(migrated.decks[0].screens[0], "width")).toBe(false);
     expect(migrated.settings.autosave).toBe(true);
+  });
+
+  test("upgrades v7 projects and normalizes deterministic asset background effects", () => {
+    const project = createDefaultProject("V7 background", { now: timestamp });
+    const deck = project.decks[0];
+    const screen = deck?.screens[0];
+    if (!deck || !screen) throw new Error("Missing starter screen.");
+    const migrated = parseProject({
+      ...project,
+      schemaVersion: 7,
+      decks: [{
+        ...deck,
+        screens: [{
+          ...screen,
+          background: {
+            type: "asset",
+            assetPath: "assets/hero.png",
+            fit: "contain",
+            position: { x: 2, y: -1 },
+            blur: 999,
+            overlayColor: "#102030",
+            overlayOpacity: 2,
+            texture: { type: "noise", seed: 42.4, opacity: 0.12, scale: 2.8 },
+          },
+        }],
+      }],
+    });
+
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrated.decks[0]?.screens[0]?.background).toEqual({
+      type: "asset",
+      assetPath: "assets/hero.png",
+      fit: "contain",
+      position: { x: 1, y: 0 },
+      blur: 256,
+      overlayColor: "#102030",
+      overlayOpacity: 1,
+      texture: { type: "noise", seed: 42, opacity: 0.12, scale: 3 },
+    });
+  });
+
+  test("upgrades v8 assets with editable display names while preserving storage paths", () => {
+    const project = createDefaultProject("V8 assets", { now: timestamp });
+    const migrated = parseProject({
+      ...project,
+      schemaVersion: 8,
+      assets: [{
+        id: "asset_v8",
+        kind: "image",
+        path: "assets/home-screen-abcdef123456.png",
+        fileName: "home-screen-abcdef123456.png",
+        mimeType: "image/png",
+        width: 1320,
+        height: 2868,
+        byteSize: 42,
+      }],
+    });
+
+    expect(migrated.assets[0]).toMatchObject({
+      name: "home-screen",
+      sourceFileName: "home-screen-abcdef123456.png",
+      path: "assets/home-screen-abcdef123456.png",
+    });
   });
 
   test("groups v5 documents into fixed-size decks while preserving order and exact dimensions", () => {
@@ -200,7 +263,7 @@ describe("project migrations", () => {
     expect(migratedV4.settings.exportDirectory).toBeNull();
   });
 
-  test("keeps v7 layer order and normalizes text geometry without compatibility fields", () => {
+  test("keeps current layer order and normalizes text geometry without compatibility fields", () => {
     const project = createDefaultProject("Layer order project", { now: timestamp });
     const deck = project.decks[0];
     const screen = deck?.screens[0];

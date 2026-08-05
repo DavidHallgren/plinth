@@ -6,7 +6,7 @@ import type { AssetMetadata, Background, LayerEntry, OwnedLayer, Project, SceneE
 import { SceneElementSchema } from "./schema";
 import { isAppStorePreset } from "../scene/presets";
 import { isDevicePreset, getDevicePreset } from "../devices/presets";
-import { sanitizeAssetStem } from "./asset-validation";
+import { deriveAssetDisplayName, normalizeSourceFileName, sanitizeAssetStem } from "./asset-validation";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
 import { reconcileOverflowLinks } from "../scene/overflow-operations";
 
@@ -93,6 +93,26 @@ function migrateBackground(value: unknown): Background {
       radius: Math.max(0.01, asFiniteNumber(value.radius, 0.75)),
     };
   }
+  if (value.type === "asset") {
+    const texture: Extract<Background, { type: "asset" }>["texture"] = isRecord(value.texture) && (value.texture.type === "noise" || value.texture.type === "texture")
+      ? {
+        type: value.texture.type as "noise" | "texture",
+        seed: Math.min(0xffff_ffff, Math.max(0, Math.round(asFiniteNumber(value.texture.seed, 1)))),
+        opacity: Math.min(1, Math.max(0, asFiniteNumber(value.texture.opacity, 0.08))),
+        scale: Math.min(16, Math.max(1, Math.round(asFiniteNumber(value.texture.scale, 1)))),
+      }
+      : null;
+    return {
+      type: "asset",
+      assetPath: legacyAssetPath(value.assetPath ?? value.assetId, []),
+      fit: value.fit === "contain" ? "contain" : "cover",
+      position: normalizePoint(value.position),
+      blur: Math.min(256, Math.max(0, asFiniteNumber(value.blur, 0))),
+      overlayColor: asString(value.overlayColor, "#000000"),
+      overlayOpacity: Math.min(1, Math.max(0, asFiniteNumber(value.overlayOpacity, 0))),
+      texture,
+    };
+  }
   if (value.type === "gradient") {
     const angle = asFiniteNumber(value.angle, 135) * (Math.PI / 180);
     const dx = Math.cos(angle);
@@ -143,9 +163,12 @@ function normalizeAsset(value: unknown, index: number): AssetMetadata {
     ? sourceMimeType
     : extension === "svg" ? "image/svg+xml" : extension === "jpg" ? "image/jpeg" : extension === "webp" ? "image/webp" : "image/png";
   const contentHash = typeof source.contentHash === "string" && /^[a-f0-9]{64}$/.test(source.contentHash) ? source.contentHash : undefined;
+  const sourceFileName = normalizeSourceFileName(asString(source.sourceFileName, originalName ?? fileName));
   return {
     id: asString(source.id, createId("asset")),
     kind: "image",
+    name: typeof source.name === "string" && source.name.trim() ? source.name.trim().slice(0, 120) : deriveAssetDisplayName(sourceFileName),
+    sourceFileName,
     path,
     fileName: path.slice("assets/".length),
     mimeType,
@@ -522,6 +545,34 @@ function migrateVersionSix(source: Record<string, unknown>): Record<string, unkn
   return { ...source, schemaVersion: CURRENT_SCHEMA_VERSION, assets, decks };
 }
 
+function migrateVersionSeven(source: Record<string, unknown>): Record<string, unknown> {
+  const rawDecks = Array.isArray(source.decks) ? source.decks : [];
+  return {
+    ...source,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    assets: normalizeAssets(source.assets),
+    background: migrateBackground(source.background),
+    decks: rawDecks.map((deckValue) => {
+      if (!isRecord(deckValue)) return deckValue;
+      const rawScreens = Array.isArray(deckValue.screens) ? deckValue.screens : [];
+      return {
+        ...deckValue,
+        screens: rawScreens.map((screenValue) => isRecord(screenValue)
+          ? { ...screenValue, background: migrateBackground(screenValue.background) }
+          : screenValue),
+      };
+    }),
+  };
+}
+
+function migrateVersionEight(source: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...source,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    assets: normalizeAssets(source.assets),
+  };
+}
+
 export function migrateProject(input: unknown): unknown {
   if (!isRecord(input)) {
     throw new PlinthError("SCHEMA_INVALID", 422, "Project data must be a JSON object.");
@@ -547,7 +598,9 @@ export function migrateProject(input: unknown): unknown {
   if (versionValue === 3) return migrateVersionFive(migrateVersionThree(input));
   if (versionValue === 4) return migrateVersionFive(migrateVersionFour(input));
   if (versionValue === 5) return migrateVersionFive(input);
-  if (versionValue === 6) return migrateVersionSix(input);
+  if (versionValue === 6) return migrateVersionEight(migrateVersionSeven(migrateVersionSix(input)));
+  if (versionValue === 7) return migrateVersionEight(migrateVersionSeven(input));
+  if (versionValue === 8) return migrateVersionEight(input);
   return input;
 }
 
@@ -583,7 +636,7 @@ export function parseProject(input: unknown): Project {
     })),
   });
 
-  // Persisted v7 links are required to name a real owner, but links can become
+  // Persisted links are required to name a real owner, but links can become
   // stale after hand-edited geometry. Normalize that recoverable case on load.
   return reconcileOverflowLinks(normalized, { transferOwnership: false });
 }

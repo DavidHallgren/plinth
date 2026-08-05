@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { sceneReadiness } from "../src/canvas/export-readiness";
 import { createDefaultProject, createDeckPreset, createScreenPreset } from "../src/lib/defaults";
 import { parseProject } from "../src/lib/migrations";
-import { ProjectSchema, type Project, type ShapeElement } from "../src/lib/schema";
+import { CURRENT_SCHEMA_VERSION, ProjectSchema, type Project, type ShapeElement } from "../src/lib/schema";
 import {
   addElement,
   duplicateDeck,
@@ -74,7 +74,7 @@ function ownerScreen(project: Project, elementId: string): string | undefined {
 }
 
 describe("screen overflow model", () => {
-  test("migrates v6 elements and z-order into canonical v7 owned layers", () => {
+  test("migrates v6 elements and z-order into canonical owned layers", () => {
     const project = fixture(1);
     const screen = project.decks[0]?.screens[0];
     if (!screen) throw new Error("Missing screen.");
@@ -93,7 +93,7 @@ describe("screen overflow model", () => {
       })),
     };
     const migrated = parseProject(rawV6);
-    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.decks[0]?.screens[0]?.layers.every((layer) => layer.kind === "owned" && layer.overflow === false)).toBe(true);
     expect(JSON.stringify(migrated)).not.toContain("\"elements\"");
     expect(JSON.stringify(migrated)).not.toContain("\"zIndex\"");
@@ -222,7 +222,7 @@ describe("screen overflow model", () => {
     })).toThrow(/owner screen/);
   });
 
-  test("normalizes missing required links and stale non-intersecting links when loading v7", () => {
+  test("normalizes missing required links and stale non-intersecting links when loading the current schema", () => {
     let project = fixture(2);
     project = addElement(project, "screen_1", shape("load-link", { x: 350, width: 120 }));
     project = toggleElementOverflow(project, "screen_1", "load-link", true);
@@ -325,7 +325,7 @@ describe("screen overflow model", () => {
         autoHeight: true,
       },
     };
-    project = { ...project, assets: [{ id: "asset_linked", kind: "image", path: "assets/linked.png", fileName: "linked.png", mimeType: "image/png", width: 120, height: 100, byteSize: 10 }] };
+    project = { ...project, assets: [{ id: "asset_linked", kind: "image", name: "Linked", sourceFileName: "linked.png", path: "assets/linked.png", fileName: "linked.png", mimeType: "image/png", width: 120, height: 100, byteSize: 10 }] };
     project = toggleElementOverflow(addElement(addElement(project, "screen_1", image), "screen_1", text), "screen_1", "linked-image", true);
     project = toggleElementOverflow(project, "screen_1", "linked-text", true);
     const readiness = sceneReadiness(resolveScreen(project, "screen_2"));

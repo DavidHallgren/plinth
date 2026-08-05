@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { apiAction, handleAddDeck, handleAddScreen, handleCreateProject, handleDuplicateProject, handleGetProject, handleRenameProject } from "../src/lib/api";
 import { ProjectStorage } from "../src/lib/storage";
+import { CURRENT_SCHEMA_VERSION } from "../src/lib/schema";
 
 const temporaryDirectories: string[] = [];
 
@@ -104,7 +105,7 @@ describe("deck and screen API", () => {
 
     const loadedResponse = await handleGetProject(new Request("http://plinth.test/api/projects/deck-api"), storage);
     expect(loadedResponse.status).toBe(200);
-    expect((await loadedResponse.json() as { data: { project: { schemaVersion: number } } }).data.project.schemaVersion).toBe(7);
+    expect((await loadedResponse.json() as { data: { project: { schemaVersion: number } } }).data.project.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
 
   test("requires fixed dimensions when creating a deck", async () => {

@@ -27,6 +27,13 @@ export type ImageFitGeometry = {
   scale: number;
 };
 
+export type ImageCropGeometry = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0.5));
 }
@@ -82,6 +89,24 @@ export function calculateImageFitGeometry(
     width,
     height,
     scale,
+  };
+}
+
+export function calculateImageCoverCrop(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+  position: NormalizedPoint = { x: 0.5, y: 0.5 },
+): ImageCropGeometry {
+  const sourceW = Math.max(1, sourceWidth);
+  const sourceH = Math.max(1, sourceHeight);
+  const geometry = calculateImageFitGeometry(sourceW, sourceH, targetWidth, targetHeight, "cover", position);
+  return {
+    x: Math.max(0, Math.min(sourceW, -geometry.x / geometry.scale)),
+    y: Math.max(0, Math.min(sourceH, -geometry.y / geometry.scale)),
+    width: Math.min(sourceW, Math.max(1, Math.max(1, targetWidth) / geometry.scale)),
+    height: Math.min(sourceH, Math.max(1, Math.max(1, targetHeight) / geometry.scale)),
   };
 }
 

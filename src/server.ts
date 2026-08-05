@@ -19,6 +19,7 @@ import {
   handleListExports,
   handleSaveProject,
   handleUploadAsset,
+  handleRenameAsset,
   handleDeleteAsset,
 } from "./lib/api";
 import { ProjectStorage } from "./lib/storage";
@@ -56,6 +57,7 @@ const routes = {
   },
   "/api/projects/:slug/assets/*": {
     GET: (request: Request) => apiAction(() => handleGetAsset(request, storage)),
+    PATCH: (request: Request) => apiAction(() => handleRenameAsset(request, storage)),
     DELETE: (request: Request) => apiAction(() => handleDeleteAsset(request, storage)),
   },
   "/api/projects/:slug/exports": {

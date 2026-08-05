@@ -1,5 +1,5 @@
 import type Konva from "konva";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { AssetMetadata, GradientStop } from "../lib/schema";
@@ -11,6 +11,7 @@ import { konvaFontStyle } from "./text-style";
 import { calculateTextAutoHeight } from "../scene/text-geometry";
 import type { ResolvedElement } from "../scene/overflow";
 import type { ResolvedScreen } from "../scene/selectors";
+import { createBackgroundTextureTile } from "./background-texture";
 
 export type SceneRendererProps = {
   screen: ResolvedScreen;
@@ -18,6 +19,7 @@ export type SceneRendererProps = {
   assets: readonly AssetMetadata[];
   selectedElementIds?: readonly string[];
   interactive?: boolean;
+  compact?: boolean;
   targetScreenId?: string;
   offsetX?: number;
   offsetY?: number;
@@ -43,6 +45,7 @@ export function backgroundProps(screen: ResolvedScreen): Record<string, unknown>
       fillLinearGradientEndPoint: { x: screen.background.end.x * screen.width, y: screen.background.end.y * screen.height },
     };
   }
+  if (screen.background.type === "asset") return {};
   return {
     fillRadialGradientColorStops: colorStops(screen.background.stops),
     fillRadialGradientStartPoint: { x: screen.background.center.x * screen.width, y: screen.background.center.y * screen.height },
@@ -50,6 +53,54 @@ export function backgroundProps(screen: ResolvedScreen): Record<string, unknown>
     fillRadialGradientEndPoint: { x: screen.background.center.x * screen.width, y: screen.background.center.y * screen.height },
     fillRadialGradientEndRadius: screen.background.radius * Math.max(screen.width, screen.height),
   };
+}
+
+function ScreenBackground({ screen, projectSlug, assets, interactive, compact, targetScreenId, onClearSelection }: { screen: ResolvedScreen; projectSlug: string; assets: readonly AssetMetadata[]; interactive: boolean; compact: boolean; targetScreenId: string; onClearSelection: (targetScreenId: string) => void }) {
+  const texture = screen.background.type === "asset" ? screen.background.texture : null;
+  const textureTile = useMemo(() => texture ? createBackgroundTextureTile(texture) : null, [texture]);
+  const interactionProps = {
+    listening: interactive,
+    name: `screen-background-${targetScreenId}`,
+    onClick: interactive ? () => onClearSelection(targetScreenId) : undefined,
+  };
+
+  if (screen.background.type !== "asset") {
+    return <Rect {...backgroundProps(screen)} {...interactionProps} height={screen.height} width={screen.width} />;
+  }
+
+  const background = screen.background;
+  return (
+    <Group>
+      <AssetImageLayer
+        asset={assetFor(assets, background.assetPath)}
+        assetPath={background.assetPath}
+        blur={background.blur}
+        cachePixelRatio={compact ? Math.min(1, 160 / Math.max(screen.width, screen.height)) : 1}
+        compact={compact}
+        cornerRadius={0}
+        fit={background.fit}
+        height={screen.height}
+        label={`Missing background ${background.assetPath}`}
+        position={background.position}
+        projectSlug={projectSlug}
+        width={screen.width}
+      />
+      {background.overlayOpacity > 0 ? <Rect fill={background.overlayColor} height={screen.height} listening={false} opacity={background.overlayOpacity} width={screen.width} /> : null}
+      {texture && textureTile ? (
+        <Rect
+          fillPatternImage={textureTile as unknown as HTMLImageElement}
+          fillPatternRepeat="repeat"
+          fillPatternScaleX={texture.scale}
+          fillPatternScaleY={texture.scale}
+          height={screen.height}
+          listening={false}
+          opacity={texture.opacity}
+          width={screen.width}
+        />
+      ) : null}
+      {interactive ? <Rect fill="#000000" height={screen.height} opacity={0.001} width={screen.width} {...interactionProps} /> : null}
+    </Group>
+  );
 }
 
 function shadowProps(shadow: ResolvedElement["shadow"]): Record<string, unknown> {
@@ -263,13 +314,13 @@ function CameraDefinition({ geometry }: { geometry: ReturnType<typeof calculateD
   return <Ellipse fill="#05060a" listening={false} radiusX={geometry.camera.width / 2} radiusY={geometry.camera.height / 2} x={geometry.camera.x + geometry.camera.width / 2} y={geometry.camera.y + geometry.camera.height / 2} />;
 }
 
-export function SceneRenderer({ screen, projectSlug, assets, selectedElementIds = [], interactive = false, targetScreenId = screen.id, offsetX = 0, offsetY = 0, register = () => undefined, onSelect = () => undefined, onClearSelection = () => undefined, onGestureStart = () => undefined, onMoveEnd = () => undefined, children }: SceneRendererProps) {
+export function SceneRenderer({ screen, projectSlug, assets, selectedElementIds = [], interactive = false, compact = false, targetScreenId = screen.id, offsetX = 0, offsetY = 0, register = () => undefined, onSelect = () => undefined, onClearSelection = () => undefined, onGestureStart = () => undefined, onMoveEnd = () => undefined, children }: SceneRendererProps) {
   const selectedSet = new Set(selectedElementIds);
   const orderedElements = [...screen.elements].sort((left, right) => left.renderOrder - right.renderOrder);
   return (
     <Layer>
       <Group clipX={0} clipY={0} clipWidth={screen.width} clipHeight={screen.height} x={offsetX} y={offsetY}>
-        <Rect {...backgroundProps(screen)} height={screen.height} listening={interactive} name={`screen-background-${targetScreenId}`} onClick={interactive ? () => onClearSelection(targetScreenId) : undefined} width={screen.width} />
+        <ScreenBackground assets={assets} compact={compact} interactive={interactive} onClearSelection={onClearSelection} projectSlug={projectSlug} screen={screen} targetScreenId={targetScreenId} />
         {orderedElements.map((element) => (
           <ElementNode
             assets={assets}

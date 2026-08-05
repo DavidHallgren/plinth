@@ -1,4 +1,4 @@
-import type { AssetMetadata, Project, SceneElement } from "../lib/schema";
+import type { AssetMetadata, Background, Project, SceneElement } from "../lib/schema";
 import { deviceFrameSource } from "../devices/frame-assets";
 import { assetUrl } from "./image-loading";
 import { imageResourceState, loadImageResource } from "./image-cache";
@@ -10,10 +10,11 @@ export type SceneReadiness = {
   fontSpecs: string[];
 };
 
-type RenderableScene = { elements: readonly SceneElement[] };
+type RenderableScene = { background: Background; elements: readonly SceneElement[] };
 
 function referencedAssetPaths(sceneScreen: RenderableScene): string[] {
   const paths = new Set<string>();
+  if (sceneScreen.background.type === "asset") paths.add(sceneScreen.background.assetPath);
   for (const element of sceneScreen.elements) {
     if (element.type === "image") paths.add(element.assetPath);
     if (element.type === "device" && element.screenshotPath) paths.add(element.screenshotPath);
