@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultProject, createDeckPreset, createScreenPreset } from "../src/lib/defaults";
-import { ProjectSchema, type Project, type ShapeElement } from "../src/lib/schema";
+import { ProjectSchema, type DeviceElement, type ImageElement, type Project, type ShapeElement } from "../src/lib/schema";
 import {
   addDeck,
   addElement,
@@ -15,6 +15,7 @@ import {
   reorderDecks,
   reorderElements,
   reorderScreens,
+  replaceElement,
   resizeElement,
   updateScreen,
   updateElement,
@@ -160,6 +161,62 @@ describe("scene operations", () => {
     const updatedScreen = updateScreen(updatedElement, screen.id, { background: { type: "transparent" } });
     const afterScreenUpdate = firstScreen(updatedScreen).layers.map((layer) => layer.kind === "owned" ? layer.element.id : layer.elementId);
     expect(afterScreenUpdate).toEqual(expectedOrder);
+  });
+
+  test("replaces an image with a frame while preserving its layer identity and order", () => {
+    const image: ImageElement = {
+      id: "image_to_frame",
+      type: "image",
+      name: "Screenshot",
+      x: 80,
+      y: 30,
+      width: 160,
+      height: 220,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      visible: true,
+      shadow: null,
+      assetPath: "assets/screenshot.png",
+      fit: "cover",
+      position: { x: 0.5, y: 0.5 },
+      cornerRadius: 12,
+      alt: "Screenshot",
+    };
+    let project = addElement(fixture(), "screen_operations", shape("below"));
+    project = addElement(project, "screen_operations", image);
+    const frame: DeviceElement = {
+      id: image.id,
+      type: "device",
+      name: image.name,
+      x: 106,
+      y: 10,
+      width: 108,
+      height: 220,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      visible: true,
+      shadow: null,
+      preset: "iphone-17-pro-max",
+      deviceId: "iphone-17-pro-max",
+      deviceName: "iPhone 17 Pro Max",
+      frame: "phone",
+      frameColor: "#182d55",
+      screenColor: "#f7f8fc",
+      screenshotPath: image.assetPath,
+      screenshotFit: image.fit,
+      screenshotPosition: image.position,
+      bezelStyle: "solid",
+      cornerRadius: null,
+      screenCornerRadius: null,
+      showGlare: false,
+      showCamera: true,
+    };
+    const replaced = replaceElement(project, "screen_operations", image.id, frame);
+    expect(elements(replaced).map((element) => element.id)).toEqual(["below", image.id]);
+    expect(elements(replaced)[1]).toMatchObject({ type: "device", screenshotPath: image.assetPath, preset: "iphone-17-pro-max" });
+    expect(() => replaceElement(project, "screen_operations", image.id, { ...frame, id: "different" })).toThrow(/preserve their existing id/);
   });
 
   test("does not move, resize, or transform locked elements", () => {

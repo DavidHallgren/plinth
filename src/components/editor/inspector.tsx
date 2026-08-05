@@ -1,12 +1,13 @@
 import { ChevronDown, Lock, Unlock, Eye, EyeOff, Link2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { EDITABLE_DEVICE_PRESETS, getDevicePreset } from "../../devices/presets";
-import type { Background, SceneElement, Shadow } from "../../lib/schema";
+import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
+import type { AssetMetadata, Background, SceneElement, Shadow } from "../../lib/schema";
 import type { ResolvedScreen } from "../../scene/selectors";
 import type { ElementPatch, ElementUpdate } from "../../scene/element-operations";
 import type { ScreenPatch } from "../../scene/structure-operations";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { FramePresetMenu } from "./frame-preset-menu";
 
 const selectClass = "plinth-focus-ring h-8 w-full rounded-lg border border-line bg-[#111111] px-2 text-xs text-ink outline-none focus:border-accent/70";
 const FONT_OPTIONS = [
@@ -20,18 +21,20 @@ const FONT_OPTIONS = [
 
 type InspectorProps = {
   screen: ResolvedScreen;
+  assets: readonly AssetMetadata[];
   selectedElements: SceneElement[];
   onUpdateScreen: (patch: ScreenPatch) => void;
   onUpdateElement: (elementId: string, patch: ElementPatch) => void;
   onUpdateElements: (updates: ElementUpdate[]) => void;
+  onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void;
   onToggleOverflow: (elementId: string, enabled: boolean) => void;
   onMoveOwnership: (elementId: string) => void;
   ownerScreenName?: string;
 };
 
-export function Inspector({ screen, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
+export function Inspector({ screen, assets, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
-    return <ScreenInspector screen={screen} onUpdate={onUpdateScreen} />;
+    return <ScreenInspector assets={assets} screen={screen} onUpdate={onUpdateScreen} />;
   }
   if (selectedElements.length > 1) {
     return <MultiSelectionInspector elements={selectedElements} onUpdateElements={onUpdateElements} />;
@@ -41,10 +44,10 @@ export function Inspector({ screen, selectedElements, onUpdateScreen, onUpdateEl
   const resolved = screen.elements.find((candidate) => candidate.id === element.id);
   const ownedLayer = screen.layers.find((layer): layer is Extract<typeof layer, { kind: "owned" }> => layer.kind === "owned" && layer.element.id === element.id);
   const ownerScreen = resolved?.ownerScreenId === screen.id ? undefined : resolved?.ownerScreenId;
-  return <ElementInspector element={element} isLinked={Boolean(resolved?.isOverflowLink)} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} />;
+  return <ElementInspector element={element} isLinked={Boolean(resolved?.isOverflowLink)} onConvertImageToFrame={onConvertImageToFrame} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} />;
 }
 
-function ScreenInspector({ screen, onUpdate }: { screen: ResolvedScreen; onUpdate: (patch: ScreenPatch) => void }) {
+function ScreenInspector({ screen, assets, onUpdate }: { screen: ResolvedScreen; assets: readonly AssetMetadata[]; onUpdate: (patch: ScreenPatch) => void }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <InspectorHeading title="Screen" detail={`${screen.width} × ${screen.height} · ${screen.deckName}`} />
@@ -53,7 +56,7 @@ function ScreenInspector({ screen, onUpdate }: { screen: ResolvedScreen; onUpdat
         <Field label="Export name"><Input onChange={(event) => onUpdate({ exportSlug: event.target.value })} value={screen.exportSlug} /></Field>
       </Section>
       <Section title="Background">
-        <BackgroundControls background={screen.background} onChange={(background) => onUpdate({ background })} />
+        <BackgroundControls assets={assets} background={screen.background} onChange={(background) => onUpdate({ background })} />
       </Section>
     </div>
   );
@@ -78,11 +81,12 @@ function MultiSelectionInspector({ elements, onUpdateElements }: { elements: Sce
   );
 }
 
-function ElementInspector({ element, onUpdate, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; onUpdate: (id: string, patch: ElementPatch) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
+function ElementInspector({ element, onUpdate, onConvertImageToFrame, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
   const update = (patch: ElementPatch) => onUpdate(element.id, patch);
+  const elementTypeLabel = element.type === "device" ? "frame" : element.type;
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
-      <InspectorHeading title={element.name} detail={isLinked ? `${element.type} · linked projection` : element.type} />
+      <InspectorHeading title={element.name} detail={isLinked ? `${elementTypeLabel} · linked projection` : elementTypeLabel} />
       {isLinked ? <div className="mb-3 rounded-lg border border-accent/20 bg-accent/[0.08] px-2.5 py-2 text-[10px] leading-4 text-muted">Editing the canonical element owned by {ownerScreenName ?? "another screen"}. Changes apply to every projection.</div> : null}
       <Section title="Transform">
         <Field label="Name"><Input onChange={(event) => update({ name: event.target.value })} value={element.name} /></Field>
@@ -103,8 +107,8 @@ function ElementInspector({ element, onUpdate, overflowEnabled, onToggleOverflow
       </Section>
       {element.type === "text" ? <TextControls element={element} onUpdate={update} /> : null}
       {element.type === "shape" ? <ShapeControls element={element} onUpdate={update} /> : null}
-      {element.type === "device" ? <DeviceControls element={element} onUpdate={update} /> : null}
-      {element.type === "image" ? <ImageControls element={element} onUpdate={update} /> : null}
+      {element.type === "device" ? <FrameControls element={element} onUpdate={update} /> : null}
+      {element.type === "image" ? <ImageControls element={element} onAddFrame={(presetId) => onConvertImageToFrame(element.id, presetId)} onUpdate={update} /> : null}
     </div>
   );
 }
@@ -162,27 +166,31 @@ function ShapeControls({ element, onUpdate }: { element: Extract<SceneElement, {
   );
 }
 
-function DeviceControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "device" }>; onUpdate: (patch: ElementPatch) => void }) {
+function FrameControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "device" }>; onUpdate: (patch: ElementPatch) => void }) {
   const preset = getDevicePreset(element.preset);
   const selectedFinish = preset?.frameFinishes?.some((finish) => finish.color === element.frameColor) ? element.frameColor : preset?.defaultFrameColor;
   return (
-    <Section title="Device frame">
-      <Field label="Preset"><select className={selectClass} onChange={(event) => {
-        const nextPreset = getDevicePreset(event.target.value);
+    <Section title="Frame">
+      <Field label="Preset"><FramePresetMenu disabled={element.locked} label={preset?.label ?? "Choose frame"} onSelect={(presetId) => {
+        const nextPreset = getDevicePreset(presetId);
         if (!nextPreset) return;
+        const nextWidth = element.height * nextPreset.aspectRatio;
         onUpdate({
-          preset: nextPreset.id as Extract<typeof element.preset, string>,
-          deviceId: nextPreset.id,
+          preset: presetId,
+          deviceId: presetId,
           deviceName: nextPreset.label,
+          frame: presetId.includes("ipad") ? "tablet" : "phone",
           frameColor: nextPreset.defaultFrameColor,
           screenColor: nextPreset.defaultScreenColor,
           cornerRadius: null,
           screenCornerRadius: null,
+          width: nextWidth,
+          x: element.x + (element.width - nextWidth) / 2,
         });
-      }} value={element.preset}>{EDITABLE_DEVICE_PRESETS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></Field>
-      <Field label="Screenshot"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.screenshotPath ?? "No screenshot selected"}>{element.screenshotPath ? assetFileName(element.screenshotPath) : "No screenshot selected"}</p></Field>
+      }} value={element.preset} /></Field>
+      <Field label="Image"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.screenshotPath ?? "No image selected"}>{element.screenshotPath ? assetFileName(element.screenshotPath) : "No image selected"}</p></Field>
       <div className="grid grid-cols-2 gap-2">{preset?.frameFinishes ? <Field label="Frame finish"><select className={selectClass} onChange={(event) => onUpdate({ frameColor: event.target.value })} value={selectedFinish}>{preset.frameFinishes.map((finish) => <option key={finish.color} value={finish.color}>{finish.label}</option>)}</select></Field> : <Field label="Frame color"><ColorField onChange={(frameColor) => { if (frameColor) onUpdate({ frameColor }); }} value={element.frameColor} /></Field>}<Field label="Screen color"><ColorField onChange={(screenColor) => { if (screenColor) onUpdate({ screenColor }); }} value={element.screenColor} /></Field></div>
-      <Field label="Screenshot fit"><select className={selectClass} onChange={(event) => onUpdate({ screenshotFit: event.target.value as "contain" | "cover" | "stretch" })} value={element.screenshotFit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
+      <Field label="Image fit"><select className={selectClass} onChange={(event) => onUpdate({ screenshotFit: event.target.value as "contain" | "cover" | "stretch" })} value={element.screenshotFit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
       <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, x } })} step={0.05} value={element.screenshotPosition.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, y } })} step={0.05} value={element.screenshotPosition.y} /></Field></div>
       <div className="grid grid-cols-2 gap-2"><Field label="Bezel"><select className={selectClass} onChange={(event) => onUpdate({ bezelStyle: event.target.value as "solid" | "metallic" })} value={element.bezelStyle}><option value="solid">Solid</option><option value="metallic">Metallic</option></select></Field><Field label="Outer radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius ?? 0} /></Field><Field label="Screen radius"><NumberField min={0} onChange={(screenCornerRadius) => onUpdate({ screenCornerRadius })} value={element.screenCornerRadius ?? 0} /></Field></div>
       <div className="grid grid-cols-2 gap-2"><ToggleButton active={element.showCamera} label="Camera" onClick={() => onUpdate({ showCamera: !element.showCamera })} /><ToggleButton active={element.showGlare} label="Glare" onClick={() => onUpdate({ showGlare: !element.showGlare })} /></div>
@@ -191,9 +199,10 @@ function DeviceControls({ element, onUpdate }: { element: Extract<SceneElement, 
   );
 }
 
-function ImageControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "image" }>; onUpdate: (patch: ElementPatch) => void }) {
+function ImageControls({ element, onAddFrame, onUpdate }: { element: Extract<SceneElement, { type: "image" }>; onAddFrame: (presetId: DevicePresetId) => void; onUpdate: (patch: ElementPatch) => void }) {
   return (
     <Section title="Image">
+      <FramePresetMenu disabled={element.locked} label="Add frame" onSelect={onAddFrame} />
       <Field label="Image"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.assetPath}>{assetFileName(element.assetPath)}</p></Field>
       <Field label="Alt text"><Input onChange={(event) => onUpdate({ alt: event.target.value })} value={element.alt} /></Field>
       <Field label="Fit"><select className={selectClass} onChange={(event) => onUpdate({ fit: event.target.value as "contain" | "cover" | "stretch" })} value={element.fit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
@@ -207,7 +216,7 @@ function assetFileName(path: string): string {
   return path.split("/").pop() ?? path;
 }
 
-function BackgroundControls({ background, onChange }: { background: Background; onChange: (background: Background) => void }) {
+function BackgroundControls({ background, assets, onChange }: { background: Background; assets: readonly AssetMetadata[]; onChange: (background: Background) => void }) {
   return (
     <div className="space-y-3">
       <select className={selectClass} onChange={(event) => {
@@ -215,15 +224,54 @@ function BackgroundControls({ background, onChange }: { background: Background; 
         if (event.target.value === "linear-gradient") onChange({ type: "linear-gradient", stops: [{ offset: 0, color: "#14182a" }, { offset: 1, color: "#8b7cff" }], start: { x: 0, y: 0 }, end: { x: 1, y: 1 } });
         if (event.target.value === "radial-gradient") onChange({ type: "radial-gradient", stops: [{ offset: 0, color: "#f3c1da" }, { offset: 1, color: "#27203d" }], center: { x: 0.5, y: 0.5 }, radius: 0.85 });
         if (event.target.value === "transparent") onChange({ type: "transparent" });
+        if (event.target.value === "asset" && assets[0]) onChange({ type: "asset", assetPath: assets[0].path, fit: "cover", position: { x: 0.5, y: 0.5 }, blur: 0, overlayColor: "#000000", overlayOpacity: 0, texture: null });
       }} value={background.type}>
         <option value="solid">Solid</option>
         <option value="linear-gradient">Linear gradient</option>
         <option value="radial-gradient">Radial gradient</option>
+        <option disabled={assets.length === 0} value="asset">Asset{assets.length === 0 ? " (upload one first)" : ""}</option>
         <option value="transparent">Transparent</option>
       </select>
       {background.type === "solid" ? <ColorField onChange={(color) => { if (color) onChange({ ...background, color }); }} value={background.color} /> : null}
       {background.type === "linear-gradient" ? <LinearGradientControls background={background} onChange={onChange} /> : null}
       {background.type === "radial-gradient" ? <RadialGradientControls background={background} onChange={onChange} /> : null}
+      {background.type === "asset" ? <AssetBackgroundControls assets={assets} background={background} onChange={onChange} /> : null}
+    </div>
+  );
+}
+
+function AssetBackgroundControls({ background, assets, onChange }: { background: Extract<Background, { type: "asset" }>; assets: readonly AssetMetadata[]; onChange: (background: Background) => void }) {
+  const texture = background.texture;
+  return (
+    <div className="space-y-3">
+      <Field label="Asset">
+        <select className={selectClass} onChange={(event) => onChange({ ...background, assetPath: event.target.value })} value={background.assetPath}>
+          {!assets.some((asset) => asset.path === background.assetPath) ? <option value={background.assetPath}>Missing · {assetFileName(background.assetPath)}</option> : null}
+          {assets.map((asset) => <option key={asset.path} value={asset.path}>{asset.name} · {asset.width}×{asset.height}</option>)}
+        </select>
+      </Field>
+      <Field label="Fit"><select className={selectClass} onChange={(event) => onChange({ ...background, fit: event.target.value as "cover" | "contain" })} value={background.fit}><option value="cover">Cover / crop</option><option value="contain">Contain</option></select></Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onChange({ ...background, position: { ...background.position, x } })} step={0.05} value={background.position.x} /></Field>
+        <Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onChange({ ...background, position: { ...background.position, y } })} step={0.05} value={background.position.y} /></Field>
+      </div>
+      <Field label="Blur"><NumberField max={256} min={0} onChange={(blur) => onChange({ ...background, blur })} value={background.blur} /></Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Overlay"><ColorField onChange={(overlayColor) => { if (overlayColor) onChange({ ...background, overlayColor }); }} value={background.overlayColor} /></Field>
+        <Field label="Overlay opacity"><NumberField max={1} min={0} onChange={(overlayOpacity) => onChange({ ...background, overlayOpacity })} step={0.05} value={background.overlayOpacity} /></Field>
+      </div>
+      <Field label="Texture">
+        <select className={selectClass} onChange={(event) => onChange({
+          ...background,
+          texture: event.target.value === "none" ? null : { type: event.target.value as "noise" | "texture", seed: texture?.seed ?? 1, opacity: texture?.opacity ?? 0.08, scale: texture?.scale ?? 1 },
+        })} value={texture?.type ?? "none"}>
+          <option value="none">None</option>
+          <option value="noise">Fine noise</option>
+          <option value="texture">Coarse texture</option>
+        </select>
+      </Field>
+      {texture ? <div className="grid grid-cols-3 gap-2"><Field label="Seed"><NumberField max={0xffff_ffff} min={0} onChange={(seed) => onChange({ ...background, texture: { ...texture, seed: Math.round(seed) } })} value={texture.seed} /></Field><Field label="Opacity"><NumberField max={1} min={0} onChange={(opacity) => onChange({ ...background, texture: { ...texture, opacity } })} step={0.01} value={texture.opacity} /></Field><Field label="Scale"><NumberField max={16} min={1} onChange={(scale) => onChange({ ...background, texture: { ...texture, scale: Math.round(scale) } })} value={texture.scale} /></Field></div> : null}
+      <p className="text-[10px] leading-4 text-muted">The stored seed produces the same texture in the editor and every export.</p>
     </div>
   );
 }

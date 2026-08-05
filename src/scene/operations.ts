@@ -464,6 +464,18 @@ export function updateElement(project: Project, screenId: string, elementId: str
   return reconcileOverflowLinks(replaceOwnedElement(project, context.deck.id, context.ownerScreen.id, elementId, nextElement));
 }
 
+export function replaceElement(project: Project, screenId: string, elementId: string, replacement: SceneElement): Project {
+  const context = elementContextFor(project, screenId, elementId);
+  if (replacement.id !== elementId) throw new SceneOperationError("INVALID_OPERATION", "Replacement elements must preserve their existing id.");
+  const ownerOrigin = screenOrigin(context.deck, context.ownerScreen.id);
+  const coordinateOrigin = screenOrigin(context.deck, screenId);
+  const translated = ownerOrigin && coordinateOrigin
+    ? { ...replacement, x: replacement.x + coordinateOrigin.x - ownerOrigin.x }
+    : replacement;
+  const nextElement = SceneElementSchema.parse(clampElementToDeck(context.deck, translated, screenId !== context.ownerScreen.id));
+  return reconcileOverflowLinks(replaceOwnedElement(project, context.deck.id, context.ownerScreen.id, elementId, nextElement));
+}
+
 export function updateElements(project: Project, screenId: string, updates: ElementUpdate[] | Record<string, ElementPatch>): Project {
   const normalizedUpdates = Array.isArray(updates) ? updates : Object.entries(updates).map(([id, patch]) => ({ id, patch }));
   return normalizedUpdates.reduce((current, update) => updateElement(current, screenId, update.id, update.patch), project);

@@ -2,9 +2,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { AssetMetadata, DeviceElement, Project, ScreenPreset, ImageElement, ShapeElement, TextElement } from "../../lib/schema";
 import { createId, nowIso } from "../../lib/ids";
 import { EditorStore } from "../../app/editor-store";
-import { resolveScreen, selectActiveDeck, selectSelectedElements } from "../../scene/selectors";
-import { selectAssetReferences } from "../../scene/selectors";
-import { addElement } from "../../scene/element-operations";
+import { resolveScreen, selectActiveDeck, selectAssetUsages, selectSelectedElements } from "../../scene/selectors";
+import { addElement, replaceElement } from "../../scene/element-operations";
 import { updateDeck } from "../../scene/structure-operations";
 import { DeckCanvas, type DeckFitMode } from "../../canvas/deck-canvas";
 import { ScreenNavigator } from "../sidebar/screen-navigator";
@@ -16,7 +15,7 @@ import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { APP_STORE_PRESETS, getPresetDefinition } from "../../scene/presets";
-import { getDevicePreset } from "../../devices/presets";
+import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import { useAssetMutations } from "../../hooks/use-asset-mutations";
 
 type EditorWorkspaceProps = {
@@ -67,12 +66,13 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const [renameExportDirectory, setRenameExportDirectory] = useState(project.settings.exportDirectory ?? "");
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [localNotice, setLocalNotice] = useState<string | null>(null);
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportRendering, setExportRendering] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const inspectorCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { uploadStates, uploadFiles, deleteAsset } = useAssetMutations({
+  const { uploadStates, uploadFiles, dismissUpload, retryUpload, renameAsset, deleteAsset } = useAssetMutations({
     project,
     store,
     currentLocalRevision: () => localCommitRevisionRef.current,
@@ -94,6 +94,11 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const activeDeck = selectActiveDeck(snapshot.project, snapshot.activeDeckId);
   const activeScreen = resolveScreen(snapshot.project, snapshot.activeScreenId);
   const selectedElements = selectSelectedElements(activeScreen, snapshot.selectedElementIds);
+  const selectedFrame = selectedElements.find((element) => element.type === "device");
+  const frameTarget = {
+    selectedFrameName: selectedFrame?.name ?? null,
+  };
+  const assetUsages = new Map(snapshot.project.assets.map((asset) => [asset.path, selectAssetUsages(snapshot.project, asset.path)]));
   const focusedOwnerScreen = selectedElements[0]?.ownerScreenId;
   const reportError = useCallback((reason: unknown) => {
     setLocalError(reason instanceof Error ? reason.message : "The editor could not apply that change.");
@@ -108,6 +113,11 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   useEffect(() => () => {
     if (inspectorCommitTimerRef.current) clearTimeout(inspectorCommitTimerRef.current);
   }, []);
+  useEffect(() => {
+    if (!localNotice) return;
+    const timer = setTimeout(() => setLocalNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [localNotice]);
   function queueInspectorChange(label: string, action: () => void): void {
     setLocalError(null);
     try {
@@ -277,7 +287,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     const element: ImageElement = {
       id: createId("image"),
       type: "image",
-      name: asset.fileName,
+      name: asset.name,
       x: Math.round((activeScreen.width - width) / 2),
       y: Math.round((activeScreen.height - height) / 2),
       width,
@@ -291,32 +301,36 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       fit: "cover",
       position: { x: 0.5, y: 0.5 },
       cornerRadius: Math.min(32, Math.round(Math.min(width, height) * 0.06)),
-      alt: asset.fileName,
+      alt: asset.name,
     };
     run(() => {
       store.apply("Add image", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
       requestActiveScreenReveal();
+      setLocalNotice(`Added “${asset.name}” as an image.`);
     });
   }
 
-  function placeAssetInDevice(asset: AssetMetadata) {
-    const selectedDevice = selectedElements.find((element) => element.type === "device");
-    if (selectedDevice) {
-      run(() => store.updateElement(selectedDevice.id, { screenshotPath: asset.path }));
-      return;
-    }
-    const preset = getDevicePreset("iphone-17-pro-max");
+  function replaceAssetInSelectedFrame(asset: AssetMetadata) {
+    if (!selectedFrame) return;
+    run(() => store.updateElement(selectedFrame.id, { screenshotPath: asset.path }));
+    setLocalNotice(`Updated ${selectedFrame.name} with “${asset.name}”.`);
+  }
+
+  function addAssetWithFrame(asset: AssetMetadata, presetId: DevicePresetId) {
+    const preset = getDevicePreset(presetId);
     if (!preset) return;
-    const width = Math.round(activeScreen.width * 0.46);
-    const height = Math.min(Math.round(width / preset.aspectRatio), Math.round(activeScreen.height * 0.58));
+    const maxWidth = Math.round(activeScreen.width * 0.46);
+    const maxHeight = Math.round(activeScreen.height * 0.58);
+    const width = Math.min(maxWidth, Math.round(maxHeight * preset.aspectRatio));
+    const height = Math.round(width / preset.aspectRatio);
     const element: DeviceElement = {
       id: createId("device"),
       type: "device",
-      preset: "iphone-17-pro-max",
-      deviceId: "iphone-17-pro-max",
-      deviceName: "iPhone 17 Pro Max",
-      frame: "phone",
+      preset: presetId,
+      deviceId: presetId,
+      deviceName: preset.label,
+      frame: preset.category === "iPad" || presetId.includes("ipad") ? "tablet" : "phone",
       frameColor: preset.defaultFrameColor,
       screenColor: preset.defaultScreenColor,
       screenshotPath: asset.path,
@@ -327,7 +341,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       screenCornerRadius: null,
       showGlare: false,
       showCamera: true,
-      name: "iPhone 17 Pro Max",
+      name: preset.label,
       x: Math.round((activeScreen.width - width) / 2),
       y: Math.round((activeScreen.height - height) / 2),
       width,
@@ -339,9 +353,57 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       shadow: null,
     };
     run(() => {
-      store.apply("Add device", (current) => addElement(current, activeScreen.id, element));
+      store.apply("Add frame", (current) => addElement(current, activeScreen.id, element));
       store.setSelection([element.id]);
       requestActiveScreenReveal();
+      setLocalNotice(`Added “${asset.name}” with a ${element.deviceName} frame.`);
+    });
+  }
+
+  function convertImageToFrame(elementId: string, presetId: DevicePresetId) {
+    const selected = selectedElements.find((element) => element.id === elementId);
+    const preset = getDevicePreset(presetId);
+    if (!selected || selected.type !== "image" || !preset) return;
+    const image = selected;
+    const maxWidth = activeScreen.width * 0.9;
+    const maxHeight = activeScreen.height * 0.9;
+    let height = Math.min(maxHeight, Math.max(image.height, image.width / preset.aspectRatio));
+    let width = height * preset.aspectRatio;
+    if (width > maxWidth) {
+      width = maxWidth;
+      height = width / preset.aspectRatio;
+    }
+    const frame: DeviceElement = {
+      id: image.id,
+      type: "device",
+      preset: presetId,
+      deviceId: presetId,
+      deviceName: preset.label,
+      frame: presetId.includes("ipad") ? "tablet" : "phone",
+      frameColor: preset.defaultFrameColor,
+      screenColor: preset.defaultScreenColor,
+      screenshotPath: image.assetPath,
+      screenshotFit: image.fit,
+      screenshotPosition: image.position,
+      bezelStyle: "solid",
+      cornerRadius: null,
+      screenCornerRadius: null,
+      showGlare: false,
+      showCamera: true,
+      name: image.name,
+      x: image.x + (image.width - width) / 2,
+      y: image.y + (image.height - height) / 2,
+      width,
+      height,
+      rotation: image.rotation,
+      opacity: image.opacity,
+      locked: image.locked,
+      visible: image.visible,
+      shadow: image.shadow,
+    };
+    run(() => {
+      store.apply("Add frame", (current) => replaceElement(current, activeScreen.id, image.id, frame));
+      setLocalNotice(`Added a ${preset.label} frame to “${image.name}”.`);
     });
   }
 
@@ -468,6 +530,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         zoom={snapshot.zoom}
       />
       {visibleError ? <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-300/20 bg-red-400/[0.08] px-4 py-2 text-xs text-red-100" role="alert"><span>{visibleError}</span><button className="text-red-100/70 hover:text-red-50" onClick={() => setLocalError(null)} type="button">Dismiss</button></div> : null}
+      {localNotice ? <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-300/20 bg-emerald-400/[0.08] px-4 py-2 text-xs text-emerald-100" role="status"><span>{localNotice}</span><button className="text-emerald-100/70 hover:text-emerald-50" onClick={() => setLocalNotice(null)} type="button">Dismiss</button></div> : null}
       <div className="flex min-h-0 flex-1">
         <ScreenNavigator
           activeDeckId={snapshot.activeDeckId}
@@ -541,7 +604,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           </div>
         </main>
         <aside className="flex min-h-0 w-[276px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
-          <Inspector onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} screen={activeScreen} selectedElements={selectedElements} />
+          <Inspector assets={snapshot.project.assets} onConvertImageToFrame={convertImageToFrame} onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} screen={activeScreen} selectedElements={selectedElements} />
         </aside>
       </div>
 
@@ -577,15 +640,26 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
 
       <AssetLibrary
         assets={snapshot.project.assets}
+        frameTarget={frameTarget}
         onAddImage={addImage}
+        onAddWithFrame={addAssetWithFrame}
         onDeleteAsset={deleteAsset}
+        onDismissUpload={dismissUpload}
         onOpenChange={setAssetLibraryOpen}
-        onPlaceInDevice={placeAssetInDevice}
+        onReplaceSelectedFrame={replaceAssetInSelectedFrame}
+        onRenameAsset={renameAsset}
+        onRetryUpload={retryUpload}
+        onRevealUsage={(usage) => {
+          commitInspectorTransaction();
+          store.setActiveScreen(usage.screenId);
+          store.setSelection(usage.elementType === "background" ? [] : [usage.elementId]);
+          requestActiveScreenReveal();
+        }}
         onUploadFiles={uploadFiles}
         open={assetLibraryOpen}
         projectSlug={project.slug}
         uploadStates={uploadStates}
-        usageCounts={selectAssetReferences(snapshot.project)}
+        usagesByPath={assetUsages}
       />
       <ExportDialog
         activeDeckId={snapshot.activeDeckId}

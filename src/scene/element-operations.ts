@@ -3,6 +3,7 @@ export {
   duplicateElements,
   moveElements,
   removeElements,
+  replaceElement,
   reorderElements,
   resizeElement,
   updateElement,

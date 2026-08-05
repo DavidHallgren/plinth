@@ -105,7 +105,7 @@ export function ScreenNavigator({ project, activeDeckId, activeScreenId, selecte
             const resolved = layer.kind === "owned" ? layer.element : resolvedById.get(layer.elementId);
             if (!resolved) return null;
             return <LayerRow actualIndex={actualIndex} dropEdge={layerDropTarget?.id === resolved.id ? layerDropTarget.edge : null} element={resolved} isLink={layer.kind === "overflow-link"} key={`${activeScreen.id}:${layer.kind}:${layer.kind === "owned" ? layer.element.id : `${layer.ownerScreenId}:${layer.elementId}`}`} linkOwner={layer.kind === "overflow-link" ? activeDeck.screens.find((screen) => screen.id === layer.ownerScreenId) : undefined} onDelete={onDeleteElement} onDragFinished={() => setLayerDropTarget(null)} onDropTarget={(edge) => setLayerDropTarget((current) => current?.id === resolved.id && current.edge === edge ? current : { id: resolved.id, edge })} onDuplicate={onDuplicateElement} onGoToOwner={onGoToOwner} onMove={onMoveLayer} onRename={onRenameElement} onReorder={onReorderLayer} onSelect={onSelectLayer} onToggleLocked={onToggleLocked} onToggleVisible={onToggleVisible} selected={selectedElementIds.includes(resolved.id)} total={activeScreen.layers.length} />;
-          })}{activeScreen.layers.length === 0 ? <p className="px-2 py-8 text-center text-xs text-muted">Add text, a shape, an image, or a device to begin.</p> : null}</div> : null}
+          })}{activeScreen.layers.length === 0 ? <p className="px-2 py-8 text-center text-xs text-muted">Add text, a shape, an image, or a frame to begin.</p> : null}</div> : null}
         </section>
       </> : null}
     </aside>
