@@ -311,7 +311,7 @@ describe("screen overflow model", () => {
       shadow: null,
       text: "Linked",
       style: {
-        fontFamily: "Arial, sans-serif",
+        fontFamilyId: "builtin:inter",
         fontSize: 24,
         fontWeight: 400,
         lineHeight: 1.2,
@@ -330,7 +330,7 @@ describe("screen overflow model", () => {
     project = toggleElementOverflow(project, "screen_1", "linked-text", true);
     const readiness = sceneReadiness(resolveScreen(project, "screen_2"));
     expect(readiness.assetPaths).toEqual(["assets/linked.png"]);
-    expect(readiness.fontFamilies).toContain("Arial, sans-serif");
+    expect(readiness.fontFamilies).toContain("Inter Variable");
   });
 
   test("keeps independent deck-resolved export dimensions for every screen", () => {

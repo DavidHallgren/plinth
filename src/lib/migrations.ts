@@ -2,13 +2,13 @@ import { createDefaultProject, DEFAULT_BACKGROUND } from "./defaults";
 import { PlinthError } from "./errors";
 import { createId, slugify } from "./ids";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "./schema";
-import type { AssetMetadata, Background, LayerEntry, OwnedLayer, Project, SceneElement, Screen, Shadow } from "./schema";
+import type { AssetMetadata, Background, OwnedLayer, Project, SceneElement, Screen, Shadow } from "./schema";
 import { SceneElementSchema } from "./schema";
 import { isAppStorePreset } from "../scene/presets";
 import { isDevicePreset, getDevicePreset } from "../devices/presets";
 import { deriveAssetDisplayName, normalizeSourceFileName, sanitizeAssetStem } from "./asset-validation";
-import { normalizeTextElementGeometry } from "../scene/text-geometry";
 import { reconcileOverflowLinks } from "../scene/overflow-operations";
+import { DEFAULT_BUILT_IN_FONT_ID, getBuiltInFont } from "../fonts/catalog";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -236,7 +236,7 @@ function migrateElement(value: unknown, index: number, assets: AssetMetadata[]):
       type: "text",
       text: typeof value.text === "string" ? value.text : "Text",
       style: {
-        fontFamily: asString(style.fontFamily, "Inter, ui-sans-serif, system-ui, sans-serif"),
+        fontFamilyId: DEFAULT_BUILT_IN_FONT_ID,
         fontSize: asPositiveNumber(style.fontSize, 32),
         fontWeight: Math.min(900, Math.max(100, Math.round(asFiniteNumber(style.fontWeight, 400)))),
         italic: asBoolean(style.italic, false),
@@ -573,6 +573,39 @@ function migrateVersionEight(source: Record<string, unknown>): Record<string, un
   };
 }
 
+function migrateVersionNine(source: Record<string, unknown>): Record<string, unknown> {
+  const rawDecks = Array.isArray(source.decks) ? source.decks : [];
+  return {
+    ...source,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    fonts: [],
+    decks: rawDecks.map((deckValue) => {
+      if (!isRecord(deckValue)) return deckValue;
+      const screens = Array.isArray(deckValue.screens) ? deckValue.screens : [];
+      return {
+        ...deckValue,
+        screens: screens.map((screenValue) => {
+          if (!isRecord(screenValue)) return screenValue;
+          const layers = Array.isArray(screenValue.layers) ? screenValue.layers : [];
+          return {
+            ...screenValue,
+            layers: layers.map((layerValue) => {
+              if (!isRecord(layerValue) || layerValue.kind !== "owned" || !isRecord(layerValue.element) || layerValue.element.type !== "text") return layerValue;
+              const element = layerValue.element;
+              const style = isRecord(element.style) ? element.style : {};
+              const { fontFamily: _fontFamily, ...styleWithoutFamily } = style;
+              return {
+                ...layerValue,
+                element: { ...element, style: { ...styleWithoutFamily, fontFamilyId: DEFAULT_BUILT_IN_FONT_ID } },
+              };
+            }),
+          };
+        }),
+      };
+    }),
+  };
+}
+
 export function migrateProject(input: unknown): unknown {
   if (!isRecord(input)) {
     throw new PlinthError("SCHEMA_INVALID", 422, "Project data must be a JSON object.");
@@ -592,21 +625,48 @@ export function migrateProject(input: unknown): unknown {
     );
   }
 
-  if (versionValue === 0) return migrateVersionFive(migrateVersionZero(input));
-  if (versionValue === 1) return migrateVersionFive(migrateVersionOne(input));
-  if (versionValue === 2) return migrateVersionFive(migrateVersionTwo(input));
-  if (versionValue === 3) return migrateVersionFive(migrateVersionThree(input));
-  if (versionValue === 4) return migrateVersionFive(migrateVersionFour(input));
-  if (versionValue === 5) return migrateVersionFive(input);
-  if (versionValue === 6) return migrateVersionEight(migrateVersionSeven(migrateVersionSix(input)));
-  if (versionValue === 7) return migrateVersionEight(migrateVersionSeven(input));
-  if (versionValue === 8) return migrateVersionEight(input);
+  if (versionValue === 0) return migrateVersionNine(migrateVersionFive(migrateVersionZero(input)));
+  if (versionValue === 1) return migrateVersionNine(migrateVersionFive(migrateVersionOne(input)));
+  if (versionValue === 2) return migrateVersionNine(migrateVersionFive(migrateVersionTwo(input)));
+  if (versionValue === 3) return migrateVersionNine(migrateVersionFive(migrateVersionThree(input)));
+  if (versionValue === 4) return migrateVersionNine(migrateVersionFive(migrateVersionFour(input)));
+  if (versionValue === 5) return migrateVersionNine(migrateVersionFive(input));
+  if (versionValue === 6) return migrateVersionNine(migrateVersionEight(migrateVersionSeven(migrateVersionSix(input))));
+  if (versionValue === 7) return migrateVersionNine(migrateVersionEight(migrateVersionSeven(input)));
+  if (versionValue === 8) return migrateVersionNine(migrateVersionEight(input));
+  if (versionValue === 9) return migrateVersionNine(input);
   return input;
 }
 
-export function parseProject(input: unknown): Project {
+export type ProjectLoadWarning = { code: "FONT_SUBSTITUTED"; message: string; fontFamilyId: string };
+
+export function parseProjectWithWarnings(input: unknown): { project: Project; warnings: ProjectLoadWarning[] } {
   const migrated = migrateProject(input);
-  const result = ProjectSchema.safeParse(migrated);
+  const warnings: ProjectLoadWarning[] = [];
+  const source = isRecord(migrated) ? migrated : {};
+  const projectFontIds = new Set(Array.isArray(source.fonts) ? source.fonts.filter(isRecord).map((font) => font.id).filter((id): id is string => typeof id === "string") : []);
+  const decks = Array.isArray(source.decks) ? source.decks : [];
+  const normalizedInput = {
+    ...source,
+    decks: decks.map((deckValue) => {
+      if (!isRecord(deckValue)) return deckValue;
+      const screens = Array.isArray(deckValue.screens) ? deckValue.screens : [];
+      return { ...deckValue, screens: screens.map((screenValue) => {
+        if (!isRecord(screenValue)) return screenValue;
+        const layers = Array.isArray(screenValue.layers) ? screenValue.layers : [];
+        return { ...screenValue, layers: layers.map((layerValue) => {
+          if (!isRecord(layerValue) || layerValue.kind !== "owned" || !isRecord(layerValue.element) || layerValue.element.type !== "text" || !isRecord(layerValue.element.style)) return layerValue;
+          const id = layerValue.element.style.fontFamilyId;
+          if (typeof id !== "string") return layerValue;
+          const available = id.startsWith("builtin:") ? Boolean(getBuiltInFont(id as `builtin:${string}`)) : projectFontIds.has(id);
+          if (available) return layerValue;
+          if (!warnings.some((warning) => warning.fontFamilyId === id)) warnings.push({ code: "FONT_SUBSTITUTED", fontFamilyId: id, message: `Font "${id}" is unavailable and was changed to Inter.` });
+          return { ...layerValue, element: { ...layerValue.element, style: { ...layerValue.element.style, fontFamilyId: DEFAULT_BUILT_IN_FONT_ID } } };
+        }) };
+      }) };
+    }),
+  };
+  const result = ProjectSchema.safeParse(normalizedInput);
 
   if (!result.success) {
     const issueSummary = result.error.issues
@@ -618,25 +678,11 @@ export function parseProject(input: unknown): Project {
     });
   }
 
-  const normalized = ProjectSchema.parse({
-    ...result.data,
-    decks: result.data.decks.map((deck) => ({
-      ...deck,
-      screens: deck.screens.map((screen) => ({
-        ...screen,
-        layers: screen.layers.map((layer): LayerEntry => layer.kind === "owned"
-          ? {
-            ...layer,
-            element: layer.element.type === "text"
-              ? normalizeTextElementGeometry(layer.element, deck.width, deck.height, deck.width * deck.screens.length)
-              : layer.element,
-          }
-          : layer),
-      })),
-    })),
-  });
-
   // Persisted links are required to name a real owner, but links can become
   // stale after hand-edited geometry. Normalize that recoverable case on load.
-  return reconcileOverflowLinks(normalized, { transferOwnership: false });
+  return { project: reconcileOverflowLinks(result.data, { transferOwnership: false }), warnings };
+}
+
+export function parseProject(input: unknown): Project {
+  return parseProjectWithWarnings(input).project;
 }

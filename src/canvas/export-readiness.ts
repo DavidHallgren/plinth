@@ -2,6 +2,8 @@ import type { AssetMetadata, Background, Project, SceneElement } from "../lib/sc
 import { deviceFrameSource } from "../devices/frame-assets";
 import { assetUrl } from "./image-loading";
 import { imageResourceState, loadImageResource } from "./image-cache";
+import { ensureFontReady } from "../fonts/font-registry";
+import { fontCssFamily } from "../fonts/catalog";
 
 export type SceneReadiness = {
   assetPaths: string[];
@@ -25,7 +27,7 @@ function referencedAssetPaths(sceneScreen: RenderableScene): string[] {
 function referencedFontFamilies(sceneScreen: RenderableScene): string[] {
   const families = new Set<string>();
   for (const element of sceneScreen.elements) {
-    if (element.type === "text") families.add(element.style.fontFamily);
+    if (element.type === "text") families.add(fontCssFamily(element.style.fontFamilyId));
     if (element.type === "device") families.add("Inter, ui-sans-serif, system-ui, sans-serif");
   }
   return [...families];
@@ -45,7 +47,7 @@ function referencedFontSpecs(sceneScreen: RenderableScene): string[] {
   const specs = new Set<string>(["400 16px Inter, ui-sans-serif, system-ui, sans-serif"]);
   for (const element of sceneScreen.elements) {
     if (element.type !== "text") continue;
-    specs.add(`${element.style.italic ? "italic " : ""}${element.style.fontWeight} ${element.style.fontSize}px ${element.style.fontFamily}`);
+    specs.add(`${element.style.italic ? "italic " : ""}${element.style.fontWeight} ${element.style.fontSize}px "${fontCssFamily(element.style.fontFamilyId)}"`);
   }
   return [...specs];
 }
@@ -59,7 +61,7 @@ export function sceneReadiness(sceneScreen: RenderableScene): SceneReadiness {
   };
 }
 
-export async function waitForSceneReady(project: Pick<Project, "slug">, sceneScreen: RenderableScene, assets: readonly AssetMetadata[]): Promise<void> {
+export async function waitForSceneReady(project: Project, sceneScreen: RenderableScene, assets: readonly AssetMetadata[]): Promise<void> {
   const readiness = sceneReadiness(sceneScreen);
   const missing = readiness.assetPaths.filter((path) => !assets.some((asset) => asset.path === path));
   if (missing.length > 0) {
@@ -91,6 +93,10 @@ export async function waitForSceneReady(project: Pick<Project, "slug">, sceneScr
   if (failedImages.length > 0) {
     throw new Error(`Export cannot start: ${failedImages.map((result) => `${result.path} (${result.error})`).join(", ")}. Fix the asset and try again.`);
   }
+
+  await Promise.all(sceneScreen.elements.filter((element): element is Extract<SceneElement, { type: "text" }> => element.type === "text").map((element) =>
+    ensureFontReady(project, element.style.fontFamilyId, element.style.fontWeight, element.style.italic ?? false, element.text),
+  ));
 
   const pageDocument = globalThis.document;
   if (pageDocument?.fonts) {

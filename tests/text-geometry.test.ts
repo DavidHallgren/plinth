@@ -11,7 +11,7 @@ const timestamp = "2026-08-02T00:00:00.000Z";
 describe("text auto-height geometry", () => {
   test("accounts for explicit and wrapped lines with padding", () => {
     const style = {
-      fontFamily: "Inter, sans-serif",
+      fontFamilyId: "builtin:inter",
       fontSize: 20,
       fontWeight: 400,
       lineHeight: 1.2,
@@ -27,7 +27,7 @@ describe("text auto-height geometry", () => {
 
   test("uses measured font width instead of a character-count boundary", () => {
     const style = {
-      fontFamily: "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+      fontFamilyId: "builtin:inter",
       fontSize: 96,
       fontWeight: 820,
       italic: false,
@@ -72,7 +72,7 @@ describe("text auto-height geometry", () => {
       shadow: null,
       text: "This is a deliberately long line that must wrap in a narrow box.",
       style: {
-        fontFamily: "Inter, sans-serif",
+        fontFamilyId: "builtin:inter",
         fontSize: 20,
         fontWeight: 400,
         lineHeight: 1.2,
@@ -96,7 +96,7 @@ describe("text auto-height geometry", () => {
     expect(changedScreen && ownedElements(changedScreen)[0]?.height).toBe(40);
   });
 
-  test("keeps stored auto-height geometry aligned with renderer and migrated JSON", () => {
+  test("keeps browser-computed auto-height geometry and does not remeasure it on the server", () => {
     const project = createDefaultProject("Auto-height fixture", { now: timestamp });
     const deck = project.decks[0];
     const screen = deck?.screens[0];
@@ -111,6 +111,6 @@ describe("text auto-height geometry", () => {
       decks: [{ ...deck, screens: [{ ...screen, layers: screen.layers.map((layer) => layer.kind === "owned" && layer.element.id === text.id ? { ...layer, element: { ...layer.element, height: legacyHeight } } : layer) }] }],
     });
     const parsedScreen = parsed.decks[0]?.screens[0];
-    expect(parsedScreen && ownedElements(parsedScreen).find((element) => element.id === text.id)?.height).toBe(expectedHeight);
+    expect(parsedScreen && ownedElements(parsedScreen).find((element) => element.id === text.id)?.height).toBe(legacyHeight);
   });
 });

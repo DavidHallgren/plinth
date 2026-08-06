@@ -12,6 +12,7 @@ import { calculateTextAutoHeight } from "../scene/text-geometry";
 import type { ResolvedElement } from "../scene/overflow";
 import type { ResolvedScreen } from "../scene/selectors";
 import { createBackgroundTextureTile } from "./background-texture";
+import { fontCssFamily } from "../fonts/catalog";
 
 export type SceneRendererProps = {
   screen: ResolvedScreen;
@@ -190,7 +191,7 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
         <Text
           align={element.style.align}
           fill={element.style.color}
-          fontFamily={element.style.fontFamily}
+          fontFamily={fontCssFamily(element.style.fontFamilyId)}
           fontSize={element.style.fontSize}
           fontStyle={konvaFontStyle(element.style.fontWeight, element.style.italic ?? false)}
           height={textHeight}

@@ -3,11 +3,12 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { createDefaultProject } from "./defaults";
 import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
-import { parseProject } from "./migrations";
+import { parseProject, parseProjectWithWarnings, type ProjectLoadWarning } from "./migrations";
 import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
 import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, findExportPlanForFile, MAX_EXPORT_BYTES } from "./export-validation";
 import type { ExportScope } from "./export-validation";
 import type { AssetMetadata, Project, ProjectInput, ScreenPreset } from "./schema";
+import type { ProjectFontFace, ProjectFontFamily } from "./schema";
 import { selectAssetReferences, selectAssetUsages, type AssetUsage } from "../scene/selectors";
 import { addDeck as addSceneDeck, addScreen as addSceneScreen, type AddDeckOptions, type AddScreenOptions } from "../scene/structure-operations";
 import { ProjectMutationLock } from "./project-mutation-lock";
@@ -17,6 +18,7 @@ import { createAssetMetadata } from "./asset-storage";
 import { removeAssetUsages } from "./asset-mutations";
 import { ExportRunRegistry } from "./export-storage";
 import { filesystemErrorCode, writePrettyJsonAtomic } from "./project-storage";
+import { assertFontPath, MAX_FONT_BYTES, MAX_PROJECT_FONT_BYTES, validateFontBytes } from "./font-validation";
 export { writePrettyJsonAtomic } from "./project-storage";
 
 export type ProjectMetadata = {
@@ -46,6 +48,9 @@ export type AssetMutation = {
   asset: AssetMetadata;
   duplicate: boolean;
 };
+
+export type FontMutation = { project: Project; font: ProjectFontFamily; face: ProjectFontFace; duplicate: boolean };
+export type FontRead = { face: ProjectFontFace; bytes: Uint8Array };
 
 export type ExportWriteInput = {
   screenId: string;
@@ -78,7 +83,7 @@ export type ExportWrite = {
 export type ExportRead = ExportWrite & { bytes: Uint8Array };
 
 const PROJECT_FILE = "project.json";
-const PROJECT_SUBDIRECTORIES = ["assets", "exports"] as const;
+const PROJECT_SUBDIRECTORIES = ["assets", "fonts", "exports"] as const;
 const EXPORT_RUN_ID_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}(?:-\d+)?$/;
 
 const errorCode = filesystemErrorCode;
@@ -147,6 +152,11 @@ export class ProjectStorage {
   assetFilePath(slug: string, assetPath: string): string {
     const safePath = assertAssetPath(assetPath);
     return resolveWithin(this.projectSubdirectory(slug, "assets"), assetFileNameFromPath(safePath));
+  }
+
+  fontFilePath(slug: string, fontPath: string): string {
+    const safePath = assertFontPath(fontPath);
+    return resolveWithin(this.projectSubdirectory(slug, "fonts"), safePath.slice("fonts/".length));
   }
 
   exportFilePath(slug: string, fileName: string): string {
@@ -249,7 +259,7 @@ export class ProjectStorage {
     }
   }
 
-  async loadProject(slug: string): Promise<Project> {
+  async loadProjectWithWarnings(slug: string): Promise<{ project: Project; warnings: ProjectLoadWarning[] }> {
     const filePath = this.projectFile(slug);
     let contents: string;
 
@@ -274,7 +284,32 @@ export class ProjectStorage {
     }
 
     try {
-      return parseProject(raw);
+      const result = parseProjectWithWarnings(raw);
+      const unavailable = new Set<string>();
+      await Promise.all(result.project.fonts.map(async (family) => {
+        for (const face of family.faces) {
+          try {
+            const bytes = new Uint8Array(await readFile(this.fontFilePath(slug, face.path)));
+            if (bytes.byteLength !== face.byteSize || await hashBytes(bytes) !== face.contentHash) unavailable.add(family.id);
+          } catch (error) {
+            if (errorCode(error) === "ENOENT") unavailable.add(family.id);
+            else throw error;
+          }
+        }
+      }));
+      if (unavailable.size === 0) return result;
+      const warnings = [...result.warnings];
+      for (const fontFamilyId of unavailable) warnings.push({ code: "FONT_SUBSTITUTED", fontFamilyId, message: `Project font "${fontFamilyId}" is missing or does not match its metadata and was changed to Inter.` });
+      const project = {
+        ...result.project,
+        decks: result.project.decks.map((deck) => ({ ...deck, screens: deck.screens.map((screen) => ({
+          ...screen,
+          layers: screen.layers.map((layer) => layer.kind === "owned" && layer.element.type === "text" && unavailable.has(layer.element.style.fontFamilyId)
+            ? { ...layer, element: { ...layer.element, style: { ...layer.element.style, fontFamilyId: "builtin:inter" as const } } }
+            : layer),
+        })) })),
+      };
+      return { project, warnings };
     } catch (error) {
       if (isPlinthError(error)) {
         throw new PlinthError("PROJECT_INVALID", 422, `Project "${slug}" failed validation: ${error.message}`, {
@@ -284,6 +319,10 @@ export class ProjectStorage {
       }
       throw error;
     }
+  }
+
+  async loadProject(slug: string): Promise<Project> {
+    return (await this.loadProjectWithWarnings(slug)).project;
   }
 
   async saveProject(project: Project): Promise<Project> {
@@ -301,7 +340,7 @@ export class ProjectStorage {
           projectId: validated.id,
         });
       }
-      return this.saveProjectUnlocked({ ...validated, assets: current.assets });
+      return this.saveProjectUnlocked({ ...validated, assets: current.assets, fonts: current.fonts });
     });
   }
 
@@ -319,6 +358,75 @@ export class ProjectStorage {
     const project = await this.loadProject(slug);
     const references = selectAssetReferences(project);
     return project.assets.map((asset) => ({ ...asset, usageCount: references.get(asset.path) ?? 0 }));
+  }
+
+  async readFont(slug: string, fontPath: string): Promise<FontRead> {
+    const project = await this.loadProject(slug);
+    const safePath = assertFontPath(fontPath);
+    const face = project.fonts.flatMap((family) => family.faces).find((candidate) => candidate.path === safePath);
+    if (!face) throw new PlinthError("FONT_NOT_FOUND", 404, `Font "${safePath}" was not found in project "${slug}".`);
+    try {
+      const filePath = this.fontFilePath(slug, safePath);
+      await assertFileNotSymlink(filePath);
+      const bytes = new Uint8Array(await readFile(filePath));
+      const hash = await hashBytes(bytes);
+      if (hash !== face.contentHash || bytes.byteLength !== face.byteSize) throw new PlinthError("FONT_INVALID_CONTENT", 422, `Stored font "${safePath}" does not match its project metadata.`);
+      return { face, bytes };
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") throw new PlinthError("FONT_NOT_FOUND", 404, `Font file "${safePath}" is missing from project storage.`);
+      throw error;
+    }
+  }
+
+  async ingestFont(slug: string, file: Blob, sourceFileName: string, licenseConfirmed: boolean): Promise<FontMutation> {
+    if (!licenseConfirmed) throw new PlinthError("FONT_LICENSE_REQUIRED", 422, "Confirm that you have the right to use and share this font before uploading it.");
+    if (file.size > MAX_FONT_BYTES) throw new PlinthError("FONT_TOO_LARGE", 422, `Fonts must be ${MAX_FONT_BYTES / 1024 / 1024} MB or smaller.`);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const validated = await validateFontBytes(bytes, sourceFileName);
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, async () => {
+      const project = await this.loadProject(safeSlug);
+      const existingFamily = project.fonts.find((family) => family.faces.some((face) => face.contentHash === validated.face.contentHash));
+      const existingFace = existingFamily?.faces.find((face) => face.contentHash === validated.face.contentHash);
+      if (existingFamily && existingFace) return { project, font: existingFamily, face: existingFace, duplicate: true };
+      const currentBytes = project.fonts.flatMap((family) => family.faces).reduce((sum, face) => sum + face.byteSize, 0);
+      if (currentBytes + bytes.byteLength > MAX_PROJECT_FONT_BYTES) throw new PlinthError("FONT_PROJECT_LIMIT", 422, "Project fonts may use at most 50 MB in total.");
+      const matchingFamily = project.fonts.find((family) => family.name.toLocaleLowerCase() === validated.familyName.toLocaleLowerCase());
+      const family: ProjectFontFamily = matchingFamily
+        ? { ...matchingFamily, faces: [...matchingFamily.faces, validated.face] }
+        : { id: `font_${validated.face.contentHash.slice(0, 20)}`, name: validated.familyName, source: "uploaded", licenseConfirmed: true, faces: [validated.face] };
+      await this.ensureProjectDirectories(safeSlug);
+      const filePath = this.fontFilePath(safeSlug, validated.face.path);
+      await this.writeBinaryFileAtomic(filePath, bytes);
+      try {
+        const fonts = matchingFamily ? project.fonts.map((candidate) => candidate.id === family.id ? family : candidate) : [...project.fonts, family];
+        const nextProject = await this.saveProjectUnlocked({ ...project, fonts, updatedAt: nowIso() });
+        return { project: nextProject, font: family, face: validated.face, duplicate: false };
+      } catch (error) {
+        await unlink(filePath).catch(() => undefined);
+        throw error;
+      }
+    });
+  }
+
+  async deleteFont(slug: string, familyId: string): Promise<{ project: Project; deleted: ProjectFontFamily }> {
+    const safeSlug = assertProjectSlug(slug);
+    return this.mutationLock.run(safeSlug, async () => {
+      const project = await this.loadProject(safeSlug);
+      const family = project.fonts.find((candidate) => candidate.id === familyId);
+      if (!family) throw new PlinthError("FONT_NOT_FOUND", 404, `Font family "${familyId}" was not found.`);
+      const usages = project.decks.flatMap((deck) => deck.screens.flatMap((screen) => screen.layers.filter((layer) => layer.kind === "owned" && layer.element.type === "text" && layer.element.style.fontFamilyId === familyId).map((layer) => ({ deckId: deck.id, screenId: screen.id, elementId: layer.kind === "owned" ? layer.element.id : "" }))));
+      if (usages.length > 0) throw new PlinthError("FONT_IN_USE", 409, `Font "${family.name}" is still used by ${usages.length} text layer${usages.length === 1 ? "" : "s"}. Choose another font for those layers first.`, { usages });
+      const originals = await Promise.all(family.faces.map(async (face) => ({ face, bytes: await readFile(this.fontFilePath(safeSlug, face.path)).catch(() => null) })));
+      await Promise.all(family.faces.map((face) => unlink(this.fontFilePath(safeSlug, face.path)).catch((error) => { if (errorCode(error) !== "ENOENT") throw error; })));
+      try {
+        const nextProject = await this.saveProjectUnlocked({ ...project, fonts: project.fonts.filter((candidate) => candidate.id !== familyId), updatedAt: nowIso() });
+        return { project: nextProject, deleted: family };
+      } catch (error) {
+        await Promise.all(originals.map(({ face, bytes }) => bytes ? this.writeBinaryFileAtomic(this.fontFilePath(safeSlug, face.path), new Uint8Array(bytes)) : undefined));
+        throw error;
+      }
+    });
   }
 
   async readAsset(slug: string, assetPath: string): Promise<AssetRead> {
@@ -706,6 +814,7 @@ export class ProjectStorage {
     const usedIds = new Set([
       source.id,
       ...source.assets.map((asset) => asset.id),
+      ...source.fonts.flatMap((font) => [font.id, ...font.faces.map((face) => face.id)]),
       ...source.decks.flatMap((deck) => [deck.id, ...deck.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])]),
     ]);
     const freshId = (prefix: string): string => {
@@ -753,6 +862,7 @@ export class ProjectStorage {
     const created = await this.createProjectFromValue(duplicate);
     try {
       await this.copyAssets(slug, targetSlug);
+      await this.copyProjectFiles(slug, targetSlug, "fonts");
       return created;
     } catch (error) {
       await this.deleteProjectUnlocked(targetSlug).catch(() => undefined);
@@ -803,8 +913,12 @@ export class ProjectStorage {
   }
 
   private async copyAssets(sourceSlug: string, targetSlug: string): Promise<void> {
-    const sourceDirectory = this.projectSubdirectory(sourceSlug, "assets");
-    const targetDirectory = this.projectSubdirectory(targetSlug, "assets");
+    return this.copyProjectFiles(sourceSlug, targetSlug, "assets");
+  }
+
+  private async copyProjectFiles(sourceSlug: string, targetSlug: string, subdirectory: "assets" | "fonts"): Promise<void> {
+    const sourceDirectory = this.projectSubdirectory(sourceSlug, subdirectory);
+    const targetDirectory = this.projectSubdirectory(targetSlug, subdirectory);
     if (!(await pathExists(sourceDirectory))) {
       return;
     }

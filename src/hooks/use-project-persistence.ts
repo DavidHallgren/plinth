@@ -24,6 +24,7 @@ export function rebaseProjectAfterRename(latest: Project, renamed: Project): Pro
     name: renamed.name,
     settings: { ...latest.settings, exportDirectory: renamed.settings.exportDirectory },
     assets: renamed.assets,
+    fonts: renamed.fonts,
     updatedAt: renamed.updatedAt,
   };
 }
@@ -95,9 +96,10 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
   const openProject = useCallback(async (slug: string) => {
     setError(null);
     try {
-      const result = await apiFetch<{ project: Project }>(`/api/projects/${encodeURIComponent(slug)}`);
+      const result = await apiFetch<{ project: Project; warnings: Array<{ message: string }> }>(`/api/projects/${encodeURIComponent(slug)}`);
       revisionRef.current = 0;
-      acceptProject(result.project, { dirty: false });
+      acceptProject(result.project, { dirty: result.warnings.length > 0 });
+      if (result.warnings.length > 0) setError(`Font warning: ${result.warnings.map((warning) => warning.message).join(" ")}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not open project.");
     }

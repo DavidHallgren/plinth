@@ -94,7 +94,7 @@ describe("editor interaction guards and geometry", () => {
       shadow: null,
       text: "Layer",
       style: {
-        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        fontFamilyId: "builtin:inter",
         fontSize: 24,
         fontWeight: 400,
         italic: false,

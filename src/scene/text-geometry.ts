@@ -1,11 +1,11 @@
 import type { SceneElement, TextStyle } from "../lib/schema";
+import { DEFAULT_BUILT_IN_FONT_ID, fontCssFamily } from "../fonts/catalog";
 
 type CanonicalTextElement = Extract<SceneElement, { type: "text" }>;
 export type TextMeasurementStyle = Pick<TextStyle, "fontSize" | "lineHeight" | "letterSpacing" | "padding" | "autoHeight"> &
-  Partial<Pick<TextStyle, "fontFamily" | "fontWeight" | "italic">>;
+  Partial<Pick<TextStyle, "fontFamilyId" | "fontWeight" | "italic">>;
 export type TextWidthMeasurer = (text: string, style: TextMeasurementStyle) => number | null;
 
-const DEFAULT_FONT_FAMILY = "Inter, ui-sans-serif, system-ui, sans-serif";
 const DEFAULT_FONT_WEIGHT = 400;
 
 type CanvasTextContext = {
@@ -49,10 +49,9 @@ function normalizeFontFamily(fontFamily: string): string {
 }
 
 function canvasFont(style: TextMeasurementStyle): string {
-  const bold = (style.fontWeight ?? DEFAULT_FONT_WEIGHT) >= 700;
-  const fontStyle = style.italic ? (bold ? "italic bold" : "italic") : bold ? "bold" : "normal";
-  const family = normalizeFontFamily(style.fontFamily ?? DEFAULT_FONT_FAMILY);
-  return `${fontStyle} normal ${style.fontSize}px ${family}`;
+  const weight = Math.round(style.fontWeight ?? DEFAULT_FONT_WEIGHT);
+  const family = normalizeFontFamily(fontCssFamily(style.fontFamilyId ?? DEFAULT_BUILT_IN_FONT_ID));
+  return `${style.italic ? "italic" : "normal"} normal ${weight} ${style.fontSize}px ${family}`;
 }
 
 /**

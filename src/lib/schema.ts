@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 9 as const;
+export const CURRENT_SCHEMA_VERSION = 10 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
@@ -10,6 +10,8 @@ export const DimensionSchema = z.number().int().positive().max(100_000);
 export const DeckSlugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(96);
 export const ScreenSlugSchema = DeckSlugSchema;
 export const AssetPathSchema = z.string().regex(/^assets\/[a-z0-9][a-z0-9._-]{0,254}$/);
+export const FontPathSchema = z.string().regex(/^fonts\/[a-z0-9][a-z0-9._-]{0,254}$/);
+export const FontFamilyIdSchema = z.string().regex(/^(?:builtin:[a-z0-9]+(?:-[a-z0-9]+)*|font_[a-z0-9]+)$/).max(96);
 export type AssetPath = z.infer<typeof AssetPathSchema>;
 export const ImageFitSchema = z.enum(["contain", "cover", "stretch"]);
 export type ImageFit = z.infer<typeof ImageFitSchema>;
@@ -167,7 +169,7 @@ export type DeviceElement = z.infer<typeof DeviceElementSchema>;
 
 const TextStyleSchema = z
   .object({
-    fontFamily: z.string().min(1).max(120),
+    fontFamilyId: FontFamilyIdSchema,
     fontSize: z.number().positive().finite(),
     fontWeight: z.number().int().min(100).max(900),
     italic: z.boolean().optional(),
@@ -243,6 +245,32 @@ export const AssetMetadataSchema = z
     }
   });
 export type AssetMetadata = z.infer<typeof AssetMetadataSchema>;
+
+export const FontMimeTypeSchema = z.enum(["font/woff2", "font/woff", "font/ttf", "font/otf"]);
+export const ProjectFontFaceSchema = z.object({
+  id: IdSchema,
+  path: FontPathSchema,
+  sourceFileName: z.string().trim().min(1).max(255),
+  mimeType: FontMimeTypeSchema,
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  byteSize: z.number().int().positive(),
+  style: z.enum(["normal", "italic"]),
+  weightMin: z.number().int().min(1).max(1000),
+  weightMax: z.number().int().min(1).max(1000),
+  postscriptName: z.string().trim().min(1).max(255).nullable(),
+}).strict().superRefine((face, context) => {
+  if (face.weightMin > face.weightMax) context.addIssue({ code: z.ZodIssueCode.custom, path: ["weightMax"], message: "Font face weightMax must be greater than or equal to weightMin." });
+});
+export type ProjectFontFace = z.infer<typeof ProjectFontFaceSchema>;
+
+export const ProjectFontFamilySchema = z.object({
+  id: FontFamilyIdSchema.refine((id) => id.startsWith("font_"), "Project font IDs must start with font_."),
+  name: z.string().trim().min(1).max(120),
+  source: z.literal("uploaded"),
+  licenseConfirmed: z.literal(true),
+  faces: z.array(ProjectFontFaceSchema).min(1),
+}).strict();
+export type ProjectFontFamily = z.infer<typeof ProjectFontFamilySchema>;
 
 export const SettingsSchema = z
   .object({
@@ -336,6 +364,7 @@ const ProjectBaseSchema = z
     settings: SettingsSchema,
     background: BackgroundSchema,
     assets: z.array(AssetMetadataSchema),
+    fonts: z.array(ProjectFontFamilySchema),
     decks: z.array(DeckSchema).min(1),
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
@@ -376,6 +405,17 @@ const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) =
     } else {
       assetPaths.set(asset.path, assetIndex);
     }
+  });
+  const fontPaths = new Map<string, Array<string | number>>();
+  project.fonts.forEach((font, fontIndex) => {
+    checkIdentity(font.id, "font family", ["fonts", fontIndex, "id"]);
+    font.faces.forEach((face, faceIndex) => {
+      checkIdentity(face.id, "font face", ["fonts", fontIndex, "faces", faceIndex, "id"]);
+      const path = ["fonts", fontIndex, "faces", faceIndex, "path"];
+      const previous = fontPaths.get(face.path);
+      if (previous) context.addIssue({ code: z.ZodIssueCode.custom, path, message: `Duplicate font path "${face.path}"; already used at ${identityPath(previous)}.` });
+      else fontPaths.set(face.path, path);
+    });
   });
   const deckSlugs = new Map<string, number>();
   const screenSlugs = new Map<string, Array<string | number>>();
