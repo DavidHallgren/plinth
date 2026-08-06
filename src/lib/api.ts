@@ -4,6 +4,7 @@ import { MAX_EXPORT_BYTES } from "./export-validation";
 import { parseProject } from "./migrations";
 import { CURRENT_SCHEMA_VERSION, ScreenPresetSchema } from "./schema";
 import { assetPathFromRequestName, ProjectStorage } from "./storage";
+import { assertFontPath } from "./font-validation";
 import { PROJECT_SLUG_PATTERN } from "./ids";
 
 const ProjectSlugRequestSchema = z.string().trim().min(1).max(64).regex(
@@ -150,6 +151,19 @@ function assetPathSegment(request: Request): string {
   return assetPathFromRequestName(pathname.slice(markerIndex + marker.length));
 }
 
+function fontPathSegment(request: Request): string {
+  const pathname = new URL(request.url).pathname;
+  const marker = "/fonts/";
+  const markerIndex = pathname.indexOf(marker);
+  if (markerIndex < 0) throw new PlinthError("INVALID_REQUEST", 400, "The font file name is required.");
+  try {
+    return assertFontPath(`fonts/${decodeURIComponent(pathname.slice(markerIndex + marker.length))}`);
+  } catch (error) {
+    if (error instanceof URIError) throw new PlinthError("INVALID_REQUEST", 400, "The font file name is not valid URL encoding.");
+    throw error;
+  }
+}
+
 function exportFileNameSegment(request: Request): string {
   const pathname = new URL(request.url).pathname;
   const marker = "/exports/";
@@ -185,8 +199,8 @@ export async function handleCreateProject(request: Request, storage: ProjectStor
 }
 
 export async function handleGetProject(request: Request, storage: ProjectStorage): Promise<Response> {
-  const project = await storage.loadProject(pathSegment(request, 3));
-  return success({ project });
+  const result = await storage.loadProjectWithWarnings(pathSegment(request, 3));
+  return success(result);
 }
 
 export async function handleSaveProject(request: Request, storage: ProjectStorage): Promise<Response> {
@@ -292,6 +306,36 @@ export async function handleDeleteAsset(request: Request, storage: ProjectStorag
   const deleteUsages = url.searchParams.get("deleteUsages") === "true";
   const result = await storage.deleteAsset(pathSegment(request, 3), assetPathSegment(request), deleteUsages);
   return success({ deleted: result.deleted.path, project: result.project, usages: result.usages });
+}
+
+export async function handleUploadFont(request: Request, storage: ProjectStorage): Promise<Response> {
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    throw new PlinthError("INVALID_REQUEST", 400, "The font upload must be valid multipart data.", { cause: error instanceof Error ? error.message : String(error) });
+  }
+  const file = formData.get("file");
+  if (!(file instanceof Blob)) throw new PlinthError("INVALID_REQUEST", 400, "Font uploads must include a file in the `file` field.");
+  const sourceName = typeof (file as { name?: unknown }).name === "string" ? (file as { name: string }).name : "font";
+  const mutation = await storage.ingestFont(pathSegment(request, 3), file, sourceName, formData.get("licenseConfirmed") === "true");
+  return success({ font: mutation.font, face: mutation.face, duplicate: mutation.duplicate, project: mutation.project }, mutation.duplicate ? 200 : 201);
+}
+
+export async function handleGetFont(request: Request, storage: ProjectStorage): Promise<Response> {
+  const font = await storage.readFont(pathSegment(request, 3), fontPathSegment(request));
+  return new Response(font.bytes.buffer as ArrayBuffer, { headers: {
+    "cache-control": "public, max-age=31536000, immutable",
+    "content-length": String(font.bytes.byteLength),
+    "content-type": font.face.mimeType,
+    "x-content-type-options": "nosniff",
+  } });
+}
+
+export async function handleDeleteFont(request: Request, storage: ProjectStorage): Promise<Response> {
+  const familyId = pathSegment(request, 5);
+  const result = await storage.deleteFont(pathSegment(request, 3), familyId);
+  return success({ deleted: result.deleted.id, project: result.project });
 }
 
 export async function handleListExports(request: Request, storage: ProjectStorage): Promise<Response> {

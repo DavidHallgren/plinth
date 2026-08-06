@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 10,
   "id": "project_example",
   "slug": "example",
   "name": "Example",
@@ -23,6 +23,8 @@
     {
       "id": "asset_starter_dashboard",
       "kind": "image",
+      "name": "Dashboard",
+      "sourceFileName": "asset_dashboard.svg",
       "path": "assets/asset_dashboard.svg",
       "fileName": "asset_dashboard.svg",
       "mimeType": "image/svg+xml",
@@ -34,6 +36,8 @@
     {
       "id": "asset_starter_phone",
       "kind": "image",
+      "name": "Phone",
+      "sourceFileName": "asset_phone.svg",
       "path": "assets/asset_phone.svg",
       "fileName": "asset_phone.svg",
       "mimeType": "image/svg+xml",
@@ -45,6 +49,8 @@
     {
       "id": "asset_starter_social",
       "kind": "image",
+      "name": "Social",
+      "sourceFileName": "asset_social.svg",
       "path": "assets/asset_social.svg",
       "fileName": "asset_social.svg",
       "mimeType": "image/svg+xml",
@@ -56,6 +62,8 @@
     {
       "id": "asset_2ca4d006ab51aee58351f150ead124776a54d895f9d80e9ad7f74eb1937e8805",
       "kind": "image",
+      "name": "Beachball",
+      "sourceFileName": "beachball.png",
       "path": "assets/beachball-2ca4d006ab51.png",
       "fileName": "beachball-2ca4d006ab51.png",
       "mimeType": "image/png",
@@ -65,6 +73,7 @@
       "contentHash": "2ca4d006ab51aee58351f150ead124776a54d895f9d80e9ad7f74eb1937e8805"
     }
   ],
+  "fonts": [],
   "decks": [
     {
       "id": "deck_example_home",
@@ -192,7 +201,7 @@
                 "type": "text",
                 "text": "Example",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 63,
                   "fontWeight": 750,
                   "italic": false,
@@ -227,7 +236,7 @@
                 "type": "text",
                 "text": "A simple place for your day.",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 36,
                   "fontWeight": 500,
                   "italic": false,
@@ -262,7 +271,7 @@
                 "type": "text",
                 "text": "Open Example",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 29,
                   "fontWeight": 700,
                   "italic": false,
@@ -441,7 +450,7 @@
                 "type": "text",
                 "text": "Everything in view.",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 62,
                   "fontWeight": 750,
                   "italic": false,
@@ -476,7 +485,7 @@
                 "type": "text",
                 "text": "Simple tools for notes, lists, and plans.",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 35,
                   "fontWeight": 500,
                   "italic": false,
@@ -511,7 +520,7 @@
                 "type": "text",
                 "text": "Open Example",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 28,
                   "fontWeight": 700,
                   "italic": false,
@@ -632,7 +641,7 @@
                 "type": "text",
                 "text": "Make room for ideas.",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 72,
                   "fontWeight": 750,
                   "italic": false,
@@ -667,7 +676,7 @@
                 "type": "text",
                 "text": "A calm, flexible home for your workspace.",
                 "style": {
-                  "fontFamily": "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+                  "fontFamilyId": "builtin:inter",
                   "fontSize": 56,
                   "fontWeight": 500,
                   "italic": false,

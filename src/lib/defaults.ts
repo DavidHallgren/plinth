@@ -229,7 +229,7 @@ function createAppStoreElements(
         height: Math.round(headlineSize * 2.15),
       },
       {
-        fontFamily: "Inter, SF Pro Display, ui-sans-serif, system-ui, sans-serif",
+        fontFamilyId: "builtin:inter",
         fontSize: headlineSize,
         fontWeight: 750,
         lineHeight: 1.02,
@@ -249,7 +249,7 @@ function createAppStoreElements(
         height: Math.round(bodySize * 2.8),
       },
       {
-        fontFamily: "Inter, SF Pro Text, ui-sans-serif, system-ui, sans-serif",
+        fontFamilyId: "builtin:inter",
         fontSize: bodySize,
         fontWeight: 500,
         lineHeight: 1.35,
@@ -293,7 +293,7 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
         "Sample composition",
         { x: 208, y: 320, width: 790, height: 220 },
         {
-          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+          fontFamilyId: "builtin:inter",
           fontSize: 84,
           fontWeight: 700,
           lineHeight: 1.02,
@@ -322,7 +322,7 @@ function createLegacyElements(preset: "blank" | "browser" | "phone" | "social"):
         height: 112,
       },
       {
-        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        fontFamilyId: "builtin:inter",
         fontSize: isPhone ? 42 : 64,
         fontWeight: 700,
         lineHeight: 1.04,
@@ -483,6 +483,7 @@ export function createDefaultProject(
     },
     background: DEFAULT_BACKGROUND,
     assets: [],
+    fonts: [],
     decks,
     createdAt: now,
     updatedAt: now,

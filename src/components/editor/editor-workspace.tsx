@@ -17,6 +17,8 @@ import { Input } from "../ui/input";
 import { APP_STORE_PRESETS, getPresetDefinition } from "../../scene/presets";
 import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import { useAssetMutations } from "../../hooks/use-asset-mutations";
+import { useFontMutations } from "../../hooks/use-font-mutations";
+import { ensureProjectFonts } from "../../fonts/font-registry";
 
 type EditorWorkspaceProps = {
   project: Project;
@@ -71,6 +73,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const [exportOpen, setExportOpen] = useState(false);
   const [exportRendering, setExportRendering] = useState(false);
   const [dropActive, setDropActive] = useState(false);
+  const [fontsReady, setFontsReady] = useState(false);
   const inspectorCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { uploadStates, uploadFiles, dismissUpload, retryUpload, renameAsset, deleteAsset } = useAssetMutations({
     project,
@@ -80,10 +83,18 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     commitProject: handleProjectCommit,
     syncProject: onProjectSynced,
   });
+  const { fontBusy, uploadFont, deleteFont } = useFontMutations({ project, store, currentLocalRevision: () => localCommitRevisionRef.current, flushPendingSave, commitProject: handleProjectCommit, syncProject: onProjectSynced });
 
   useEffect(() => {
     store.replaceProject(project);
   }, [project, store]);
+
+  useEffect(() => {
+    let active = true;
+    setFontsReady(false);
+    void ensureProjectFonts(project).then(() => { if (active) setFontsReady(true); }).catch((reason) => { if (active) { setFontsReady(true); setLocalError(reason instanceof Error ? reason.message : "A project font could not be loaded."); } });
+    return () => { active = false; };
+  }, [project.id, project.slug, project.fonts]);
 
   useEffect(() => {
     setRenameName(project.name);
@@ -229,7 +240,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       shadow: null,
       text: "New headline",
       style: {
-        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        fontFamilyId: "builtin:inter",
         fontSize: 56,
         fontWeight: 700,
         italic: false,
@@ -604,9 +615,10 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           </div>
         </main>
         <aside className="flex min-h-0 w-[276px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
-          <Inspector assets={snapshot.project.assets} onConvertImageToFrame={convertImageToFrame} onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} screen={activeScreen} selectedElements={selectedElements} />
+          <Inspector assets={snapshot.project.assets} fontBusy={fontBusy} onConvertImageToFrame={convertImageToFrame} onDeleteFont={async (font) => { try { await deleteFont(font); } catch (reason) { reportError(reason); } }} onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUploadFont={async (file) => { try { return await uploadFont(file); } catch (reason) { reportError(reason); return null; } }} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} projectFonts={snapshot.project.fonts} screen={activeScreen} selectedElements={selectedElements} />
         </aside>
       </div>
+      {!fontsReady ? <div className="pointer-events-none absolute inset-0 z-[70] grid place-items-center bg-black/30 text-sm text-ink">Loading project fonts…</div> : null}
 
       <Dialog footer={<><Button onClick={() => setDeckOpen(false)} variant="ghost">Cancel</Button><Button form="deck-editor" type="submit" variant="primary">{deckEditId ? "Save deck name" : "Create deck"}</Button></>} onOpenChange={setDeckOpen} open={deckOpen} title={deckEditId ? "Rename deck" : "New deck"}>
         <form className="space-y-3" id="deck-editor" onSubmit={submitDeck}>

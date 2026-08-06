@@ -1,9 +1,6 @@
-export type KonvaFontStyle = "normal" | "bold" | "italic" | "italic bold";
+export type KonvaFontStyle = string;
 
 export function konvaFontStyle(fontWeight: number, italic: boolean): KonvaFontStyle {
-  const bold = Number.isFinite(fontWeight) && fontWeight >= 700;
-  if (italic && bold) return "italic bold";
-  if (italic) return "italic";
-  if (bold) return "bold";
-  return "normal";
+  const weight = Number.isFinite(fontWeight) ? Math.min(900, Math.max(100, Math.round(fontWeight))) : 400;
+  return `${italic ? "italic" : "normal"} ${weight}`;
 }

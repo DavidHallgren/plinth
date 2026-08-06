@@ -21,6 +21,9 @@ import {
   handleUploadAsset,
   handleRenameAsset,
   handleDeleteAsset,
+  handleUploadFont,
+  handleGetFont,
+  handleDeleteFont,
 } from "./lib/api";
 import { ProjectStorage } from "./lib/storage";
 
@@ -59,6 +62,13 @@ const routes = {
     GET: (request: Request) => apiAction(() => handleGetAsset(request, storage)),
     PATCH: (request: Request) => apiAction(() => handleRenameAsset(request, storage)),
     DELETE: (request: Request) => apiAction(() => handleDeleteAsset(request, storage)),
+  },
+  "/api/projects/:slug/fonts": {
+    POST: (request: Request) => apiAction(() => handleUploadFont(request, storage)),
+  },
+  "/api/projects/:slug/fonts/*": {
+    GET: (request: Request) => apiAction(() => handleGetFont(request, storage)),
+    DELETE: (request: Request) => apiAction(() => handleDeleteFont(request, storage)),
   },
   "/api/projects/:slug/exports": {
     GET: (request: Request) => apiAction(() => handleListExports(request, storage)),

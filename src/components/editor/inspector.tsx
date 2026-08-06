@@ -1,27 +1,24 @@
 import { ChevronDown, Lock, Unlock, Eye, EyeOff, Link2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
-import type { AssetMetadata, Background, SceneElement, Shadow } from "../../lib/schema";
+import type { AssetMetadata, Background, ProjectFontFamily, SceneElement, Shadow } from "../../lib/schema";
+import { getBuiltInFont, fontWeightRange } from "../../fonts/catalog";
 import type { ResolvedScreen } from "../../scene/selectors";
 import type { ElementPatch, ElementUpdate } from "../../scene/element-operations";
 import type { ScreenPatch } from "../../scene/structure-operations";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { FramePresetMenu } from "./frame-preset-menu";
+import { FontPicker } from "./font-picker";
 
 const selectClass = "plinth-focus-ring h-8 w-full rounded-lg border border-line bg-[#111111] px-2 text-xs text-ink outline-none focus:border-accent/70";
-const FONT_OPTIONS = [
-  "Inter, ui-sans-serif, system-ui, sans-serif",
-  "SF Pro Display, Inter, ui-sans-serif, sans-serif",
-  "SF Pro Text, Inter, ui-sans-serif, sans-serif",
-  "Arial, Helvetica, sans-serif",
-  "Georgia, serif",
-  "ui-monospace, SFMono-Regular, Menlo, monospace",
-];
-
 type InspectorProps = {
   screen: ResolvedScreen;
   assets: readonly AssetMetadata[];
+  projectFonts: readonly ProjectFontFamily[];
+  fontBusy: boolean;
+  onUploadFont: (file: File) => Promise<ProjectFontFamily | null>;
+  onDeleteFont: (font: ProjectFontFamily) => Promise<void>;
   selectedElements: SceneElement[];
   onUpdateScreen: (patch: ScreenPatch) => void;
   onUpdateElement: (elementId: string, patch: ElementPatch) => void;
@@ -32,7 +29,7 @@ type InspectorProps = {
   ownerScreenName?: string;
 };
 
-export function Inspector({ screen, assets, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
+export function Inspector({ screen, assets, projectFonts, fontBusy, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
     return <ScreenInspector assets={assets} screen={screen} onUpdate={onUpdateScreen} />;
   }
@@ -44,7 +41,7 @@ export function Inspector({ screen, assets, selectedElements, onUpdateScreen, on
   const resolved = screen.elements.find((candidate) => candidate.id === element.id);
   const ownedLayer = screen.layers.find((layer): layer is Extract<typeof layer, { kind: "owned" }> => layer.kind === "owned" && layer.element.id === element.id);
   const ownerScreen = resolved?.ownerScreenId === screen.id ? undefined : resolved?.ownerScreenId;
-  return <ElementInspector element={element} isLinked={Boolean(resolved?.isOverflowLink)} onConvertImageToFrame={onConvertImageToFrame} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} />;
+  return <ElementInspector element={element} fontBusy={fontBusy} isLinked={Boolean(resolved?.isOverflowLink)} onConvertImageToFrame={onConvertImageToFrame} onDeleteFont={onDeleteFont} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} onUploadFont={onUploadFont} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} projectFonts={projectFonts} />;
 }
 
 function ScreenInspector({ screen, assets, onUpdate }: { screen: ResolvedScreen; assets: readonly AssetMetadata[]; onUpdate: (patch: ScreenPatch) => void }) {
@@ -81,7 +78,7 @@ function MultiSelectionInspector({ elements, onUpdateElements }: { elements: Sce
   );
 }
 
-function ElementInspector({ element, onUpdate, onConvertImageToFrame, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
+function ElementInspector({ element, projectFonts, fontBusy, onUploadFont, onDeleteFont, onUpdate, onConvertImageToFrame, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
   const update = (patch: ElementPatch) => onUpdate(element.id, patch);
   const elementTypeLabel = element.type === "device" ? "frame" : element.type;
   return (
@@ -105,7 +102,7 @@ function ElementInspector({ element, onUpdate, onConvertImageToFrame, overflowEn
         </div>
         {isLinked ? <Button onClick={() => onMoveOwnership(element.id)} size="sm" variant="secondary">Move ownership here</Button> : null}
       </Section>
-      {element.type === "text" ? <TextControls element={element} onUpdate={update} /> : null}
+      {element.type === "text" ? <TextControls element={element} fontBusy={fontBusy} onDeleteFont={onDeleteFont} onUpdate={update} onUploadFont={onUploadFont} projectFonts={projectFonts} /> : null}
       {element.type === "shape" ? <ShapeControls element={element} onUpdate={update} /> : null}
       {element.type === "device" ? <FrameControls element={element} onUpdate={update} /> : null}
       {element.type === "image" ? <ImageControls element={element} onAddFrame={(presetId) => onConvertImageToFrame(element.id, presetId)} onUpdate={update} /> : null}
@@ -113,27 +110,50 @@ function ElementInspector({ element, onUpdate, onConvertImageToFrame, overflowEn
   );
 }
 
-function TextControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "text" }>; onUpdate: (patch: ElementPatch) => void }) {
+function TextControls({ element, projectFonts, fontBusy, onUploadFont, onDeleteFont, onUpdate }: { element: Extract<SceneElement, { type: "text" }>; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (patch: ElementPatch) => void }) {
   const style = element.style;
+  const builtIn = style.fontFamilyId.startsWith("builtin:") ? getBuiltInFont(style.fontFamilyId as `builtin:${string}`) : undefined;
+  const projectFont = projectFonts.find((font) => font.id === style.fontFamilyId);
+  const defaultRange = fontWeightRange(style.fontFamilyId);
+  const weightMin = projectFont ? Math.min(...projectFont.faces.map((face) => face.weightMin)) : defaultRange.min;
+  const weightMax = projectFont ? Math.max(...projectFont.faces.map((face) => face.weightMax)) : defaultRange.max;
+  const projectVariable = projectFont?.faces.some((face) => face.weightMin !== face.weightMax) ?? false;
+  const projectWeights = projectFont ? [...new Set(projectFont.faces.flatMap((face) => [face.weightMin, face.weightMax]))].sort((left, right) => left - right) : [];
+  const italicAvailable = builtIn ? builtIn.styles.includes("italic") : projectFont?.faces.some((face) => face.style === "italic" && style.fontWeight >= face.weightMin && style.fontWeight <= face.weightMax) ?? false;
   function updateStyle(values: Partial<typeof element.style>) {
     onUpdate({ style: { ...style, ...values } });
+  }
+  function selectFont(fontFamilyId: string): void {
+    const nextBuiltIn = fontFamilyId.startsWith("builtin:") ? getBuiltInFont(fontFamilyId as `builtin:${string}`) : undefined;
+    const nextProject = projectFonts.find((font) => font.id === fontFamilyId);
+    let fontWeight = style.fontWeight;
+    if (nextBuiltIn?.weight.kind === "variable") fontWeight = Math.min(nextBuiltIn.weight.max, Math.max(nextBuiltIn.weight.min, fontWeight));
+    if (nextBuiltIn?.weight.kind === "static") fontWeight = nextBuiltIn.weight.values.reduce((closest, candidate) => Math.abs(candidate - fontWeight) < Math.abs(closest - fontWeight) ? candidate : closest, nextBuiltIn.weight.values[0] ?? 400);
+    if (nextProject) {
+      const variableFace = nextProject.faces.find((face) => face.weightMin !== face.weightMax);
+      const weights = nextProject.faces.flatMap((face) => [face.weightMin, face.weightMax]);
+      fontWeight = variableFace
+        ? Math.min(variableFace.weightMax, Math.max(variableFace.weightMin, fontWeight))
+        : weights.reduce((closest, candidate) => Math.abs(candidate - fontWeight) < Math.abs(closest - fontWeight) ? candidate : closest, weights[0] ?? 400);
+    }
+    updateStyle({ fontFamilyId, fontWeight, italic: false });
   }
   return (
     <Section title="Text">
       <Field label="Content"><textarea className="plinth-focus-ring min-h-20 w-full resize-y rounded-lg border border-line bg-[#111111] px-2.5 py-2 text-xs leading-5 text-ink outline-none focus:border-accent/70" onChange={(event) => onUpdate({ text: event.target.value })} value={element.text} /></Field>
       <Field label="Font">
-        <select className={selectClass} onChange={(event) => updateStyle({ fontFamily: event.target.value })} value={style.fontFamily}>
-          {FONT_OPTIONS.map((font) => <option key={font} value={font}>{font.split(",")[0]}</option>)}
-        </select>
+        <FontPicker busy={fontBusy} onChange={selectFont} onDelete={onDeleteFont} onUpload={onUploadFont} projectFonts={projectFonts} value={style.fontFamilyId} />
       </Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Size"><NumberField min={1} onChange={(value) => updateStyle({ fontSize: value })} value={style.fontSize} /></Field>
-        <Field label="Weight"><NumberField max={900} min={100} onChange={(value) => updateStyle({ fontWeight: Math.round(value / 100) * 100 })} step={100} value={style.fontWeight} /></Field>
+        <Field label="Weight">{projectFont && !projectVariable
+          ? <select className={selectClass} onChange={(event) => updateStyle({ fontWeight: Number(event.target.value), italic: false })} value={projectWeights.includes(style.fontWeight) ? style.fontWeight : projectWeights[0]}>{projectWeights.map((weight) => <option key={weight} value={weight}>{weight}</option>)}</select>
+          : <NumberField max={weightMax} min={weightMin} onChange={(value) => updateStyle({ fontWeight: Math.round(value) })} step={defaultRange.step} value={style.fontWeight} />}</Field>
         <Field label="Line height"><NumberField min={0.5} onChange={(value) => updateStyle({ lineHeight: value })} step={0.05} value={style.lineHeight} /></Field>
         <Field label="Letter spacing"><NumberField onChange={(value) => updateStyle({ letterSpacing: value })} step={0.5} value={style.letterSpacing} /></Field>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <ToggleButton active={Boolean(style.italic)} label="Italic" onClick={() => updateStyle({ italic: !style.italic })} />
+        <ToggleButton active={Boolean(style.italic)} disabled={!italicAvailable} label={italicAvailable ? "Italic" : "No italic"} onClick={() => updateStyle({ italic: !style.italic })} />
         <ToggleButton active={Boolean(style.underline)} label="Underline" onClick={() => updateStyle({ underline: !style.underline })} />
       </div>
       <div className="grid grid-cols-3 gap-2">
@@ -328,6 +348,6 @@ function ColorField({ value, onChange, allowNone = false }: { value: string; onC
   return <div className="flex items-center gap-1.5"><input aria-label="Color swatch" className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line bg-transparent p-0.5" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value); }} type="color" value={colorValue} /><Input className="h-8 min-w-0 rounded-lg px-2 text-xs" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value || (allowNone ? null : "#ffffff")); }} value={draft} />{allowNone ? <Button aria-label="Clear color" onClick={() => { setDraft(""); onChange(null); }} size="icon" tooltip="Clear color" variant="ghost"><Trash2 size={12} /></Button> : null}</div>;
 }
 
-function ToggleButton({ active, label, icon, onClick }: { active: boolean; label: string; icon?: React.ReactNode; onClick: () => void }) {
-  return <button aria-pressed={active} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg border text-[11px] ${active ? "border-accent/30 bg-accent/[0.1] text-accent-soft" : "border-line text-muted hover:text-ink"}`} onClick={onClick} type="button">{icon}{label}</button>;
+function ToggleButton({ active, label, icon, onClick, disabled = false }: { active: boolean; label: string; icon?: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  return <button aria-pressed={active} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg border text-[11px] disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-accent/30 bg-accent/[0.1] text-accent-soft" : "border-line text-muted hover:text-ink"}`} disabled={disabled} onClick={onClick} type="button">{icon}{label}</button>;
 }
