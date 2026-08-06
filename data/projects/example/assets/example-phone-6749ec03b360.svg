@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1840" viewBox="0 0 900 1840">
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2357ff"/>
+      <stop offset="1" stop-color="#47c8ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1840" fill="#f7f8f2"/>
+  <text x="64" y="72" fill="#101425" font-family="Arial, sans-serif" font-size="21" font-weight="700">9:41</text>
+  <circle cx="770" cy="62" r="7" fill="#101425"/><circle cx="797" cy="62" r="7" fill="#101425"/><circle cx="824" cy="62" r="7" fill="#101425"/>
+  <rect x="60" y="118" width="58" height="58" rx="18" fill="#101425"/>
+  <path d="M89 132l7 15 16 2-12 11 3 16-14-8-14 8 3-16-12-11 16-2z" fill="#c8ff3d"/>
+  <text x="142" y="160" fill="#101425" font-family="Arial, sans-serif" font-size="31" font-weight="800">Example</text>
+  <circle cx="809" cy="147" r="29" fill="#e9ecdf"/><circle cx="809" cy="140" r="8" fill="#2357ff"/><path d="M793 164c5-12 27-12 32 0" fill="#2357ff"/>
+  <text x="60" y="265" fill="#6e7485" font-family="Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="2">GOOD TO SEE YOU</text>
+  <text x="60" y="333" fill="#101425" font-family="Arial, sans-serif" font-size="52" font-weight="800">Ready for awesome?</text>
+  <rect x="60" y="392" width="780" height="390" rx="42" fill="url(#hero)"/>
+  <text x="106" y="458" fill="#dbe8ff" font-family="Arial, sans-serif" font-size="17" font-weight="800" letter-spacing="3">FEATURE A</text>
+  <text x="106" y="533" fill="#ffffff" font-family="Arial, sans-serif" font-size="43" font-weight="800">One tap.</text>
+  <text x="106" y="584" fill="#ffffff" font-family="Arial, sans-serif" font-size="43" font-weight="800">Big energy.</text>
+  <rect x="106" y="666" width="202" height="62" rx="31" fill="#c8ff3d"/>
+  <text x="148" y="706" fill="#101425" font-family="Arial, sans-serif" font-size="19" font-weight="800">Try it out</text>
+  <circle cx="694" cy="570" r="92" fill="#ffffff" opacity=".18"/><path d="M694 494l20 43 47 6-35 33 9 47-41-23-42 23 9-47-35-33 48-6z" fill="#ffffff"/>
+  <text x="60" y="866" fill="#101425" font-family="Arial, sans-serif" font-size="31" font-weight="800">More good stuff</text>
+  <rect x="60" y="914" width="374" height="252" rx="32" fill="#101425"/>
+  <circle cx="114" cy="971" r="25" fill="#c8ff3d"/><path d="M102 971h24M114 959v24" stroke="#101425" stroke-width="5" stroke-linecap="round"/>
+  <text x="100" y="1040" fill="#ffffff" font-family="Arial, sans-serif" font-size="25" font-weight="800">Feature B</text>
+  <text x="100" y="1082" fill="#b9c0d4" font-family="Arial, sans-serif" font-size="18">Delightfully simple.</text>
+  <rect x="466" y="914" width="374" height="252" rx="32" fill="#e4efff"/>
+  <circle cx="520" cy="971" r="25" fill="#2357ff"/><path d="M508 971l9 9 16-19" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="506" y="1040" fill="#101425" font-family="Arial, sans-serif" font-size="25" font-weight="800">Feature C</text>
+  <text x="506" y="1082" fill="#667086" font-family="Arial, sans-serif" font-size="18">Ready when you are.</text>
+  <rect x="60" y="1210" width="780" height="286" rx="36" fill="#ffffff" stroke="#e2e5d9" stroke-width="3"/>
+  <text x="104" y="1274" fill="#6e7485" font-family="Arial, sans-serif" font-size="16" font-weight="800" letter-spacing="3">TODAY</text>
+  <text x="104" y="1342" fill="#101425" font-family="Arial, sans-serif" font-size="32" font-weight="800">Everything looks great.</text>
+  <rect x="104" y="1392" width="574" height="14" rx="7" fill="#e7e9df"/><rect x="104" y="1392" width="426" height="14" rx="7" fill="#2357ff"/>
+  <circle cx="762" cy="1350" r="37" fill="#c8ff3d"/><path d="M747 1350l11 11 22-26" fill="none" stroke="#101425" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="0" y="1668" width="900" height="172" fill="#ffffff" stroke="#e2e5d9"/>
+  <circle cx="150" cy="1724" r="19" fill="#2357ff"/><text x="116" y="1784" fill="#2357ff" font-family="Arial, sans-serif" font-size="16" font-weight="800">Home</text>
+  <circle cx="450" cy="1724" r="19" fill="#c8cdbf"/><text x="414" y="1784" fill="#767d8c" font-family="Arial, sans-serif" font-size="16">Explore</text>
+  <circle cx="750" cy="1724" r="19" fill="#c8cdbf"/><text x="719" y="1784" fill="#767d8c" font-family="Arial, sans-serif" font-size="16">More</text>
+</svg>
