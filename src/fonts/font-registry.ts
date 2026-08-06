@@ -3,6 +3,13 @@ import { fontCssFamily, isBuiltInFontId, projectFontCssFamily } from "./catalog"
 
 const loadedFaces = new Map<string, Promise<FontFace>>();
 
+export type ProjectFontRequest = {
+  familyId: string;
+  weight: number;
+  italic: boolean;
+  text: string;
+};
+
 export function projectFontUrl(projectSlug: string, path: string): string {
   const fileName = path.slice("fonts/".length);
   return `/api/projects/${encodeURIComponent(projectSlug)}/fonts/${encodeURIComponent(fileName)}`;
@@ -32,7 +39,29 @@ function registerFace(project: Project, familyId: string, face: ProjectFontFace)
 
 export async function ensureProjectFonts(project: Project): Promise<void> {
   if (typeof document === "undefined" || typeof FontFace === "undefined") return;
-  await Promise.all(project.fonts.flatMap((family) => family.faces.map((face) => registerFace(project, family.id, face))));
+  await Promise.all(projectFontRequests(project).map((request) =>
+    ensureFontReady(project, request.familyId, request.weight, request.italic, request.text),
+  ));
+}
+
+export function projectFontRequests(project: Project): ProjectFontRequest[] {
+  const requests = new Map<string, ProjectFontRequest>();
+  for (const deck of project.decks) {
+    for (const screen of deck.screens) {
+      for (const layer of screen.layers) {
+        if (layer.kind !== "owned" || layer.element.type !== "text") continue;
+        const request = {
+          familyId: layer.element.style.fontFamilyId,
+          weight: layer.element.style.fontWeight,
+          italic: layer.element.style.italic ?? false,
+          text: layer.element.text || "Plinth 123",
+        };
+        const key = `${request.familyId}:${request.weight}:${request.italic}:${request.text}`;
+        requests.set(key, request);
+      }
+    }
+  }
+  return [...requests.values()];
 }
 
 export async function ensureFontReady(project: Project, familyId: string, weight: number, italic: boolean, text = "Plinth 123"): Promise<void> {

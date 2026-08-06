@@ -145,12 +145,12 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
   }
 
   async function renderPng(sourceProject: Project, screen: ResolvedScreen): Promise<Blob> {
+    await waitForSceneReady(sourceProject, screen, sourceProject.assets);
     setRenderProject(sourceProject);
     setRenderScreen(screen);
     await nextFrame();
     await nextFrame();
     const stage = await waitForStage(screen.id);
-    await waitForSceneReady(sourceProject, screen, sourceProject.assets);
     stage.draw();
     const canvas = stage.toCanvas({ imageSmoothingEnabled: true, pixelRatio: 1 });
     if (canvas.width !== screen.width || canvas.height !== screen.height) {

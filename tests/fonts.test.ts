@@ -10,6 +10,7 @@ import { ProjectStorage } from "../src/lib/storage";
 import { normalizeFontsourceCss } from "../scripts/generate-styles";
 import { apiAction, handleDeleteFont, handleGetFont, handleUploadFont } from "../src/lib/api";
 import type { ProjectFontFamily } from "../src/lib/schema";
+import { projectFontRequests } from "../src/fonts/font-registry";
 
 const temporaryDirectories: string[] = [];
 afterEach(async () => { while (temporaryDirectories.length > 0) { const directory = temporaryDirectories.pop(); if (directory) await rm(directory, { recursive: true, force: true }); } });
@@ -48,6 +49,15 @@ describe("built-in font catalog", () => {
     expect(quotedFontCssFamily("builtin:source-sans-3")).toBe('"Source Sans 3 Variable"');
     expect(normalizeFontsourceCss("src: url(./files/source-sans.woff2) format('woff2-variations');", "@fontsource-variable/source-sans-3"))
       .toBe("src: url(../node_modules/@fontsource-variable/source-sans-3/files/source-sans.woff2) format('woff2');");
+  });
+
+  test("collects the exact font requests that must be ready before rendering", () => {
+    const project = createDefaultProject("Font readiness fixture");
+    const requests = projectFontRequests(project);
+    expect(requests.length).toBeGreaterThan(0);
+    expect(requests.every((request) => request.familyId === "builtin:inter")).toBe(true);
+    expect(requests.every((request) => Number.isFinite(request.weight) && request.text.length > 0)).toBe(true);
+    expect(new Set(requests.map((request) => `${request.familyId}:${request.weight}:${request.italic}:${request.text}`)).size).toBe(requests.length);
   });
 });
 

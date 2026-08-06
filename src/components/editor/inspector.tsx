@@ -17,6 +17,7 @@ type InspectorProps = {
   assets: readonly AssetMetadata[];
   projectFonts: readonly ProjectFontFamily[];
   fontBusy: boolean;
+  onChangeTextFont: (elementId: string, fontFamilyId: string, fontWeight: number, italic: boolean) => Promise<boolean>;
   onUploadFont: (file: File) => Promise<ProjectFontFamily | null>;
   onDeleteFont: (font: ProjectFontFamily) => Promise<void>;
   selectedElements: SceneElement[];
@@ -29,7 +30,7 @@ type InspectorProps = {
   ownerScreenName?: string;
 };
 
-export function Inspector({ screen, assets, projectFonts, fontBusy, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
+export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
     return <ScreenInspector assets={assets} screen={screen} onUpdate={onUpdateScreen} />;
   }
@@ -41,7 +42,7 @@ export function Inspector({ screen, assets, projectFonts, fontBusy, onUploadFont
   const resolved = screen.elements.find((candidate) => candidate.id === element.id);
   const ownedLayer = screen.layers.find((layer): layer is Extract<typeof layer, { kind: "owned" }> => layer.kind === "owned" && layer.element.id === element.id);
   const ownerScreen = resolved?.ownerScreenId === screen.id ? undefined : resolved?.ownerScreenId;
-  return <ElementInspector element={element} fontBusy={fontBusy} isLinked={Boolean(resolved?.isOverflowLink)} onConvertImageToFrame={onConvertImageToFrame} onDeleteFont={onDeleteFont} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} onUploadFont={onUploadFont} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} projectFonts={projectFonts} />;
+  return <ElementInspector element={element} fontBusy={fontBusy} isLinked={Boolean(resolved?.isOverflowLink)} onChangeTextFont={onChangeTextFont} onConvertImageToFrame={onConvertImageToFrame} onDeleteFont={onDeleteFont} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} onUploadFont={onUploadFont} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} projectFonts={projectFonts} />;
 }
 
 function ScreenInspector({ screen, assets, onUpdate }: { screen: ResolvedScreen; assets: readonly AssetMetadata[]; onUpdate: (patch: ScreenPatch) => void }) {
@@ -78,7 +79,7 @@ function MultiSelectionInspector({ elements, onUpdateElements }: { elements: Sce
   );
 }
 
-function ElementInspector({ element, projectFonts, fontBusy, onUploadFont, onDeleteFont, onUpdate, onConvertImageToFrame, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
+function ElementInspector({ element, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, onUpdate, onConvertImageToFrame, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onChangeTextFont: InspectorProps["onChangeTextFont"]; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
   const update = (patch: ElementPatch) => onUpdate(element.id, patch);
   const elementTypeLabel = element.type === "device" ? "frame" : element.type;
   return (
@@ -102,7 +103,7 @@ function ElementInspector({ element, projectFonts, fontBusy, onUploadFont, onDel
         </div>
         {isLinked ? <Button onClick={() => onMoveOwnership(element.id)} size="sm" variant="secondary">Move ownership here</Button> : null}
       </Section>
-      {element.type === "text" ? <TextControls element={element} fontBusy={fontBusy} onDeleteFont={onDeleteFont} onUpdate={update} onUploadFont={onUploadFont} projectFonts={projectFonts} /> : null}
+      {element.type === "text" ? <TextControls element={element} fontBusy={fontBusy} onChangeTextFont={onChangeTextFont} onDeleteFont={onDeleteFont} onUpdate={update} onUploadFont={onUploadFont} projectFonts={projectFonts} /> : null}
       {element.type === "shape" ? <ShapeControls element={element} onUpdate={update} /> : null}
       {element.type === "device" ? <FrameControls element={element} onUpdate={update} /> : null}
       {element.type === "image" ? <ImageControls element={element} onAddFrame={(presetId) => onConvertImageToFrame(element.id, presetId)} onUpdate={update} /> : null}
@@ -110,7 +111,7 @@ function ElementInspector({ element, projectFonts, fontBusy, onUploadFont, onDel
   );
 }
 
-function TextControls({ element, projectFonts, fontBusy, onUploadFont, onDeleteFont, onUpdate }: { element: Extract<SceneElement, { type: "text" }>; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (patch: ElementPatch) => void }) {
+function TextControls({ element, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, onUpdate }: { element: Extract<SceneElement, { type: "text" }>; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onChangeTextFont: InspectorProps["onChangeTextFont"]; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (patch: ElementPatch) => void }) {
   const style = element.style;
   const builtIn = style.fontFamilyId.startsWith("builtin:") ? getBuiltInFont(style.fontFamilyId as `builtin:${string}`) : undefined;
   const projectFont = projectFonts.find((font) => font.id === style.fontFamilyId);
@@ -123,7 +124,7 @@ function TextControls({ element, projectFonts, fontBusy, onUploadFont, onDeleteF
   function updateStyle(values: Partial<typeof element.style>) {
     onUpdate({ style: { ...style, ...values } });
   }
-  function selectFont(fontFamilyId: string): void {
+  function selectFont(fontFamilyId: string): Promise<boolean> {
     const nextBuiltIn = fontFamilyId.startsWith("builtin:") ? getBuiltInFont(fontFamilyId as `builtin:${string}`) : undefined;
     const nextProject = projectFonts.find((font) => font.id === fontFamilyId);
     let fontWeight = style.fontWeight;
@@ -136,7 +137,7 @@ function TextControls({ element, projectFonts, fontBusy, onUploadFont, onDeleteF
         ? Math.min(variableFace.weightMax, Math.max(variableFace.weightMin, fontWeight))
         : weights.reduce((closest, candidate) => Math.abs(candidate - fontWeight) < Math.abs(closest - fontWeight) ? candidate : closest, weights[0] ?? 400);
     }
-    updateStyle({ fontFamilyId, fontWeight, italic: false });
+    return onChangeTextFont(element.id, fontFamilyId, fontWeight, false);
   }
   return (
     <Section title="Text">
@@ -147,13 +148,13 @@ function TextControls({ element, projectFonts, fontBusy, onUploadFont, onDeleteF
       <div className="grid grid-cols-2 gap-2">
         <Field label="Size"><NumberField min={1} onChange={(value) => updateStyle({ fontSize: value })} value={style.fontSize} /></Field>
         <Field label="Weight">{projectFont && !projectVariable
-          ? <select className={selectClass} onChange={(event) => updateStyle({ fontWeight: Number(event.target.value), italic: false })} value={projectWeights.includes(style.fontWeight) ? style.fontWeight : projectWeights[0]}>{projectWeights.map((weight) => <option key={weight} value={weight}>{weight}</option>)}</select>
-          : <NumberField max={weightMax} min={weightMin} onChange={(value) => updateStyle({ fontWeight: Math.round(value) })} step={defaultRange.step} value={style.fontWeight} />}</Field>
+          ? <select className={selectClass} onChange={(event) => { void onChangeTextFont(element.id, style.fontFamilyId, Number(event.target.value), false); }} value={projectWeights.includes(style.fontWeight) ? style.fontWeight : projectWeights[0]}>{projectWeights.map((weight) => <option key={weight} value={weight}>{weight}</option>)}</select>
+          : <NumberField max={weightMax} min={weightMin} onChange={(value) => { void onChangeTextFont(element.id, style.fontFamilyId, Math.round(value), style.italic ?? false); }} step={defaultRange.step} value={style.fontWeight} />}</Field>
         <Field label="Line height"><NumberField min={0.5} onChange={(value) => updateStyle({ lineHeight: value })} step={0.05} value={style.lineHeight} /></Field>
         <Field label="Letter spacing"><NumberField onChange={(value) => updateStyle({ letterSpacing: value })} step={0.5} value={style.letterSpacing} /></Field>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <ToggleButton active={Boolean(style.italic)} disabled={!italicAvailable} label={italicAvailable ? "Italic" : "No italic"} onClick={() => updateStyle({ italic: !style.italic })} />
+        <ToggleButton active={Boolean(style.italic)} disabled={!italicAvailable} label={italicAvailable ? "Italic" : "No italic"} onClick={() => { void onChangeTextFont(element.id, style.fontFamilyId, style.fontWeight, !style.italic); }} />
         <ToggleButton active={Boolean(style.underline)} label="Underline" onClick={() => updateStyle({ underline: !style.underline })} />
       </div>
       <div className="grid grid-cols-3 gap-2">
