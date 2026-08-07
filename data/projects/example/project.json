@@ -3,7 +3,7 @@
   "id": "project_example",
   "slug": "example",
   "name": "Example",
-  "description": "A polished generic app example with simple placeholder content and editable device frames.",
+  "description": "A playful six-screen generic app campaign with bold typography, varied compositions, and intentionally nonspecific features.",
   "settings": {
     "autosave": true,
     "autosaveDelayMs": 800,
@@ -17,91 +17,78 @@
   },
   "background": {
     "type": "solid",
-    "color": "#10131a"
+    "color": "#101425"
   },
   "assets": [
     {
-      "id": "asset_starter_dashboard",
-      "kind": "image",
-      "name": "Dashboard",
-      "sourceFileName": "asset_dashboard.svg",
-      "path": "assets/asset_dashboard.svg",
-      "fileName": "asset_dashboard.svg",
-      "mimeType": "image/svg+xml",
-      "width": 1600,
-      "height": 1000,
-      "byteSize": 3859,
-      "contentHash": "052b6d00ec833e486c65e81ad1596bed79fc33696793777ab75e0038404a38a2"
-    },
-    {
       "id": "asset_starter_phone",
       "kind": "image",
-      "name": "Phone",
-      "sourceFileName": "asset_phone.svg",
-      "path": "assets/asset_phone.svg",
-      "fileName": "asset_phone.svg",
+      "name": "Example home UI",
+      "sourceFileName": "example-phone.svg",
+      "path": "assets/example-phone-6749ec03b360.svg",
+      "fileName": "example-phone-6749ec03b360.svg",
       "mimeType": "image/svg+xml",
       "width": 900,
       "height": 1840,
-      "byteSize": 3227,
-      "contentHash": "74d55bd61f58c87ffe83c84f93767ddb0781e60c6c6590714d68855386fcdbb0"
+      "byteSize": 4410,
+      "contentHash": "6749ec03b360033b69b63eb3364b5f3df976f28d9b67ea77e1d74150050e55f3"
     },
     {
-      "id": "asset_starter_social",
+      "id": "asset_c8fb943b8676a7a3ef0b4aeee110e8f663f7141f9e508fe3b2b38c0bf1ccd41a",
       "kind": "image",
-      "name": "Social",
-      "sourceFileName": "asset_social.svg",
-      "path": "assets/asset_social.svg",
-      "fileName": "asset_social.svg",
+      "name": "Example feature grid UI",
+      "sourceFileName": "example-feature-grid.svg",
+      "path": "assets/example-feature-grid-c8fb943b8676.svg",
+      "fileName": "example-feature-grid-c8fb943b8676.svg",
       "mimeType": "image/svg+xml",
-      "width": 1200,
-      "height": 1600,
-      "byteSize": 3525,
-      "contentHash": "120681d10bc847dcc3255b8f1e69c04cdf54e54bfd09dfb433560599a7c1cd7d"
+      "width": 900,
+      "height": 1840,
+      "byteSize": 5584,
+      "contentHash": "c8fb943b8676a7a3ef0b4aeee110e8f663f7141f9e508fe3b2b38c0bf1ccd41a"
     },
     {
-      "id": "asset_2ca4d006ab51aee58351f150ead124776a54d895f9d80e9ad7f74eb1937e8805",
+      "id": "asset_1da4434759e7e826d140928137bced77b628f13ac42b46a217923c6e5a5d3799",
       "kind": "image",
-      "name": "Beachball",
-      "sourceFileName": "beachball.png",
-      "path": "assets/beachball-2ca4d006ab51.png",
-      "fileName": "beachball-2ca4d006ab51.png",
+      "name": "Awesome star mascot",
+      "sourceFileName": "star-mascot.png",
+      "path": "assets/star-mascot-1da4434759e7.png",
+      "fileName": "star-mascot-1da4434759e7.png",
       "mimeType": "image/png",
       "width": 1254,
       "height": 1254,
-      "byteSize": 866135,
-      "contentHash": "2ca4d006ab51aee58351f150ead124776a54d895f9d80e9ad7f74eb1937e8805"
+      "byteSize": 679791,
+      "contentHash": "1da4434759e7e826d140928137bced77b628f13ac42b46a217923c6e5a5d3799"
     }
   ],
   "fonts": [],
   "decks": [
     {
-      "id": "deck_example_home",
-      "slug": "example-home-deck",
-      "name": "Example home deck",
+      "id": "deck_example_campaign",
+      "slug": "example-campaign",
+      "name": "Example App Store campaign",
       "width": 1320,
       "height": 2868,
       "screens": [
         {
-          "id": "doc_iphone_69",
-          "slug": "example-home",
-          "exportSlug": "example-home",
-          "name": "Example home",
+          "id": "screen_example_intro",
+          "slug": "meet-example",
+          "exportSlug": "meet-example",
+          "name": "Meet Example",
           "preset": "iphone-6-9",
           "background": {
             "type": "linear-gradient",
             "stops": [
               {
                 "offset": 0,
-                "color": "#102047"
+                "color": "#101425"
               },
               {
                 "offset": 0.58,
-                "color": "#3158b9"
+                "color": "#2357ff"
               },
               {
                 "offset": 1,
-                "color": "#b9caff"
+                "color": "#47c8ff"
               }
             ],
             "start": {
@@ -117,51 +104,48 @@
             {
               "kind": "owned",
               "element": {
-                "id": "iphone_shape_1",
-                "x": 112,
-                "y": 2409,
-                "width": 1096,
-                "height": 158,
-                "rotation": 0,
+                "id": "intro_mascot",
+                "x": 571,
+                "y": 484,
+                "width": 691,
+                "height": 691,
+                "rotation": 8,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "Decorative surface",
-                "shadow": {
-                  "color": "#05060a",
-                  "blur": 18,
-                  "offsetX": 0,
-                  "offsetY": 8,
-                  "opacity": 0.12
+                "name": "Awesome star mascot",
+                "shadow": null,
+                "type": "image",
+                "assetPath": "assets/star-mascot-1da4434759e7.png",
+                "fit": "contain",
+                "position": {
+                  "x": 0.5,
+                  "y": 0.5
                 },
-                "type": "shape",
-                "shape": "rounded-rectangle",
-                "fill": "#ffffff",
-                "stroke": "#ffffff",
-                "strokeWidth": 1,
-                "radius": 26
+                "cornerRadius": 0,
+                "alt": "Playful blue star mascot"
               },
               "overflow": false
             },
             {
               "kind": "owned",
               "element": {
-                "id": "iphone_device_2",
-                "x": 357,
-                "y": 975,
-                "width": 607,
-                "height": 1239,
+                "id": "intro_device",
+                "x": 245,
+                "y": 1015,
+                "width": 830,
+                "height": 1694,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "iPhone 17 Pro Max",
+                "name": "Oversized Example phone",
                 "shadow": {
                   "color": "#05060a",
-                  "blur": 28,
+                  "blur": 34,
                   "offsetX": 0,
-                  "offsetY": 14,
-                  "opacity": 0.24
+                  "offsetY": 18,
+                  "opacity": 0.28
                 },
                 "type": "device",
                 "preset": "iphone-17-pro-max",
@@ -169,8 +153,8 @@
                 "deviceName": "iPhone 17 Pro Max",
                 "frame": "phone",
                 "frameColor": "#182d55",
-                "screenColor": "#f7f8fc",
-                "screenshotPath": "assets/asset_phone.svg",
+                "screenColor": "#f7f8f2",
+                "screenshotPath": "assets/example-phone-6749ec03b360.svg",
                 "screenshotFit": "cover",
                 "screenshotPosition": {
                   "x": 0.5,
@@ -187,11 +171,11 @@
             {
               "kind": "owned",
               "element": {
-                "id": "iphone_text_3",
-                "x": 112,
-                "y": 244,
-                "width": 1096,
-                "height": 65,
+                "id": "intro_headline",
+                "x": 96,
+                "y": 150,
+                "width": 1128,
+                "height": 242,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
@@ -199,14 +183,257 @@
                 "name": "Headline",
                 "shadow": null,
                 "type": "text",
-                "text": "Example",
+                "text": "Meet your new\nfavorite example.",
                 "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 63,
-                  "fontWeight": 750,
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 130,
+                  "fontWeight": 700,
                   "italic": false,
                   "underline": false,
-                  "lineHeight": 1.02,
+                  "lineHeight": 0.93,
+                  "letterSpacing": -5,
+                  "color": "#ffffff",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            }
+          ],
+          "notes": "",
+          "createdAt": "2026-08-02T00:00:00.000Z",
+          "updatedAt": "2026-08-06T15:39:52.957Z"
+        },
+        {
+          "id": "screen_feature_cards",
+          "slug": "awesome-features",
+          "exportSlug": "awesome-features",
+          "name": "Awesome features",
+          "preset": "iphone-6-9",
+          "background": {
+            "type": "solid",
+            "color": "#f7f8f2"
+          },
+          "layers": [
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_a_surface",
+                "x": 92,
+                "y": 760,
+                "width": 550,
+                "height": 620,
+                "rotation": -6,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature A card",
+                "shadow": {
+                  "color": "#05060a",
+                  "blur": 26,
+                  "offsetX": 0,
+                  "offsetY": 12,
+                  "opacity": 0.2
+                },
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#101425",
+                "stroke": "#101425",
+                "strokeWidth": 1,
+                "radius": 44
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_b_surface",
+                "x": 675,
+                "y": 900,
+                "width": 525,
+                "height": 535,
+                "rotation": 7,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B card",
+                "shadow": {
+                  "color": "#05060a",
+                  "blur": 26,
+                  "offsetX": 0,
+                  "offsetY": 12,
+                  "opacity": 0.18
+                },
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#c8ff3d",
+                "stroke": "#c8ff3d",
+                "strokeWidth": 1,
+                "radius": 44
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_c_surface",
+                "x": 250,
+                "y": 1510,
+                "width": 780,
+                "height": 590,
+                "rotation": -3,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C card",
+                "shadow": {
+                  "color": "#05060a",
+                  "blur": 30,
+                  "offsetX": 0,
+                  "offsetY": 14,
+                  "opacity": 0.2
+                },
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#2357ff",
+                "stroke": "#2357ff",
+                "strokeWidth": 1,
+                "radius": 48
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_headline",
+                "x": 95,
+                "y": 150,
+                "width": 1130,
+                "height": 210,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Headline",
+                "shadow": null,
+                "type": "text",
+                "text": "Three awesome\nfeatures. At least.",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 104,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 0.94,
+                  "letterSpacing": -5,
+                  "color": "#101425",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_subheadline",
+                "x": 160,
+                "y": 440,
+                "width": 1000,
+                "height": 52,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Subheadline",
+                "shadow": null,
+                "type": "text",
+                "text": "Pick one. They are all suspiciously good.",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 36,
+                  "fontWeight": 600,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0,
+                  "color": "#4b5265",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_a_label",
+                "x": 145,
+                "y": 835,
+                "width": 420,
+                "height": 48,
+                "rotation": -6,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature A label",
+                "shadow": null,
+                "type": "text",
+                "text": "FEATURE A",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 34,
+                  "fontWeight": 800,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": 2,
+                  "color": "#c8ff3d",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_a_copy",
+                "x": 145,
+                "y": 930,
+                "width": 390,
+                "height": 160,
+                "rotation": -6,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature A copy",
+                "shadow": null,
+                "type": "text",
+                "text": "Extra\nawesome.",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 72,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 0.94,
                   "letterSpacing": -3,
                   "color": "#ffffff",
                   "align": "left",
@@ -222,28 +449,54 @@
             {
               "kind": "owned",
               "element": {
-                "id": "iphone_text_4",
-                "x": 112,
-                "y": 545,
-                "width": 950,
-                "height": 49,
-                "rotation": 0,
+                "id": "cards_a_mascot",
+                "x": 255,
+                "y": 1041,
+                "width": 300,
+                "height": 300,
+                "rotation": -6,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "Subheadline",
+                "name": "Feature A mascot",
+                "shadow": null,
+                "type": "image",
+                "assetPath": "assets/star-mascot-1da4434759e7.png",
+                "fit": "contain",
+                "position": {
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "cornerRadius": 0,
+                "alt": "Playful blue star mascot"
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_b_label",
+                "x": 738,
+                "y": 980,
+                "width": 360,
+                "height": 48,
+                "rotation": 7,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B label",
                 "shadow": null,
                 "type": "text",
-                "text": "A simple place for your day.",
+                "text": "FEATURE B",
                 "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 36,
-                  "fontWeight": 500,
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 32,
+                  "fontWeight": 800,
                   "italic": false,
                   "underline": false,
-                  "lineHeight": 1.35,
-                  "letterSpacing": 0,
-                  "color": "#e7ecff",
+                  "lineHeight": 1,
+                  "letterSpacing": 2,
+                  "color": "#101425",
                   "align": "left",
                   "backgroundColor": null,
                   "padding": 0,
@@ -257,34 +510,34 @@
             {
               "kind": "owned",
               "element": {
-                "id": "doc_iphone_69_cta",
-                "x": 112,
-                "y": 2409,
-                "width": 1096,
-                "height": 158,
-                "rotation": 0,
+                "id": "cards_b_copy",
+                "x": 725,
+                "y": 1080,
+                "width": 370,
+                "height": 150,
+                "rotation": 7,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "Primary action",
+                "name": "Feature B copy",
                 "shadow": null,
                 "type": "text",
-                "text": "Open Example",
+                "text": "Also\nexcellent.",
                 "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 29,
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 68,
                   "fontWeight": 700,
                   "italic": false,
                   "underline": false,
-                  "lineHeight": 1,
-                  "letterSpacing": -0.2,
-                  "color": "#182039",
-                  "align": "center",
+                  "lineHeight": 0.94,
+                  "letterSpacing": -3,
+                  "color": "#101425",
+                  "align": "left",
                   "backgroundColor": null,
                   "padding": 0,
                   "backgroundRadius": 0,
                   "shadow": null,
-                  "autoHeight": false
+                  "autoHeight": true
                 }
               },
               "overflow": false
@@ -292,125 +545,164 @@
             {
               "kind": "owned",
               "element": {
-                "id": "image_beachball",
-                "x": 860,
-                "y": 560,
-                "width": 360,
-                "height": 360,
-                "rotation": 12,
+                "id": "cards_c_label",
+                "x": 366.66694740599996,
+                "y": 1600,
+                "width": 560,
+                "height": 48,
+                "rotation": -3,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "Colorful placeholder decoration",
+                "name": "Feature C label",
                 "shadow": null,
-                "type": "image",
-                "assetPath": "assets/beachball-2ca4d006ab51.png",
-                "fit": "contain",
-                "position": {
-                  "x": 0.5,
-                  "y": 0.5
-                },
-                "cornerRadius": 0,
-                "alt": "Colorful placeholder decoration"
+                "type": "text",
+                "text": "FEATURE C",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 34,
+                  "fontWeight": 800,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": 2,
+                  "color": "#dbe8ff",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_c_copy",
+                "x": 381,
+                "y": 1770,
+                "width": 560,
+                "height": 132,
+                "rotation": -3,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C copy",
+                "shadow": null,
+                "type": "text",
+                "text": "The crowd favorite.",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 66,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -3,
+                  "color": "#ffffff",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_more",
+                "x": 120,
+                "y": 2305,
+                "width": 1080,
+                "height": 70,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "More features",
+                "shadow": null,
+                "type": "text",
+                "text": "+ three more, naturally",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 54,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -1,
+                  "color": "#101425",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
               },
               "overflow": false
             }
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-02T00:00:00.000Z"
-        }
-      ],
-      "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-02T00:00:00.000Z"
-    },
-    {
-      "id": "deck_example_overview",
-      "slug": "example-overview-deck",
-      "name": "Example overview deck",
-      "width": 1284,
-      "height": 2778,
-      "screens": [
+          "updatedAt": "2026-08-06T15:39:47.639Z"
+        },
         {
-          "id": "doc_iphone_65",
-          "slug": "example-overview",
-          "exportSlug": "example-overview",
-          "name": "Example overview",
-          "preset": "iphone-6-5",
+          "id": "screen_feature_a",
+          "slug": "feature-a",
+          "exportSlug": "feature-a",
+          "name": "Awesome feature A",
+          "preset": "iphone-6-9",
           "background": {
             "type": "linear-gradient",
             "stops": [
               {
                 "offset": 0,
-                "color": "#17213b"
+                "color": "#f7f8f2"
               },
               {
-                "offset": 0.55,
-                "color": "#397a91"
+                "offset": 0.52,
+                "color": "#eaff9f"
               },
               {
                 "offset": 1,
-                "color": "#bde5df"
+                "color": "#c8ff3d"
               }
             ],
             "start": {
               "x": 0,
-              "y": 1
+              "y": 0
             },
             "end": {
-              "x": 1,
-              "y": 0
+              "x": 0,
+              "y": 1
             }
           },
           "layers": [
             {
               "kind": "owned",
               "element": {
-                "id": "iphone-fallback_shape_1",
-                "x": 109,
-                "y": 2334,
-                "width": 1066,
-                "height": 153,
+                "id": "feature_a_device",
+                "x": 140,
+                "y": 825,
+                "width": 1040,
+                "height": 2122,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "Decorative surface",
+                "name": "Cropped Feature A phone",
                 "shadow": {
                   "color": "#05060a",
-                  "blur": 18,
+                  "blur": 34,
                   "offsetX": 0,
-                  "offsetY": 8,
-                  "opacity": 0.12
-                },
-                "type": "shape",
-                "shape": "rounded-rectangle",
-                "fill": "#ffffff",
-                "stroke": "#ffffff",
-                "strokeWidth": 1,
-                "radius": 26
-              },
-              "overflow": false
-            },
-            {
-              "kind": "owned",
-              "element": {
-                "id": "iphone-fallback_device_2",
-                "x": 347,
-                "y": 945,
-                "width": 591,
-                "height": 1206,
-                "rotation": 0,
-                "opacity": 1,
-                "locked": false,
-                "visible": true,
-                "name": "iPhone 17 Pro",
-                "shadow": {
-                  "color": "#05060a",
-                  "blur": 28,
-                  "offsetX": 0,
-                  "offsetY": 14,
-                  "opacity": 0.24
+                  "offsetY": 18,
+                  "opacity": 0.28
                 },
                 "type": "device",
                 "preset": "iphone-17-pro",
@@ -418,8 +710,8 @@
                 "deviceName": "iPhone 17 Pro",
                 "frame": "phone",
                 "frameColor": "#d9dce2",
-                "screenColor": "#f7f8fc",
-                "screenshotPath": "assets/asset_phone.svg",
+                "screenColor": "#f7f8f2",
+                "screenshotPath": "assets/example-feature-grid-c8fb943b8676.svg",
                 "screenshotFit": "cover",
                 "screenshotPosition": {
                   "x": 0.5,
@@ -436,11 +728,11 @@
             {
               "kind": "owned",
               "element": {
-                "id": "iphone-fallback_text_3",
-                "x": 109,
-                "y": 236,
-                "width": 1066,
-                "height": 64,
+                "id": "feature_a_headline",
+                "x": 85,
+                "y": 145,
+                "width": 1150,
+                "height": 215,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
@@ -448,92 +740,57 @@
                 "name": "Headline",
                 "shadow": null,
                 "type": "text",
-                "text": "Everything in view.",
+                "text": "Awesome feature A.\nAlready included.",
                 "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 62,
-                  "fontWeight": 750,
-                  "italic": false,
-                  "underline": false,
-                  "lineHeight": 1.02,
-                  "letterSpacing": -3,
-                  "color": "#ffffff",
-                  "align": "left",
-                  "backgroundColor": null,
-                  "padding": 0,
-                  "backgroundRadius": 0,
-                  "shadow": null,
-                  "autoHeight": true
-                }
-              },
-              "overflow": false
-            },
-            {
-              "kind": "owned",
-              "element": {
-                "id": "iphone-fallback_text_4",
-                "x": 109,
-                "y": 528,
-                "width": 924,
-                "height": 48,
-                "rotation": 0,
-                "opacity": 1,
-                "locked": false,
-                "visible": true,
-                "name": "Subheadline",
-                "shadow": null,
-                "type": "text",
-                "text": "Simple tools for notes, lists, and plans.",
-                "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 35,
-                  "fontWeight": 500,
-                  "italic": false,
-                  "underline": false,
-                  "lineHeight": 1.35,
-                  "letterSpacing": 0,
-                  "color": "#e1f1ef",
-                  "align": "left",
-                  "backgroundColor": null,
-                  "padding": 0,
-                  "backgroundRadius": 0,
-                  "shadow": null,
-                  "autoHeight": true
-                }
-              },
-              "overflow": false
-            },
-            {
-              "kind": "owned",
-              "element": {
-                "id": "doc_iphone_65_cta",
-                "x": 109,
-                "y": 2334,
-                "width": 1066,
-                "height": 153,
-                "rotation": 0,
-                "opacity": 1,
-                "locked": false,
-                "visible": true,
-                "name": "Primary action",
-                "shadow": null,
-                "type": "text",
-                "text": "Open Example",
-                "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 28,
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 104,
                   "fontWeight": 700,
                   "italic": false,
                   "underline": false,
-                  "lineHeight": 1,
-                  "letterSpacing": -0.2,
-                  "color": "#182039",
+                  "lineHeight": 0.94,
+                  "letterSpacing": -5,
+                  "color": "#101425",
                   "align": "center",
                   "backgroundColor": null,
                   "padding": 0,
                   "backgroundRadius": 0,
                   "shadow": null,
-                  "autoHeight": false
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "feature_a_subheadline",
+                "x": 150,
+                "y": 440,
+                "width": 1020,
+                "height": 52,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Subheadline",
+                "shadow": null,
+                "type": "text",
+                "text": "Six bright ideas, all in one place.",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 37,
+                  "fontWeight": 600,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0,
+                  "color": "#434a5d",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
                 }
               },
               "overflow": false
@@ -541,76 +798,1094 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-02T00:00:00.000Z"
-        }
-      ],
-      "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-02T00:00:00.000Z"
-    },
-    {
-      "id": "deck_example_workspace",
-      "slug": "example-workspace-deck",
-      "name": "Example workspace deck",
-      "width": 2064,
-      "height": 2752,
-      "screens": [
+          "updatedAt": "2026-08-06T15:39:47.639Z"
+        },
         {
-          "id": "doc_ipad_13",
-          "slug": "example-workspace",
-          "exportSlug": "example-workspace",
-          "name": "Example workspace",
-          "preset": "ipad-13",
+          "id": "screen_feature_grid",
+          "slug": "six-awesome-features",
+          "exportSlug": "six-awesome-features",
+          "name": "Six awesome features",
+          "preset": "iphone-6-9",
           "background": {
-            "type": "radial-gradient",
-            "stops": [
-              {
-                "offset": 0,
-                "color": "#3c6981"
-              },
-              {
-                "offset": 0.55,
-                "color": "#839cc6"
-              },
-              {
-                "offset": 1,
-                "color": "#18283f"
-              }
-            ],
-            "center": {
-              "x": 0.2,
-              "y": 0.16
-            },
-            "radius": 1
+            "type": "solid",
+            "color": "#f7f8f2"
           },
           "layers": [
             {
               "kind": "owned",
               "element": {
-                "id": "ipad_device_2",
-                "x": 296,
-                "y": 680,
-                "width": 1486,
-                "height": 1981,
+                "id": "grid_a_surface",
+                "x": 90,
+                "y": 700,
+                "width": 535,
+                "height": 430,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "Generic modern iPad",
+                "name": "Feature A card",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#101425",
+                "stroke": "#101425",
+                "strokeWidth": 1,
+                "radius": 42
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_b_surface",
+                "x": 695,
+                "y": 700,
+                "width": 535,
+                "height": 430,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B card",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#e4efff",
+                "stroke": "#e4efff",
+                "strokeWidth": 1,
+                "radius": 42
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_c_surface",
+                "x": 90,
+                "y": 1190,
+                "width": 535,
+                "height": 430,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C card",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#dff8f2",
+                "stroke": "#dff8f2",
+                "strokeWidth": 1,
+                "radius": 42
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_d_surface",
+                "x": 695,
+                "y": 1190,
+                "width": 535,
+                "height": 430,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature D card",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#fff2c7",
+                "stroke": "#fff2c7",
+                "strokeWidth": 1,
+                "radius": 42
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_e_surface",
+                "x": 90,
+                "y": 1680,
+                "width": 535,
+                "height": 430,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature E card",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#e9e5ff",
+                "stroke": "#e9e5ff",
+                "strokeWidth": 1,
+                "radius": 42
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_f_surface",
+                "x": 695,
+                "y": 1680,
+                "width": 535,
+                "height": 430,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature F card",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#ffe3dc",
+                "stroke": "#ffe3dc",
+                "strokeWidth": 1,
+                "radius": 42
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_headline",
+                "x": 90,
+                "y": 145,
+                "width": 1140,
+                "height": 215,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Headline",
+                "shadow": null,
+                "type": "text",
+                "text": "Six ways to be\nvery impressive.",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 104,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 0.94,
+                  "letterSpacing": -5,
+                  "color": "#101425",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_subheadline",
+                "x": 125,
+                "y": 440,
+                "width": 1070,
+                "height": 52,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Subheadline",
+                "shadow": null,
+                "type": "text",
+                "text": "Every feature has a letter. That is how you know.",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 35,
+                  "fontWeight": 600,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0,
+                  "color": "#4b5265",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_a_letter",
+                "x": 135,
+                "y": 760,
+                "width": 180,
+                "height": 140,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature A letter",
+                "shadow": null,
+                "type": "text",
+                "text": "A",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 116,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -4,
+                  "color": "#c8ff3d",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_a_name",
+                "x": 140,
+                "y": 980,
+                "width": 390,
+                "height": 60,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature A name",
+                "shadow": null,
+                "type": "text",
+                "text": "Feature A",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 43,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -2,
+                  "color": "#ffffff",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_b_letter",
+                "x": 740,
+                "y": 760,
+                "width": 180,
+                "height": 140,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B letter",
+                "shadow": null,
+                "type": "text",
+                "text": "B",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 116,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -4,
+                  "color": "#2357ff",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_b_name",
+                "x": 745,
+                "y": 980,
+                "width": 390,
+                "height": 60,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B name",
+                "shadow": null,
+                "type": "text",
+                "text": "Feature B",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 43,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -2,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_c_letter",
+                "x": 135,
+                "y": 1250,
+                "width": 180,
+                "height": 140,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C letter",
+                "shadow": null,
+                "type": "text",
+                "text": "C",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 116,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -4,
+                  "color": "#15a989",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_c_name",
+                "x": 140,
+                "y": 1470,
+                "width": 390,
+                "height": 60,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C name",
+                "shadow": null,
+                "type": "text",
+                "text": "Feature C",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 43,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -2,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_d_letter",
+                "x": 740,
+                "y": 1250,
+                "width": 180,
+                "height": 140,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature D letter",
+                "shadow": null,
+                "type": "text",
+                "text": "D",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 116,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -4,
+                  "color": "#ffb629",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_d_name",
+                "x": 745,
+                "y": 1470,
+                "width": 390,
+                "height": 60,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature D name",
+                "shadow": null,
+                "type": "text",
+                "text": "Feature D",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 43,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -2,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_e_letter",
+                "x": 135,
+                "y": 1740,
+                "width": 180,
+                "height": 140,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature E letter",
+                "shadow": null,
+                "type": "text",
+                "text": "E",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 116,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -4,
+                  "color": "#7058e8",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_e_name",
+                "x": 140,
+                "y": 1960,
+                "width": 390,
+                "height": 60,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature E name",
+                "shadow": null,
+                "type": "text",
+                "text": "Feature E",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 43,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -2,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_f_letter",
+                "x": 740,
+                "y": 1740,
+                "width": 180,
+                "height": 140,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature F letter",
+                "shadow": null,
+                "type": "text",
+                "text": "F",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 116,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -4,
+                  "color": "#ff684c",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_f_name",
+                "x": 745,
+                "y": 1960,
+                "width": 390,
+                "height": 60,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature F name",
+                "shadow": null,
+                "type": "text",
+                "text": "Feature F",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 43,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -2,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "grid_more",
+                "x": 90,
+                "y": 2300,
+                "width": 1140,
+                "height": 80,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "More features",
+                "shadow": null,
+                "type": "text",
+                "text": "+ plenty more",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 62,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -1,
+                  "color": "#101425",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            }
+          ],
+          "notes": "",
+          "createdAt": "2026-08-02T00:00:00.000Z",
+          "updatedAt": "2026-08-06T15:39:47.639Z"
+        },
+        {
+          "id": "screen_mascot",
+          "slug": "feature-b",
+          "exportSlug": "feature-b",
+          "name": "Awesome feature B",
+          "preset": "iphone-6-9",
+          "background": {
+            "type": "radial-gradient",
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#47c8ff"
+              },
+              {
+                "offset": 0.48,
+                "color": "#2357ff"
+              },
+              {
+                "offset": 1,
+                "color": "#101425"
+              }
+            ],
+            "center": {
+              "x": 0.5,
+              "y": 0.42
+            },
+            "radius": 0.9
+          },
+          "layers": [
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_panel",
+                "x": 120,
+                "y": 2070,
+                "width": 1080,
+                "height": 500,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature panel",
                 "shadow": {
                   "color": "#05060a",
-                  "blur": 28,
+                  "blur": 30,
                   "offsetX": 0,
-                  "offsetY": 14,
+                  "offsetY": 16,
                   "opacity": 0.24
                 },
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#f7f8f2",
+                "stroke": "#f7f8f2",
+                "strokeWidth": 1,
+                "radius": 54
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_row_a",
+                "x": 180,
+                "y": 2210,
+                "width": 960,
+                "height": 82,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature A row",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#ffffff",
+                "stroke": "#ffffff",
+                "strokeWidth": 1,
+                "radius": 24
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_row_b",
+                "x": 180,
+                "y": 2320,
+                "width": 960,
+                "height": 82,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B row",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#e4efff",
+                "stroke": "#e4efff",
+                "strokeWidth": 1,
+                "radius": 24
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_row_c",
+                "x": 180,
+                "y": 2430,
+                "width": 960,
+                "height": 82,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C row",
+                "shadow": null,
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#dff8f2",
+                "stroke": "#dff8f2",
+                "strokeWidth": 1,
+                "radius": 24
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_headline",
+                "x": 85,
+                "y": 145,
+                "width": 1150,
+                "height": 215,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Headline",
+                "shadow": null,
+                "type": "text",
+                "text": "Feature B gets\nyou moving.",
+                "style": {
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 108,
+                  "fontWeight": 700,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 0.93,
+                  "letterSpacing": -5,
+                  "color": "#ffffff",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_subheadline",
+                "x": 150,
+                "y": 440,
+                "width": 1020,
+                "height": 52,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Subheadline",
+                "shadow": null,
+                "type": "text",
+                "text": "Metaphorically. Probably.",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 38,
+                  "fontWeight": 600,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1.2,
+                  "letterSpacing": 0,
+                  "color": "#dbe8ff",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_hero",
+                "x": 210,
+                "y": 630,
+                "width": 900,
+                "height": 900,
+                "rotation": -5,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Hero star mascot",
+                "shadow": null,
+                "type": "image",
+                "assetPath": "assets/star-mascot-1da4434759e7.png",
+                "fit": "contain",
+                "position": {
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "cornerRadius": 0,
+                "alt": "Playful blue star mascot"
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_panel_title",
+                "x": 190,
+                "y": 2120,
+                "width": 900,
+                "height": 60,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Panel title",
+                "shadow": null,
+                "type": "text",
+                "text": "Choose something awesome",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 44,
+                  "fontWeight": 800,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": -1,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_row_a_text",
+                "x": 225,
+                "y": 2228,
+                "width": 760,
+                "height": 46,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature A row label",
+                "shadow": null,
+                "type": "text",
+                "text": "A    Feature A",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 32,
+                  "fontWeight": 800,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": 0,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_row_b_text",
+                "x": 225,
+                "y": 2338,
+                "width": 760,
+                "height": 46,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B row label",
+                "shadow": null,
+                "type": "text",
+                "text": "B    Feature B",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 32,
+                  "fontWeight": 800,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": 0,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "mascot_row_c_text",
+                "x": 225,
+                "y": 2448,
+                "width": 760,
+                "height": 46,
+                "rotation": -2,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C row label",
+                "shadow": null,
+                "type": "text",
+                "text": "C    Feature C",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 32,
+                  "fontWeight": 800,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1,
+                  "letterSpacing": 0,
+                  "color": "#101425",
+                  "align": "left",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            }
+          ],
+          "notes": "",
+          "createdAt": "2026-08-02T00:00:00.000Z",
+          "updatedAt": "2026-08-06T15:39:47.640Z"
+        },
+        {
+          "id": "screen_closing",
+          "slug": "ready-for-awesome",
+          "exportSlug": "ready-for-awesome",
+          "name": "Ready for awesome",
+          "preset": "iphone-6-9",
+          "background": {
+            "type": "solid",
+            "color": "#f7f8f2"
+          },
+          "layers": [
+            {
+              "kind": "owned",
+              "element": {
+                "id": "closing_device",
+                "x": 335,
+                "y": 630,
+                "width": 650,
+                "height": 1327,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Closing Example phone",
+                "shadow": {
+                  "color": "#05060a",
+                  "blur": 34,
+                  "offsetX": 0,
+                  "offsetY": 18,
+                  "opacity": 0.28
+                },
                 "type": "device",
-                "preset": "generic-modern-ipad",
-                "deviceId": "generic-modern-ipad",
-                "deviceName": "Generic modern iPad",
-                "frame": "tablet",
-                "frameColor": "#242833",
-                "screenColor": "#f6f7fb",
-                "screenshotPath": "assets/asset_social.svg",
+                "preset": "iphone-17-pro-max",
+                "deviceId": "iphone-17-pro-max",
+                "deviceName": "iPhone 17 Pro Max",
+                "frame": "phone",
+                "frameColor": "#182d55",
+                "screenColor": "#f7f8f2",
+                "screenshotPath": "assets/example-phone-6749ec03b360.svg",
                 "screenshotFit": "cover",
                 "screenshotPosition": {
                   "x": 0.5,
@@ -627,11 +1902,11 @@
             {
               "kind": "owned",
               "element": {
-                "id": "ipad_text_3",
-                "x": 175,
-                "y": 234,
-                "width": 1714,
-                "height": 74,
+                "id": "closing_headline",
+                "x": 90,
+                "y": 130,
+                "width": 1140,
+                "height": 100,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
@@ -639,17 +1914,17 @@
                 "name": "Headline",
                 "shadow": null,
                 "type": "text",
-                "text": "Make room for ideas.",
+                "text": "One example.",
                 "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 72,
-                  "fontWeight": 750,
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 106,
+                  "fontWeight": 700,
                   "italic": false,
                   "underline": false,
-                  "lineHeight": 1.02,
-                  "letterSpacing": -3,
-                  "color": "#ffffff",
-                  "align": "left",
+                  "lineHeight": 0.94,
+                  "letterSpacing": -5,
+                  "color": "#101425",
+                  "align": "center",
                   "backgroundColor": null,
                   "padding": 0,
                   "backgroundRadius": 0,
@@ -662,29 +1937,90 @@
             {
               "kind": "owned",
               "element": {
-                "id": "ipad_text_4",
-                "x": 175,
-                "y": 523,
-                "width": 1486,
-                "height": 76,
+                "id": "closing_mascot",
+                "x": 825,
+                "y": 500,
+                "width": 330,
+                "height": 330,
+                "rotation": 8,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Closing star mascot",
+                "shadow": null,
+                "type": "image",
+                "assetPath": "assets/star-mascot-1da4434759e7.png",
+                "fit": "contain",
+                "position": {
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "cornerRadius": 0,
+                "alt": "Playful blue star mascot"
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "closing_promise",
+                "x": 95,
+                "y": 2160,
+                "width": 1130,
+                "height": 180,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
                 "visible": true,
-                "name": "Subheadline",
+                "name": "Closing promise",
                 "shadow": null,
                 "type": "text",
-                "text": "A calm, flexible home for your workspace.",
+                "text": "Ready for whatever\ncomes next.",
                 "style": {
-                  "fontFamilyId": "builtin:inter",
-                  "fontSize": 56,
-                  "fontWeight": 500,
+                  "fontFamilyId": "builtin:quicksand",
+                  "fontSize": 98,
+                  "fontWeight": 700,
                   "italic": false,
                   "underline": false,
-                  "lineHeight": 1.35,
+                  "lineHeight": 0.94,
+                  "letterSpacing": -5,
+                  "color": "#101425",
+                  "align": "center",
+                  "backgroundColor": null,
+                  "padding": 0,
+                  "backgroundRadius": 0,
+                  "shadow": null,
+                  "autoHeight": true
+                }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "closing_subheadline",
+                "x": 170,
+                "y": 2445,
+                "width": 980,
+                "height": 52,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Closing subheadline",
+                "shadow": null,
+                "type": "text",
+                "text": "That is the whole example.",
+                "style": {
+                  "fontFamilyId": "builtin:nunito",
+                  "fontSize": 38,
+                  "fontWeight": 600,
+                  "italic": false,
+                  "underline": false,
+                  "lineHeight": 1.2,
                   "letterSpacing": 0,
-                  "color": "#e8f2f5",
-                  "align": "left",
+                  "color": "#596174",
+                  "align": "center",
                   "backgroundColor": null,
                   "padding": 0,
                   "backgroundRadius": 0,
@@ -697,13 +2033,13 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-03T19:31:56.937Z"
+          "updatedAt": "2026-08-06T15:39:47.640Z"
         }
       ],
       "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-03T19:31:56.937Z"
+      "updatedAt": "2026-08-06T15:39:52.958Z"
     }
   ],
   "createdAt": "2026-08-02T00:00:00.000Z",
-  "updatedAt": "2026-08-03T19:31:56.937Z"
+  "updatedAt": "2026-08-06T15:39:52.960Z"
 }
