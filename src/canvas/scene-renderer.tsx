@@ -14,7 +14,7 @@ import type { ResolvedScreen } from "../scene/selectors";
 import { createBackgroundTextureTile } from "./background-texture";
 import { fontCssFamily } from "../fonts/catalog";
 
-export type SceneRendererProps = {
+export type SceneContentsProps = {
   screen: ResolvedScreen;
   projectSlug: string;
   assets: readonly AssetMetadata[];
@@ -31,6 +31,8 @@ export type SceneRendererProps = {
   onMoveEnd?: (targetScreenId: string, elementId: string, x: number, y: number) => void;
   children?: ReactNode;
 };
+
+export type SceneRendererProps = SceneContentsProps;
 
 function colorStops(stops: GradientStop[]): Array<number | string> {
   return stops.flatMap((stop) => [stop.offset, stop.color]);
@@ -315,31 +317,33 @@ function CameraDefinition({ geometry }: { geometry: ReturnType<typeof calculateD
   return <Ellipse fill="#05060a" listening={false} radiusX={geometry.camera.width / 2} radiusY={geometry.camera.height / 2} x={geometry.camera.x + geometry.camera.width / 2} y={geometry.camera.y + geometry.camera.height / 2} />;
 }
 
-export function SceneRenderer({ screen, projectSlug, assets, selectedElementIds = [], interactive = false, compact = false, targetScreenId = screen.id, offsetX = 0, offsetY = 0, register = () => undefined, onSelect = () => undefined, onClearSelection = () => undefined, onGestureStart = () => undefined, onMoveEnd = () => undefined, children }: SceneRendererProps) {
+export function SceneContents({ screen, projectSlug, assets, selectedElementIds = [], interactive = false, compact = false, targetScreenId = screen.id, offsetX = 0, offsetY = 0, register = () => undefined, onSelect = () => undefined, onClearSelection = () => undefined, onGestureStart = () => undefined, onMoveEnd = () => undefined, children }: SceneContentsProps) {
   const selectedSet = new Set(selectedElementIds);
   const orderedElements = [...screen.elements].sort((left, right) => left.renderOrder - right.renderOrder);
   return (
-    <Layer>
-      <Group clipX={0} clipY={0} clipWidth={screen.width} clipHeight={screen.height} x={offsetX} y={offsetY}>
-        <ScreenBackground assets={assets} compact={compact} interactive={interactive} onClearSelection={onClearSelection} projectSlug={projectSlug} screen={screen} targetScreenId={targetScreenId} />
-        {orderedElements.map((element) => (
-          <ElementNode
-            assets={assets}
-            element={element}
-            interactive={interactive}
-            key={`${targetScreenId}:${element.id}`}
-            onGestureStart={onGestureStart}
-            onMoveEnd={onMoveEnd}
-            onSelect={onSelect}
-            projectSlug={projectSlug}
-            register={register}
-            screen={screen}
-            selected={selectedSet.has(element.id)}
-            targetScreenId={targetScreenId}
-          />
-        ))}
-        {children}
-      </Group>
-    </Layer>
+    <Group clipX={0} clipY={0} clipWidth={screen.width} clipHeight={screen.height} x={offsetX} y={offsetY}>
+      <ScreenBackground assets={assets} compact={compact} interactive={interactive} onClearSelection={onClearSelection} projectSlug={projectSlug} screen={screen} targetScreenId={targetScreenId} />
+      {orderedElements.map((element) => (
+        <ElementNode
+          assets={assets}
+          element={element}
+          interactive={interactive}
+          key={`${targetScreenId}:${element.id}`}
+          onGestureStart={onGestureStart}
+          onMoveEnd={onMoveEnd}
+          onSelect={onSelect}
+          projectSlug={projectSlug}
+          register={register}
+          screen={screen}
+          selected={selectedSet.has(element.id)}
+          targetScreenId={targetScreenId}
+        />
+      ))}
+      {children}
+    </Group>
   );
+}
+
+export function SceneRenderer(props: SceneRendererProps) {
+  return <Layer><SceneContents {...props} /></Layer>;
 }
