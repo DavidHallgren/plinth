@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import { useMemo, type ReactNode } from "react";
-import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Text } from "react-konva";
+import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Text } from "./react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { AssetMetadata, GradientStop } from "../lib/schema";
 import { getDevicePreset } from "../devices/presets";
