@@ -1,10 +1,10 @@
 import type Konva from "konva";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Stage, Transformer } from "react-konva";
+import { Layer, Stage, Transformer } from "react-konva";
 import type { AssetMetadata, Deck } from "../lib/schema";
 import type { ResolvedScreen } from "../scene/selectors";
 import { projectionKey } from "../scene/overflow";
-import { SceneRenderer } from "./scene-renderer";
+import { SceneContents } from "./scene-renderer";
 
 export type CanvasTransform = {
   id: string;
@@ -214,29 +214,31 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
               scaleY={zoom}
               width={scaledWidth}
             >
-              {screens.map((screen, index) => (
-                <SceneRenderer
-                  assets={assets}
-                  interactive
-                  key={screen.id}
-                  offsetX={index * (deck.width + SCREEN_GAP / zoom)}
-                  onClearSelection={(targetScreenId) => { onFocusScreen(targetScreenId); onClearSelection(targetScreenId); }}
-                  onGestureStart={onGestureStart}
-                  onMoveEnd={onMoveEnd}
-                  onSelect={(targetScreenId, elementId, additive) => { onFocusScreen(targetScreenId); onSelect(targetScreenId, elementId, additive); }}
-                  projectSlug={projectSlug}
-                  register={(targetScreenId, elementId, node) => {
-                    const key = projectionKey(targetScreenId, elementId);
-                    if (node) nodeRefs.current.set(key, node);
-                    else nodeRefs.current.delete(key);
-                  }}
-                  screen={screen}
-                  selectedElementIds={selectedElementIds}
-                  targetScreenId={screen.id}
-                >
-                  {screen.id === focusedScreenId ? transformer : null}
-                </SceneRenderer>
-              ))}
+              <Layer>
+                {screens.map((screen, index) => (
+                  <SceneContents
+                    assets={assets}
+                    interactive
+                    key={screen.id}
+                    offsetX={index * (deck.width + SCREEN_GAP / zoom)}
+                    onClearSelection={(targetScreenId) => { onFocusScreen(targetScreenId); onClearSelection(targetScreenId); }}
+                    onGestureStart={onGestureStart}
+                    onMoveEnd={onMoveEnd}
+                    onSelect={(targetScreenId, elementId, additive) => { onFocusScreen(targetScreenId); onSelect(targetScreenId, elementId, additive); }}
+                    projectSlug={projectSlug}
+                    register={(targetScreenId, elementId, node) => {
+                      const key = projectionKey(targetScreenId, elementId);
+                      if (node) nodeRefs.current.set(key, node);
+                      else nodeRefs.current.delete(key);
+                    }}
+                    screen={screen}
+                    selectedElementIds={selectedElementIds}
+                    targetScreenId={screen.id}
+                  >
+                    {screen.id === focusedScreenId ? transformer : null}
+                  </SceneContents>
+                ))}
+              </Layer>
             </Stage>
             <div className="pointer-events-none absolute inset-0">
               {screens.map((screen, index) => (
