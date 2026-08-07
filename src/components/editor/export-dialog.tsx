@@ -1,7 +1,7 @@
 import type Konva from "konva";
 import { Download, FileOutput, FolderOutput, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Stage } from "react-konva";
+import { Stage } from "../../canvas/react-konva";
 import type { Project } from "../../lib/schema";
 import { resolveScreen, type ResolvedScreen } from "../../scene/selectors";
 import { apiFetch } from "../../lib/client-api";

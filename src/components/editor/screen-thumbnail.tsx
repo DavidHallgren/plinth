@@ -1,4 +1,4 @@
-import { Stage } from "react-konva";
+import { Stage } from "../../canvas/react-konva";
 import { SceneRenderer } from "../../canvas/scene-renderer";
 import { thumbnailSize } from "../../devices/geometry";
 import type { AssetMetadata } from "../../lib/schema";

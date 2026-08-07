@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Group, Layer } from "react-konva";
+import { Group, Layer } from "../src/canvas/react-konva";
 import { createDefaultProject } from "../src/lib/defaults";
 import { resolveScreen } from "../src/scene/selectors";
 import { SceneContents, SceneRenderer } from "../src/canvas/scene-renderer";

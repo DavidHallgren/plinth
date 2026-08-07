@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Layer, Stage, Transformer } from "react-konva";
+import { Layer, Stage, Transformer } from "./react-konva";
 import type { AssetMetadata, Deck } from "../lib/schema";
 import type { ResolvedScreen } from "../scene/selectors";
 import { projectionKey } from "../scene/overflow";

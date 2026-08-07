@@ -1,6 +1,6 @@
 import Konva from "konva";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import { Group, Image as KonvaImage, Rect, Text } from "react-konva";
+import { Group, Image as KonvaImage, Rect, Text } from "./react-konva";
 import type { AssetMetadata, ImageFit, Point } from "../lib/schema";
 import { calculateImageCoverCrop, calculateImageFitGeometry } from "../devices/geometry";
 import { clearImageCache as clearImageCacheEntries, imageCacheVersion, imageResourceState, loadImageResource, subscribeImageCache, type ImageResource } from "./image-cache";
