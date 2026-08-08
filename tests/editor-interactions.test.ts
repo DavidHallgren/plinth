@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
-import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom, horizontalVisibilityRatio, shouldBeginCanvasPan, shouldRevealScreenHorizontally } from "../src/canvas/deck-canvas";
+import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom, horizontalVisibilityRatio, revealScrollDelta, shouldBeginCanvasPan, shouldRevealScreenHorizontally } from "../src/canvas/deck-canvas";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { ProjectSchema, type TextElement } from "../src/lib/schema";
@@ -73,6 +73,14 @@ describe("editor interaction guards and geometry", () => {
     expect(shouldRevealScreenHorizontally(-75, 100, 0, 100)).toBe(false);
     expect(horizontalVisibilityRatio(-76, 100, 0, 100)).toBeCloseTo(0.24);
     expect(shouldRevealScreenHorizontally(-76, 100, 0, 100)).toBe(true);
+  });
+
+  test("minimally reveals layer bounds on either viewport axis", () => {
+    expect(revealScrollDelta(20, 100, 0, 200)).toBe(0);
+    expect(revealScrollDelta(-90, 100, 0, 200)).toBe(-106);
+    expect(revealScrollDelta(190, 100, 0, 200)).toBe(106);
+    expect(revealScrollDelta(250, 100, 0, 200)).toBe(166);
+    expect(revealScrollDelta(-100, 1_000, 0, 200)).toBe(0);
   });
 
   test("reorder keeps layer order and retains the moved selection identity", () => {

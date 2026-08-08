@@ -10,7 +10,7 @@ import { ProjectStorage } from "../src/lib/storage";
 import { normalizeFontsourceCss } from "../scripts/generate-styles";
 import { apiAction, handleDeleteFont, handleGetFont, handleUploadFont } from "../src/lib/api";
 import type { ProjectFontFamily } from "../src/lib/schema";
-import { projectFontRequests } from "../src/fonts/font-registry";
+import { projectFontLoadKey, projectFontRequests } from "../src/fonts/font-registry";
 
 const temporaryDirectories: string[] = [];
 afterEach(async () => { while (temporaryDirectories.length > 0) { const directory = temporaryDirectories.pop(); if (directory) await rm(directory, { recursive: true, force: true }); } });
@@ -58,6 +58,14 @@ describe("built-in font catalog", () => {
     expect(requests.every((request) => request.familyId === "builtin:inter")).toBe(true);
     expect(requests.every((request) => Number.isFinite(request.weight) && request.text.length > 0)).toBe(true);
     expect(new Set(requests.map((request) => `${request.familyId}:${request.weight}:${request.italic}:${request.text}`)).size).toBe(requests.length);
+  });
+
+  test("keeps the font load key stable across ordinary normalized project edits", () => {
+    const project = createDefaultProject("Font load key fixture");
+    const normalizedClone = structuredClone(project);
+    expect(normalizedClone.fonts).not.toBe(project.fonts);
+    expect(projectFontLoadKey(normalizedClone)).toBe(projectFontLoadKey(project));
+    expect(projectFontLoadKey({ ...project, slug: "renamed-font-load-key-fixture" })).not.toBe(projectFontLoadKey(project));
   });
 });
 

@@ -3,6 +3,10 @@ import { fontCssFamily, isBuiltInFontId, projectFontCssFamily } from "./catalog"
 
 const loadedFaces = new Map<string, Promise<FontFace>>();
 
+export function projectFontLoadKey(project: Pick<Project, "id" | "slug" | "fonts">): string {
+  return JSON.stringify([project.id, project.slug, project.fonts]);
+}
+
 export type ProjectFontRequest = {
   familyId: string;
   weight: number;

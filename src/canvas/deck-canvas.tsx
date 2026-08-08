@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Layer, Stage, Transformer } from "./react-konva";
 import type { AssetMetadata, Deck } from "../lib/schema";
 import type { ResolvedScreen } from "../scene/selectors";
-import { projectionKey } from "../scene/overflow";
+import { elementLocalBounds, projectionKey } from "../scene/overflow";
 import { SceneContents } from "./scene-renderer";
 
 export type CanvasTransform = {
@@ -20,6 +20,7 @@ export type DeckFitMode = "deck" | "focused-screen" | "screen-width";
 const CANVAS_PADDING = 32;
 const SCREEN_GAP = 6;
 const SCREEN_REVEAL_THRESHOLD = 0.25;
+const LAYER_REVEAL_PADDING = 16;
 
 export function horizontalVisibilityRatio(screenLeft: number, screenWidth: number, viewportLeft: number, viewportWidth: number): number {
   if (screenWidth <= 0 || viewportWidth <= 0) return 0;
@@ -30,6 +31,17 @@ export function horizontalVisibilityRatio(screenLeft: number, screenWidth: numbe
 
 export function shouldRevealScreenHorizontally(screenLeft: number, screenWidth: number, viewportLeft: number, viewportWidth: number): boolean {
   return horizontalVisibilityRatio(screenLeft, screenWidth, viewportLeft, viewportWidth) < SCREEN_REVEAL_THRESHOLD;
+}
+
+export function revealScrollDelta(targetStart: number, targetSize: number, viewportStart: number, viewportSize: number): number {
+  if (targetSize <= 0 || viewportSize <= 0) return 0;
+  const targetEnd = targetStart + targetSize;
+  const viewportEnd = viewportStart + viewportSize;
+  const visible = Math.max(0, Math.min(targetEnd, viewportEnd) - Math.max(targetStart, viewportStart));
+  const requiredVisible = Math.min(targetSize, viewportSize, targetSize * SCREEN_REVEAL_THRESHOLD);
+  if (visible >= requiredVisible) return 0;
+  if (targetStart < viewportStart) return targetStart - LAYER_REVEAL_PADDING - viewportStart;
+  return targetEnd + LAYER_REVEAL_PADDING - viewportEnd;
 }
 
 export function shouldBeginCanvasPan(button: number, modifiers: { altKey: boolean; shiftKey: boolean }): boolean {
@@ -89,6 +101,8 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
   const focusedIndex = Math.max(0, screens.findIndex((screen) => screen.id === focusedScreenId));
   const focusedScreen = screens[focusedIndex] ?? screens[0];
   const focusedElements = focusedScreen?.elements ?? [];
+  const selectionKey = selectedElementIds.join(":");
+  const revealTriggerRef = useRef({ focusedIndex, focusedScreenId, revealScreenRequest, selectionKey });
   const lockedElementIds = useMemo(() => new Set(focusedElements.filter((element) => element.locked).map((element) => element.id)), [focusedElements]);
 
   useLayoutEffect(() => {
@@ -109,17 +123,24 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
         ? fitScreenWidthZoom(deck.width, viewportSize.width)
         : fitDeckZoom(deck.width, deck.height, screens.length, viewportSize.width, viewportSize.height);
     onFitZoom(nextZoom);
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       const viewport = viewportRef.current;
       if (!viewport || fitMode === "deck") return;
       const screenWidth = deck.width * nextZoom;
       const screenLeft = CANVAS_PADDING + focusedIndex * (screenWidth + SCREEN_GAP);
       viewport.scrollTo({ left: Math.max(0, screenLeft - (viewport.clientWidth - screenWidth) / 2), top: Math.max(0, (deck.height * nextZoom - viewport.clientHeight) / 2), behavior: "smooth" });
     });
-  }, [deck.height, deck.width, fitMode, fitRequest, focusedIndex, onFitZoom, screens.length, viewportSize.height, viewportSize.width]);
+    return () => cancelAnimationFrame(frame);
+  }, [deck.height, deck.width, fitMode, fitRequest, onFitZoom, screens.length, viewportSize.height, viewportSize.width]);
 
   useLayoutEffect(() => {
-    if (!revealScreenRequest || !viewportSize.width || !viewportSize.height) return;
+    const previous = revealTriggerRef.current;
+    const focusChanged = previous.focusedIndex !== focusedIndex || previous.focusedScreenId !== focusedScreenId;
+    const revealRequested = previous.revealScreenRequest !== revealScreenRequest;
+    const selectionChanged = previous.selectionKey !== selectionKey;
+    revealTriggerRef.current = { focusedIndex, focusedScreenId, revealScreenRequest, selectionKey };
+    if (!focusChanged && !revealRequested && !selectionChanged) return;
+    if (!viewportSize.width || !viewportSize.height) return;
     const frame = requestAnimationFrame(() => {
       const viewport = viewportRef.current;
       const canvasFrame = frameRef.current;
@@ -128,12 +149,26 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
       const viewportBounds = viewport.getBoundingClientRect();
       const frameBounds = canvasFrame.getBoundingClientRect();
       const screenLeft = frameBounds.left + canvasFrame.clientLeft + focusedIndex * (screenWidth + SCREEN_GAP);
-      if (!shouldRevealScreenHorizontally(screenLeft, screenWidth, viewportBounds.left, viewport.clientWidth)) return;
-      const screenLeftInContent = viewport.scrollLeft + screenLeft - (viewportBounds.left + viewport.clientLeft);
-      viewport.scrollTo({ left: Math.max(0, screenLeftInContent - (viewport.clientWidth - screenWidth) / 2), top: Math.max(0, (deck.height * zoom - viewport.clientHeight) / 2), behavior: "smooth" });
+      const selectedBounds = focusedElements
+        .filter((element) => selectedElementIds.includes(element.id))
+        .map(elementLocalBounds);
+      const targetBounds = selectedBounds.length > 0
+        ? selectedBounds.reduce((bounds, current) => ({
+          left: Math.min(bounds.left, current.left),
+          top: Math.min(bounds.top, current.top),
+          right: Math.max(bounds.right, current.right),
+          bottom: Math.max(bounds.bottom, current.bottom),
+        }))
+        : { left: 0, top: 0, right: deck.width, bottom: deck.height };
+      const targetLeft = screenLeft + targetBounds.left * zoom;
+      const targetTop = frameBounds.top + canvasFrame.clientTop + targetBounds.top * zoom;
+      const deltaX = revealScrollDelta(targetLeft, (targetBounds.right - targetBounds.left) * zoom, viewportBounds.left + viewport.clientLeft, viewport.clientWidth);
+      const deltaY = revealScrollDelta(targetTop, (targetBounds.bottom - targetBounds.top) * zoom, viewportBounds.top + viewport.clientTop, viewport.clientHeight);
+      if (deltaX === 0 && deltaY === 0) return;
+      viewport.scrollTo({ left: Math.max(0, viewport.scrollLeft + deltaX), top: Math.max(0, viewport.scrollTop + deltaY), behavior: "smooth" });
     });
     return () => cancelAnimationFrame(frame);
-  }, [deck.height, deck.width, focusedIndex, revealScreenRequest, viewportSize.height, viewportSize.width, zoom]);
+  }, [focusedIndex, focusedScreenId, revealScreenRequest, selectionKey]);
 
   useLayoutEffect(() => {
     const transformer = transformerRef.current;

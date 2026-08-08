@@ -1,4 +1,3 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.generated.css";
 import { App } from "./components/app-shell";
@@ -11,9 +10,7 @@ if (!root) {
 }
 
 createRoot(root).render(
-  <StrictMode>
-    <TooltipProvider>
-      <App />
-    </TooltipProvider>
-  </StrictMode>,
+  <TooltipProvider>
+    <App />
+  </TooltipProvider>,
 );

@@ -18,7 +18,7 @@ import { APP_STORE_PRESETS, getPresetDefinition } from "../../scene/presets";
 import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import { useAssetMutations } from "../../hooks/use-asset-mutations";
 import { useFontMutations } from "../../hooks/use-font-mutations";
-import { ensureFontReady, ensureProjectFonts } from "../../fonts/font-registry";
+import { ensureFontReady, ensureProjectFonts, projectFontLoadKey } from "../../fonts/font-registry";
 
 type EditorWorkspaceProps = {
   project: Project;
@@ -74,6 +74,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const [exportRendering, setExportRendering] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
+  const fontLoadKey = projectFontLoadKey(project);
   const fontChangeRevisionRef = useRef(0);
   const inspectorCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { uploadStates, uploadFiles, dismissUpload, retryUpload, renameAsset, deleteAsset } = useAssetMutations({
@@ -95,7 +96,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     setFontsReady(false);
     void ensureProjectFonts(project).then(() => { if (active) setFontsReady(true); }).catch((reason) => { if (active) setLocalError(reason instanceof Error ? reason.message : "A project font could not be loaded."); });
     return () => { active = false; };
-  }, [project.id, project.slug, project.fonts]);
+  }, [fontLoadKey]);
 
   useEffect(() => {
     setRenameName(project.name);
