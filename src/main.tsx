@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router";
 import "./styles.generated.css";
 import { App } from "./components/app-shell";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -10,7 +11,9 @@ if (!root) {
 }
 
 createRoot(root).render(
-  <TooltipProvider>
-    <App />
-  </TooltipProvider>,
+  <BrowserRouter>
+    <TooltipProvider>
+      <App />
+    </TooltipProvider>
+  </BrowserRouter>,
 );

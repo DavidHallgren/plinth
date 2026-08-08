@@ -19,6 +19,8 @@ bun run dev
 
 Open [http://localhost:3000](http://localhost:3000). The bundled example project is stored in `data/projects/example/`; other projects under `data/` are ignored by Git.
 
+The project picker lives at `/`. Open editors use `/projects/<project-id>`, where the stable persisted ID keeps bookmarks and reloads working even if the project's editable slug changes. Other browser paths show the app's not-found state.
+
 ## Development
 
 ```sh

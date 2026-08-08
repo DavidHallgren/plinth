@@ -104,7 +104,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDe
                     <div className="group flex w-full items-center gap-1 rounded-lg border border-line bg-white/[0.025] transition hover:border-accent/35 hover:bg-accent/[0.07]" key={project.slug}>
                       <button
                         className="plinth-focus-ring flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3.5 py-3 text-left"
-                        disabled={!project.valid}
+                        disabled={loading || !project.valid}
                         onClick={() => void onOpen(project.slug)}
                         type="button"
                       >
@@ -126,7 +126,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDe
                         <DropdownMenu>
                           <DropdownMenuTrigger aria-label={`More actions for ${project.name}`} className="plinth-focus-ring grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-white/[0.07] hover:text-ink"><MoreHorizontal size={16} /></DropdownMenuTrigger>
                           <DropdownMenuContent className="w-40">
-                            <DropdownMenuItem danger disabled={deletingSlug === project.slug} onClick={() => void deleteProject(project)}>
+                            <DropdownMenuItem danger disabled={loading || deletingSlug === project.slug} onClick={() => void deleteProject(project)}>
                               <Trash2 size={12} />
                               {deletingSlug === project.slug ? "Deleting…" : "Delete project"}
                             </DropdownMenuItem>

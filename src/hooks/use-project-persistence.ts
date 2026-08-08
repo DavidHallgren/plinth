@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ProjectLoadRequestGate } from "../app/project-route";
 import { ApiClientError, apiFetch, jsonRequest } from "../lib/client-api";
 import type { Project } from "../lib/schema";
 import type { ProjectMetadata } from "../lib/storage";
@@ -37,6 +38,7 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
   const projectRef = useRef<Project | null>(null);
   const dirtyRef = useRef(false);
   const revisionRef = useRef(0);
+  const openRequestGateRef = useRef(new ProjectLoadRequestGate());
   const projectRevisionsRef = useRef(new WeakMap<Project, number>());
 
   useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
@@ -94,29 +96,39 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
   }, [autosave.saveNow]);
 
   const openProject = useCallback(async (slug: string) => {
+    const request = openRequestGateRef.current.start();
     setError(null);
     try {
-      const result = await apiFetch<{ project: Project; warnings: Array<{ message: string }> }>(`/api/projects/${encodeURIComponent(slug)}`);
+      const result = await apiFetch<{ project: Project; warnings: Array<{ message: string }> }>(`/api/projects/${encodeURIComponent(slug)}`, { signal: request.signal });
+      if (!openRequestGateRef.current.isCurrent(request)) return null;
       revisionRef.current = 0;
       acceptProject(result.project, { dirty: result.warnings.length > 0 });
       if (result.warnings.length > 0) setError(`Font warning: ${result.warnings.map((warning) => warning.message).join(" ")}`);
+      return result.project;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not open project.");
+      if (openRequestGateRef.current.isCurrent(request)) setError(reason instanceof Error ? reason.message : "Could not open project.");
+      return null;
     }
   }, [acceptProject]);
 
+  const cancelOpenProject = useCallback(() => {
+    openRequestGateRef.current.cancel();
+  }, []);
+
   const createProject = useCallback(async (input: CreateProjectInput) => {
+    cancelOpenProject();
     setError(null);
     try {
       const result = await apiFetch<{ project: Project }>("/api/projects", jsonRequest(input));
       revisionRef.current = 0;
       acceptProject(result.project, { dirty: false });
       await refreshProjects();
+      return result.project;
     } catch (reason) {
       setError(reason instanceof ApiClientError && reason.code === "PROJECT_EXISTS" ? "That project slug already exists." : reason instanceof Error ? reason.message : "Could not create project.");
       throw reason;
     }
-  }, [acceptProject, refreshProjects]);
+  }, [acceptProject, cancelOpenProject, refreshProjects]);
 
   const changeProject = useCallback((nextProject: Project) => acceptProject(nextProject, { dirty: true, incrementRevision: true }), [acceptProject]);
   const syncProject = useCallback(async (nextProject: Project) => {
@@ -131,6 +143,7 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
       if (current?.slug === slug) await saveLatestProject();
       await apiFetch<{ deleted: string }>(`/api/projects/${encodeURIComponent(slug)}`, { method: "DELETE" });
       if (current?.slug === slug) {
+        cancelOpenProject();
         projectRef.current = null;
         setProject(null);
         setDirty(false);
@@ -141,7 +154,7 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
       setError(reason instanceof Error ? reason.message : "Could not delete the project.");
       throw reason;
     }
-  }, [refreshProjects, saveLatestProject]);
+  }, [cancelOpenProject, refreshProjects, saveLatestProject]);
 
   const renameProject = useCallback(async (name: string, slug?: string, exportDirectory?: string | null) => {
     if (!projectRef.current) return;
@@ -171,6 +184,7 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
   }, [acceptProject, autosave.saveNow, refreshProjects, saveLatestProject]);
 
   const leaveProject = useCallback(async () => {
+    cancelOpenProject();
     setBusy(true);
     try {
       await saveLatestProject();
@@ -182,7 +196,7 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
     } finally {
       setBusy(false);
     }
-  }, [saveLatestProject]);
+  }, [cancelOpenProject, saveLatestProject]);
 
   return {
     project,
@@ -190,6 +204,7 @@ export function useProjectPersistence(refreshProjects: RefreshProjects) {
     busy,
     setError,
     openProject,
+    cancelOpenProject,
     createProject,
     changeProject,
     syncProject,
