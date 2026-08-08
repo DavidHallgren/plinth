@@ -6,7 +6,7 @@
   "description": "A local-first screenshot composition tool.",
   "type": "module",
   "scripts": {
-    "dev": "bun --hot src/server.ts",
+    "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
     "build": "bun scripts/build.ts",
     "test": "bun test",
