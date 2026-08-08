@@ -5,6 +5,7 @@ import { parseProject } from "../src/lib/migrations";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema, type Project, type ShapeElement } from "../src/lib/schema";
 import {
   addElement,
+  alignElements,
   duplicateDeck,
   moveElements,
   removeScreen,
@@ -162,6 +163,20 @@ describe("screen overflow model", () => {
     const updated = updateElement(project, "screen_2", "inspected", { x: inspected?.x });
     const ownerLayer = updated.decks[0]?.screens[0]?.layers.find((layer) => layer.kind === "owned" && layer.element.id === "inspected");
     expect(ownerLayer?.kind === "owned" && ownerLayer.element.x).toBe(350);
+  });
+
+  test("aligns linked projections in target coordinates and reconciles their canonical owners together", () => {
+    let project = fixture(2);
+    project = addElement(project, "screen_1", shape("first", { x: 350, width: 120, y: 40 }));
+    project = addElement(project, "screen_1", shape("second", { x: 375, width: 80, y: 160 }));
+    project = toggleElementOverflow(project, "screen_1", "first", true);
+    project = toggleElementOverflow(project, "screen_1", "second", true);
+
+    const aligned = alignElements(project, "screen_2", ["first", "second"], "left");
+    const projections = resolveScreen(aligned, "screen_2").elements.filter((element) => ["first", "second"].includes(element.id));
+    expect(projections.map((element) => elementLocalBounds(element).left)).toEqual([-50.5, -50.5]);
+    expect(aligned.decks[0]?.screens[0]?.layers.filter((layer) => layer.kind === "owned").map((layer) => layer.element.x)).toEqual([350, 350]);
+    expect(aligned.decks[0]?.screens[1]?.layers.filter((layer) => layer.kind === "overflow-link").map((layer) => layer.elementId)).toEqual(["first", "second"]);
   });
 
   test("allows a linked transform to cross the seam before ownership reconciliation", () => {

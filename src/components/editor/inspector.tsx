@@ -1,10 +1,26 @@
-import { ChevronDown, Lock, Unlock, Eye, EyeOff, Link2, Trash2 } from "lucide-react";
+import {
+  AlignHorizontalJustifyCenter,
+  AlignHorizontalJustifyEnd,
+  AlignHorizontalJustifyStart,
+  AlignHorizontalSpaceBetween,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  AlignVerticalJustifyStart,
+  AlignVerticalSpaceBetween,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Link2,
+  Lock,
+  Trash2,
+  Unlock,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import type { AssetMetadata, Background, ProjectFontFamily, SceneElement, Shadow } from "../../lib/schema";
 import { getBuiltInFont, fontWeightRange } from "../../fonts/catalog";
 import type { ResolvedScreen } from "../../scene/selectors";
-import type { ElementPatch, ElementUpdate } from "../../scene/element-operations";
+import type { ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate } from "../../scene/element-operations";
 import type { ScreenPatch } from "../../scene/structure-operations";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -24,18 +40,20 @@ type InspectorProps = {
   onUpdateScreen: (patch: ScreenPatch) => void;
   onUpdateElement: (elementId: string, patch: ElementPatch) => void;
   onUpdateElements: (updates: ElementUpdate[]) => void;
+  onAlignSelection: (alignment: ElementAlignment) => void;
+  onDistributeSelection: (distribution: ElementDistribution) => void;
   onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void;
   onToggleOverflow: (elementId: string, enabled: boolean) => void;
   onMoveOwnership: (elementId: string) => void;
   ownerScreenName?: string;
 };
 
-export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
+export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onAlignSelection, onDistributeSelection, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
     return <ScreenInspector assets={assets} screen={screen} onUpdate={onUpdateScreen} />;
   }
   if (selectedElements.length > 1) {
-    return <MultiSelectionInspector elements={selectedElements} onUpdateElements={onUpdateElements} />;
+    return <MultiSelectionInspector elements={selectedElements} onAlignSelection={onAlignSelection} onDistributeSelection={onDistributeSelection} onUpdateElements={onUpdateElements} />;
   }
   const element = selectedElements[0];
   if (!element) return null;
@@ -60,13 +78,32 @@ function ScreenInspector({ screen, assets, onUpdate }: { screen: ResolvedScreen;
   );
 }
 
-function MultiSelectionInspector({ elements, onUpdateElements }: { elements: SceneElement[]; onUpdateElements: (updates: ElementUpdate[]) => void }) {
+function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection, onDistributeSelection }: { elements: SceneElement[]; onUpdateElements: (updates: ElementUpdate[]) => void; onAlignSelection: (alignment: ElementAlignment) => void; onDistributeSelection: (distribution: ElementDistribution) => void }) {
   const opacity = elements.every((element) => element.opacity === elements[0]?.opacity) ? elements[0]?.opacity ?? 1 : undefined;
   const locked = elements.every((element) => element.locked);
   const visible = elements.every((element) => element.visible);
+  const editableCount = elements.filter((element) => !element.locked).length;
+  const alignmentActions: Array<{ alignment: ElementAlignment; label: string; icon: React.ReactNode }> = [
+    { alignment: "left", label: "Align left", icon: <AlignHorizontalJustifyStart size={14} /> },
+    { alignment: "horizontal-center", label: "Align horizontal centers", icon: <AlignHorizontalJustifyCenter size={14} /> },
+    { alignment: "right", label: "Align right", icon: <AlignHorizontalJustifyEnd size={14} /> },
+    { alignment: "top", label: "Align top", icon: <AlignVerticalJustifyStart size={14} /> },
+    { alignment: "vertical-center", label: "Align vertical centers", icon: <AlignVerticalJustifyCenter size={14} /> },
+    { alignment: "bottom", label: "Align bottom", icon: <AlignVerticalJustifyEnd size={14} /> },
+  ];
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <InspectorHeading title="Selection" detail={`${elements.length} layers`} />
+      <Section title="Arrange">
+        <div className="grid grid-cols-3 gap-1.5">
+          {alignmentActions.map(({ alignment, label, icon }) => <Button aria-label={label} disabled={editableCount < 2} key={alignment} onClick={() => onAlignSelection(alignment)} size="icon" tooltip={label} variant="secondary">{icon}</Button>)}
+        </div>
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          <Button disabled={editableCount < 3} onClick={() => onDistributeSelection("horizontal")} size="sm" tooltip="Equal horizontal gaps" variant="secondary"><AlignHorizontalSpaceBetween size={14} /> Horizontal</Button>
+          <Button disabled={editableCount < 3} onClick={() => onDistributeSelection("vertical")} size="sm" tooltip="Equal vertical gaps" variant="secondary"><AlignVerticalSpaceBetween size={14} /> Vertical</Button>
+        </div>
+        {editableCount !== elements.length ? <p className="mt-2 text-[10px] leading-4 text-muted">Locked layers are excluded. {editableCount} editable layer{editableCount === 1 ? "" : "s"} selected.</p> : null}
+      </Section>
       <Section title="Common properties">
         <Field label="Opacity"><NumberField max={1} min={0} onChange={(value) => onUpdateElements(elements.map((element) => ({ id: element.id, patch: { opacity: value } })))} step={0.05} value={opacity ?? 1} /></Field>
         <div className="grid grid-cols-2 gap-2">

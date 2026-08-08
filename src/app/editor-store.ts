@@ -2,6 +2,8 @@ import { createId } from "../lib/ids";
 import type { Project, SceneElement, Screen, ScreenPreset } from "../lib/schema";
 import {
   addElement,
+  alignElements,
+  distributeElements,
   duplicateElements,
   moveElements,
   removeElements,
@@ -10,7 +12,7 @@ import {
   updateElement,
   updateElements,
 } from "../scene/element-operations";
-import type { ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput } from "../scene/element-operations";
+import type { ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput } from "../scene/element-operations";
 import { addDeck, addScreen, duplicateDeck, duplicateScreen, removeDeck, removeScreen, reorderDecks, reorderScreens, updateDeck, updateScreen } from "../scene/structure-operations";
 import type { AddDeckOptions, AddScreenOptions, DeckPatch, ScreenPatch } from "../scene/structure-operations";
 import { toggleElementOverflow, transferElementOwnership } from "../scene/overflow-operations";
@@ -263,6 +265,19 @@ export class EditorStore {
     const ids = this.editableSelectedIds();
     if (ids.length === 0) return;
     this.apply("Nudge selection", (project) => moveElements(project, this.snapshot.activeScreenId, ids, delta));
+  }
+
+  alignSelection(alignment: ElementAlignment): void {
+    const ids = this.editableSelectedIds();
+    if (ids.length < 2) return;
+    const label = alignment === "horizontal-center" ? "Align horizontal centers" : alignment === "vertical-center" ? "Align vertical centers" : `Align ${alignment}`;
+    this.apply(label, (project) => alignElements(project, this.snapshot.activeScreenId, ids, alignment));
+  }
+
+  distributeSelection(distribution: ElementDistribution): void {
+    const ids = this.editableSelectedIds();
+    if (ids.length < 3) return;
+    this.apply(`Distribute ${distribution === "horizontal" ? "horizontally" : "vertically"}`, (project) => distributeElements(project, this.snapshot.activeScreenId, ids, distribution));
   }
 
   updateElement(elementId: string, patch: ElementPatch, targetScreenId = this.snapshot.activeScreenId): void {

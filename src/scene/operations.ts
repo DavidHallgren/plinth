@@ -6,6 +6,7 @@ import type { ShapeElement } from "../lib/schema";
 import { calculateTextAutoHeight } from "./text-geometry";
 import {
   boundsIntersectScreen,
+  elementAlignmentBounds,
   elementDeckBounds,
   elementForOwnedLayer,
   ownerOfElement,
@@ -75,6 +76,8 @@ export type ResizeElementInput = {
   rotation?: number;
 };
 export type MoveDelta = { x: number; y: number };
+export type ElementAlignment = "left" | "horizontal-center" | "right" | "top" | "vertical-center" | "bottom";
+export type ElementDistribution = "horizontal" | "vertical";
 
 export type AddDeckOptions = {
   id?: string;
@@ -479,6 +482,102 @@ export function replaceElement(project: Project, screenId: string, elementId: st
 export function updateElements(project: Project, screenId: string, updates: ElementUpdate[] | Record<string, ElementPatch>): Project {
   const normalizedUpdates = Array.isArray(updates) ? updates : Object.entries(updates).map(([id, patch]) => ({ id, patch }));
   return normalizedUpdates.reduce((current, update) => updateElement(current, screenId, update.id, update.patch), project);
+}
+
+type ArrangementParticipant = {
+  context: ElementContext;
+  element: SceneElement;
+  bounds: ReturnType<typeof elementAlignmentBounds>;
+  renderOrder: number;
+};
+
+function arrangementParticipants(project: Project, screenId: string, elementIds: readonly string[]): ArrangementParticipant[] {
+  const resolvedById = new Map(resolveDeckScreen(screenContextFor(project, screenId).deck, screenId).map((element) => [element.id, element]));
+  const seen = new Set<string>();
+  const participants: ArrangementParticipant[] = [];
+  for (const elementId of elementIds) {
+    if (seen.has(elementId)) continue;
+    seen.add(elementId);
+    const context = elementContextFor(project, screenId, elementId);
+    if (context.ownerLayer.element.locked) continue;
+    const element = resolvedById.get(elementId);
+    if (!element) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in screen "${screenId}".`);
+    participants.push({ context, element, bounds: elementAlignmentBounds(element), renderOrder: element.renderOrder });
+  }
+  return participants;
+}
+
+function translateArrangedElements(project: Project, participants: readonly ArrangementParticipant[], deltas: ReadonlyMap<string, MoveDelta>): Project {
+  let next = project;
+  for (const participant of participants) {
+    const delta = deltas.get(participant.element.id);
+    if (!delta || (Math.abs(delta.x) < 0.0001 && Math.abs(delta.y) < 0.0001)) continue;
+    const canonical = participant.context.ownerLayer.element;
+    next = replaceOwnedElement(next, participant.context.deck.id, participant.context.ownerScreen.id, canonical.id, {
+      ...canonical,
+      x: canonical.x + delta.x,
+      y: canonical.y + delta.y,
+    });
+  }
+  return next === project ? project : reconcileOverflowLinks(next);
+}
+
+export function alignElements(project: Project, screenId: string, elementIds: readonly string[], alignment: ElementAlignment): Project {
+  const participants = arrangementParticipants(project, screenId, elementIds);
+  if (participants.length < 2) return project;
+  const selection = participants.reduce((bounds, participant) => ({
+    left: Math.min(bounds.left, participant.bounds.left),
+    top: Math.min(bounds.top, participant.bounds.top),
+    right: Math.max(bounds.right, participant.bounds.right),
+    bottom: Math.max(bounds.bottom, participant.bounds.bottom),
+  }), participants[0]!.bounds);
+  const deltas = new Map<string, MoveDelta>();
+  for (const participant of participants) {
+    const bounds = participant.bounds;
+    const x = alignment === "left"
+      ? selection.left - bounds.left
+      : alignment === "horizontal-center"
+        ? (selection.left + selection.right - bounds.left - bounds.right) / 2
+        : alignment === "right"
+          ? selection.right - bounds.right
+          : 0;
+    const y = alignment === "top"
+      ? selection.top - bounds.top
+      : alignment === "vertical-center"
+        ? (selection.top + selection.bottom - bounds.top - bounds.bottom) / 2
+        : alignment === "bottom"
+          ? selection.bottom - bounds.bottom
+          : 0;
+    deltas.set(participant.element.id, { x, y });
+  }
+  return translateArrangedElements(project, participants, deltas);
+}
+
+export function distributeElements(project: Project, screenId: string, elementIds: readonly string[], distribution: ElementDistribution): Project {
+  const participants = arrangementParticipants(project, screenId, elementIds);
+  if (participants.length < 3) return project;
+  const horizontal = distribution === "horizontal";
+  const sorted = [...participants].sort((left, right) => {
+    const leftCenter = horizontal ? left.bounds.left + left.bounds.right : left.bounds.top + left.bounds.bottom;
+    const rightCenter = horizontal ? right.bounds.left + right.bounds.right : right.bounds.top + right.bounds.bottom;
+    const position = leftCenter - rightCenter;
+    return position || left.renderOrder - right.renderOrder || left.element.id.localeCompare(right.element.id);
+  });
+  const first = sorted[0]!;
+  const last = sorted[sorted.length - 1]!;
+  const totalSize = sorted.reduce((total, participant) => total + (horizontal
+    ? participant.bounds.right - participant.bounds.left
+    : participant.bounds.bottom - participant.bounds.top), 0);
+  const span = horizontal ? last.bounds.right - first.bounds.left : last.bounds.bottom - first.bounds.top;
+  const gap = (span - totalSize) / (sorted.length - 1);
+  let cursor = horizontal ? first.bounds.left : first.bounds.top;
+  const deltas = new Map<string, MoveDelta>();
+  for (const participant of sorted) {
+    const start = horizontal ? participant.bounds.left : participant.bounds.top;
+    deltas.set(participant.element.id, horizontal ? { x: cursor - start, y: 0 } : { x: 0, y: cursor - start });
+    cursor += (horizontal ? participant.bounds.right - participant.bounds.left : participant.bounds.bottom - participant.bounds.top) + gap;
+  }
+  return translateArrangedElements(project, participants, deltas);
 }
 
 export function moveElements(project: Project, screenId: string, elementIds: string[], delta: MoveDelta): Project {

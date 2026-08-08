@@ -74,7 +74,8 @@ function elementStrokeWidth(element: SceneElement): number {
   return element.type === "shape" ? element.strokeWidth : 0;
 }
 
-export function elementLocalBounds(element: SceneElement): ElementBounds {
+/** Transformed element geometry used by alignment tools. Visual effects such as shadows are excluded. */
+export function elementAlignmentBounds(element: SceneElement): ElementBounds {
   const width = element.width;
   const height = elementHeight(element);
   const stroke = elementStrokeWidth(element) / 2;
@@ -88,7 +89,11 @@ export function elementLocalBounds(element: SceneElement): ElementBounds {
   const top = element.y + Math.min(...corners.map((point) => point.y)) - stroke;
   const right = element.x + Math.max(...corners.map((point) => point.x)) + stroke;
   const bottom = element.y + Math.max(...corners.map((point) => point.y)) + stroke;
-  return shadowBounds({ left, top, right, bottom }, element.type === "text" ? element.style.shadow ?? element.shadow : element.shadow);
+  return { left, top, right, bottom };
+}
+
+export function elementLocalBounds(element: SceneElement): ElementBounds {
+  return shadowBounds(elementAlignmentBounds(element), element.type === "text" ? element.style.shadow ?? element.shadow : element.shadow);
 }
 
 export function elementDeckBounds(deck: Deck, ownerScreenId: string, element: SceneElement): ElementBounds | undefined {

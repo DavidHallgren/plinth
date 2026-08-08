@@ -5,6 +5,8 @@ import {
   addDeck,
   addElement,
   addScreen,
+  alignElements,
+  distributeElements,
   duplicateDeck,
   duplicateElements,
   duplicateScreen,
@@ -22,6 +24,7 @@ import {
   updateElements,
   updateDeck,
 } from "../src/scene/operations";
+import { elementAlignmentBounds } from "../src/scene/overflow";
 import { ProjectHistory } from "../src/scene/history";
 import { EditorStore } from "../src/app/editor-store";
 import { ownedElements } from "./helpers";
@@ -148,6 +151,64 @@ describe("scene operations", () => {
     expect(elements(partiallyOutside)[0]).toMatchObject({ x: -45, y: 260 });
     const beyondRecoveryEdge = updateElement(partiallyOutside, "screen_operations", "off_canvas", { x: -500, y: 500 });
     expect(elements(beyondRecoveryEdge)[0]).toMatchObject({ x: -99, y: 299 });
+  });
+
+  test("aligns transformed geometry on every selection edge while excluding shadows and locked layers", () => {
+    let project = fixture();
+    project = addElement(project, "screen_operations", {
+      ...shape("rotated", 70, 40),
+      width: 120,
+      height: 60,
+      rotation: 25,
+      shadow: { color: "#000000", blur: 40, offsetX: 30, offsetY: 20, opacity: 0.5 },
+    });
+    project = addElement(project, "screen_operations", { ...shape("small", 230, 150), width: 45, height: 35 });
+    project = addElement(project, "screen_operations", { ...shape("locked", 330, 250), locked: true });
+    const ids = ["rotated", "small", "locked"];
+    const cases = [
+      ["left", "left"],
+      ["horizontal-center", "horizontalCenter"],
+      ["right", "right"],
+      ["top", "top"],
+      ["vertical-center", "verticalCenter"],
+      ["bottom", "bottom"],
+    ] as const;
+
+    for (const [alignment, edge] of cases) {
+      const aligned = alignElements(project, "screen_operations", ids, alignment);
+      const arranged = elements(aligned);
+      const firstBounds = elementAlignmentBounds(arranged.find((element) => element.id === "rotated")!);
+      const secondBounds = elementAlignmentBounds(arranged.find((element) => element.id === "small")!);
+      const firstValue = edge === "horizontalCenter" ? (firstBounds.left + firstBounds.right) / 2
+        : edge === "verticalCenter" ? (firstBounds.top + firstBounds.bottom) / 2
+          : firstBounds[edge];
+      const secondValue = edge === "horizontalCenter" ? (secondBounds.left + secondBounds.right) / 2
+        : edge === "verticalCenter" ? (secondBounds.top + secondBounds.bottom) / 2
+          : secondBounds[edge];
+      expect(secondValue).toBeCloseTo(firstValue, 8);
+      expect(arranged.find((element) => element.id === "locked")).toMatchObject({ x: 330, y: 250, locked: true });
+    }
+  });
+
+  test("distributes different-sized layers with equal gaps and fixed endpoints", () => {
+    let project = fixture();
+    project = addElement(project, "screen_operations", { ...shape("first", 10, 10), width: 40, height: 30 });
+    project = addElement(project, "screen_operations", { ...shape("middle", 90, 70), width: 80, height: 60 });
+    project = addElement(project, "screen_operations", { ...shape("last", 300, 220), width: 20, height: 20 });
+
+    for (const distribution of ["horizontal", "vertical"] as const) {
+      const distributed = distributeElements(project, "screen_operations", ["last", "middle", "first"], distribution);
+      const arranged = elements(distributed).map((element) => ({ element, bounds: elementAlignmentBounds(element) }));
+      const ordered = [...arranged].sort((left, right) => distribution === "horizontal" ? left.bounds.left - right.bounds.left : left.bounds.top - right.bounds.top);
+      const gap = (left: typeof ordered[number], right: typeof ordered[number]) => distribution === "horizontal"
+        ? right.bounds.left - left.bounds.right
+        : right.bounds.top - left.bounds.bottom;
+      expect(gap(ordered[0]!, ordered[1]!)).toBeCloseTo(gap(ordered[1]!, ordered[2]!), 8);
+      expect(ordered[0]!.element.id).toBe("first");
+      expect(ordered[2]!.element.id).toBe("last");
+      expect(ordered[0]!.element).toMatchObject({ x: 10, y: 10 });
+      expect(ordered[2]!.element).toMatchObject({ x: 300, y: 220 });
+    }
   });
 
   test("preserves existing layer order when updating element or screen properties", () => {
@@ -306,6 +367,21 @@ describe("operation history", () => {
     store.nudge({ x: 10, y: 10 });
     expect(commits).toHaveLength(0);
     expect(elements(store.getSnapshot().project)[0]).toMatchObject({ x: 10, y: 10, locked: true });
+  });
+
+  test("commits an alignment as one undoable project change", () => {
+    let initial = addElement(fixture(), "screen_operations", shape("first", 10, 10));
+    initial = addElement(initial, "screen_operations", shape("second", 200, 100));
+    const commits: Project[] = [];
+    const store = new EditorStore(initial, (project) => commits.push(project));
+    store.setSelection(["first", "second"]);
+    store.alignSelection("left");
+
+    expect(commits).toHaveLength(1);
+    expect(elements(store.getSnapshot().project).map((element) => element.x)).toEqual([10, 10]);
+    expect(store.getSnapshot().selectedElementIds).toEqual(["first", "second"]);
+    store.undo();
+    expect(elements(store.getSnapshot().project).map((element) => element.x)).toEqual([10, 200]);
   });
 
   test("keeps zoom when switching active decks and screens", () => {
