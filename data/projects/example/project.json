@@ -202,11 +202,34 @@
                 }
               },
               "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "shape_d88923ceef0c",
+                "x": 338,
+                "y": 2452,
+                "width": 660,
+                "height": 12,
+                "rotation": 0,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Line",
+                "shadow": null,
+                "type": "shape",
+                "shape": "line",
+                "fill": "#b0b0b0",
+                "stroke": "#d10000",
+                "strokeWidth": 40,
+                "radius": 0
+              },
+              "overflow": false
             }
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-06T15:39:52.957Z"
+          "updatedAt": "2026-08-09T12:15:54.581Z"
         },
         {
           "id": "screen_feature_cards",
@@ -292,10 +315,10 @@
                 "name": "Feature C card",
                 "shadow": {
                   "color": "#05060a",
-                  "blur": 30,
+                  "blur": 16,
                   "offsetX": 0,
-                  "offsetY": 14,
-                  "opacity": 0.2
+                  "offsetY": 8,
+                  "opacity": 0.24
                 },
                 "type": "shape",
                 "shape": "rounded-rectangle",
@@ -650,7 +673,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-06T15:39:47.639Z"
+          "updatedAt": "2026-08-09T12:15:26.786Z"
         },
         {
           "id": "screen_feature_a",
@@ -798,7 +821,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-06T15:39:47.639Z"
+          "updatedAt": "2026-08-09T12:11:44.152Z"
         },
         {
           "id": "screen_feature_grid",
@@ -1477,7 +1500,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-06T15:39:47.639Z"
+          "updatedAt": "2026-08-09T12:11:44.152Z"
         },
         {
           "id": "screen_mascot",
@@ -1845,7 +1868,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-06T15:39:47.640Z"
+          "updatedAt": "2026-08-09T12:11:44.152Z"
         },
         {
           "id": "screen_closing",
@@ -2033,13 +2056,13 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-06T15:39:47.640Z"
+          "updatedAt": "2026-08-09T12:11:44.152Z"
         }
       ],
       "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-06T15:39:52.958Z"
+      "updatedAt": "2026-08-09T12:15:54.582Z"
     }
   ],
   "createdAt": "2026-08-02T00:00:00.000Z",
-  "updatedAt": "2026-08-06T15:39:52.960Z"
+  "updatedAt": "2026-08-09T12:15:54.584Z"
 }
