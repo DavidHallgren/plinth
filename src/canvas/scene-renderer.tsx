@@ -117,6 +117,15 @@ function shadowProps(shadow: ResolvedElement["shadow"]): Record<string, unknown>
   };
 }
 
+export function shapeVisualProps(element: Extract<ResolvedElement, { type: "shape" }>): Record<string, unknown> {
+  return {
+    fill: element.fill,
+    stroke: element.stroke,
+    strokeWidth: element.strokeWidth,
+    ...shadowProps(element.shadow),
+  };
+}
+
 function elementPosition(screen: ResolvedScreen, element: ResolvedElement) {
   const height = element.type === "text" && element.style.autoHeight !== false
     ? Math.min(screen.height, calculateTextAutoHeight(element.text, element.width, element.style))
@@ -172,7 +181,7 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
     if (!interactive || element.locked) return;
     onMoveEnd(targetScreenId, element.id, event.target.x(), event.target.y());
   };
-  const baseProps = {
+  const elementNodeProps = {
     ...position,
     draggable,
     listening: interactive,
@@ -180,7 +189,6 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
     onTap: interactive ? handleTap : undefined,
     onDragStart: interactive ? handleDragStart : undefined,
     onDragEnd: interactive ? handleDragEnd : undefined,
-    ...shadowProps(element.shadow),
   };
   const registerNode = (node: Konva.Node | null) => register(targetScreenId, element.id, node);
 
@@ -188,7 +196,7 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
     const textShadow = element.style.shadow ?? element.shadow;
     const textHeight = position.height;
     return (
-      <Group {...baseProps} name={`element-${element.id}`} ref={registerNode}>
+      <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}>
         <Rect cornerRadius={element.style.backgroundRadius ?? 0} fill={element.style.backgroundColor ?? "transparent"} height={textHeight} listening={false} width={element.width} />
         <Text
           align={element.style.align}
@@ -211,19 +219,19 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
   }
 
   if (element.type === "shape") {
-    const shapeProps = { fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth };
+    const shapeProps = shapeVisualProps(element);
     if (element.shape === "ellipse") {
-      return <Group {...baseProps} name={`element-${element.id}`} ref={registerNode}><Ellipse {...shapeProps} radiusX={element.width / 2} radiusY={element.height / 2} x={element.width / 2} y={element.height / 2} /></Group>;
+      return <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}><Ellipse {...shapeProps} radiusX={element.width / 2} radiusY={element.height / 2} x={element.width / 2} y={element.height / 2} /></Group>;
     }
     if (element.shape === "line") {
-      return <Group {...baseProps} name={`element-${element.id}`} ref={registerNode}><Line {...shapeProps} points={[0, element.height / 2, element.width, element.height / 2]} /></Group>;
+      return <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}><Line {...shapeProps} points={[0, element.height / 2, element.width, element.height / 2]} /></Group>;
     }
-    return <Rect {...baseProps} cornerRadius={element.shape === "rounded-rectangle" ? element.radius : 0} name={`element-${element.id}`} ref={registerNode} stroke={element.stroke} strokeWidth={element.strokeWidth} fill={element.fill} />;
+    return <Rect {...elementNodeProps} {...shapeProps} cornerRadius={element.shape === "rounded-rectangle" ? element.radius : 0} name={`element-${element.id}`} ref={registerNode} />;
   }
 
   if (element.type === "image") {
     return (
-      <Group {...baseProps} name={`element-${element.id}`} ref={registerNode}>
+      <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}>
         <AssetImageLayer asset={assetFor(assets, element.assetPath)} assetPath={element.assetPath} cornerRadius={element.cornerRadius} fit={element.fit} height={element.height} label={`Missing ${element.assetPath}`} listening={interactive} position={element.position} projectSlug={projectSlug} width={element.width} />
       </Group>
     );

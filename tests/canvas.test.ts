@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Group, Layer } from "../src/canvas/react-konva";
 import { createDefaultProject } from "../src/lib/defaults";
 import { resolveScreen } from "../src/scene/selectors";
-import { SceneContents, SceneRenderer } from "../src/canvas/scene-renderer";
+import { SceneContents, SceneRenderer, shapeVisualProps } from "../src/canvas/scene-renderer";
 import { konvaFontStyle } from "../src/canvas/text-style";
 
 describe("Konva text styles", () => {
@@ -23,5 +23,25 @@ describe("scene renderer composition", () => {
 
     expect(SceneContents(props).type).toBe(Group);
     expect(SceneRenderer(props).type).toBe(Layer);
+  });
+
+  test("applies shape shadows to the drawable node props", () => {
+    const project = createDefaultProject("Shape shadow fixture");
+    const sourceScreen = project.decks[0]?.screens[0];
+    if (!sourceScreen) throw new Error("Missing shape shadow fixture screen.");
+    const shape = resolveScreen(project, sourceScreen.id).elements.find((element) => element.type === "shape");
+    if (!shape || shape.type !== "shape") throw new Error("Missing shape fixture.");
+    const shadow = { color: "#123456", blur: 12, offsetX: 4, offsetY: 6, opacity: 0.7 };
+
+    expect(shapeVisualProps({ ...shape, shape: "line", shadow })).toMatchObject({
+      fill: shape.fill,
+      stroke: shape.stroke,
+      strokeWidth: shape.strokeWidth,
+      shadowColor: shadow.color,
+      shadowBlur: shadow.blur,
+      shadowOffsetX: shadow.offsetX,
+      shadowOffsetY: shadow.offsetY,
+      shadowOpacity: shadow.opacity,
+    });
   });
 });

@@ -225,14 +225,16 @@ function TextControls({ element, projectFonts, fontBusy, onChangeTextFont, onUpl
 }
 
 function ShapeControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "shape" }>; onUpdate: (patch: ElementPatch) => void }) {
+  const isLine = element.shape === "line";
+  const isRoundedRectangle = element.shape === "rounded-rectangle";
   return (
     <Section title="Shape">
       <Field label="Type"><select className={selectClass} onChange={(event) => onUpdate({ shape: event.target.value as Extract<typeof element.shape, string> })} value={element.shape}><option value="rectangle">Rectangle</option><option value="rounded-rectangle">Rounded rectangle</option><option value="ellipse">Ellipse</option><option value="line">Line</option></select></Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Fill"><ColorField onChange={(fill) => { if (fill) onUpdate({ fill }); }} value={element.fill} /></Field>
-        <Field label="Stroke"><ColorField onChange={(stroke) => { if (stroke) onUpdate({ stroke }); }} value={element.stroke} /></Field>
+        {!isLine ? <Field label="Fill"><ColorField onChange={(fill) => { if (fill) onUpdate({ fill }); }} value={element.fill} /></Field> : null}
+        <Field label={isLine ? "Color" : "Stroke"}><ColorField onChange={(stroke) => { if (stroke) onUpdate({ stroke }); }} value={element.stroke} /></Field>
         <Field label="Stroke width"><NumberField min={0} onChange={(strokeWidth) => onUpdate({ strokeWidth })} value={element.strokeWidth} /></Field>
-        <Field label="Radius"><NumberField min={0} onChange={(radius) => onUpdate({ radius })} value={element.radius} /></Field>
+        {isRoundedRectangle ? <Field label="Radius"><NumberField min={0} onChange={(radius) => onUpdate({ radius })} value={element.radius} /></Field> : null}
       </div>
       <ShadowControls shadow={element.shadow} onChange={(shadow) => onUpdate({ shadow })} />
     </Section>
