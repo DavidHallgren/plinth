@@ -202,34 +202,11 @@
                 }
               },
               "overflow": false
-            },
-            {
-              "kind": "owned",
-              "element": {
-                "id": "shape_d88923ceef0c",
-                "x": 338,
-                "y": 2452,
-                "width": 660,
-                "height": 12,
-                "rotation": 0,
-                "opacity": 1,
-                "locked": false,
-                "visible": true,
-                "name": "Line",
-                "shadow": null,
-                "type": "shape",
-                "shape": "line",
-                "fill": "#b0b0b0",
-                "stroke": "#d10000",
-                "strokeWidth": 40,
-                "radius": 0
-              },
-              "overflow": false
             }
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:15:54.581Z"
+          "updatedAt": "2026-08-09T12:29:48.447Z"
         },
         {
           "id": "screen_feature_cards",
@@ -673,7 +650,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:15:26.786Z"
+          "updatedAt": "2026-08-09T12:29:48.447Z"
         },
         {
           "id": "screen_feature_a",
@@ -821,7 +798,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:11:44.152Z"
+          "updatedAt": "2026-08-09T12:29:48.448Z"
         },
         {
           "id": "screen_feature_grid",
@@ -1500,7 +1477,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:11:44.152Z"
+          "updatedAt": "2026-08-09T12:29:48.448Z"
         },
         {
           "id": "screen_mascot",
@@ -1868,7 +1845,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:11:44.152Z"
+          "updatedAt": "2026-08-09T12:29:48.448Z"
         },
         {
           "id": "screen_closing",
@@ -2056,13 +2033,13 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:11:44.152Z"
+          "updatedAt": "2026-08-09T12:29:48.448Z"
         }
       ],
       "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-09T12:15:54.582Z"
+      "updatedAt": "2026-08-09T12:29:48.448Z"
     }
   ],
   "createdAt": "2026-08-02T00:00:00.000Z",
-  "updatedAt": "2026-08-09T12:15:54.584Z"
+  "updatedAt": "2026-08-09T12:29:48.449Z"
 }
