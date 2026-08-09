@@ -7,6 +7,7 @@ import {
   addElement,
   alignElements,
   duplicateDeck,
+  groupElements,
   moveElements,
   removeScreen,
   reorderElements,
@@ -75,6 +76,17 @@ function ownerScreen(project: Project, elementId: string): string | undefined {
 }
 
 describe("screen overflow model", () => {
+  test("transfers grouped ownership as one unit", () => {
+    let project = fixture(2);
+    project = addElement(project, "screen_1", shape("first", { x: 280, width: 80 }));
+    project = addElement(project, "screen_1", shape("second", { x: 300, y: 120, width: 80 }));
+    project = groupElements(project, "screen_1", ["first", "second"], { id: "group_pair" });
+    project = moveElements(project, "screen_1", ["first", "second"], { x: 400, y: 0 });
+    expect(ownerScreen(project, "first")).toBe("screen_2");
+    expect(ownerScreen(project, "second")).toBe("screen_2");
+    expect(project.decks[0]?.groups[0]?.elementIds).toEqual(["first", "second"]);
+  });
+
   test("migrates v6 elements and z-order into canonical owned layers", () => {
     const project = fixture(1);
     const screen = project.decks[0]?.screens[0];

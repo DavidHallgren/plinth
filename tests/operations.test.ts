@@ -11,6 +11,7 @@ import {
   duplicateDeck,
   duplicateElements,
   duplicateScreen,
+  groupElements,
   moveElements,
   removeDeck,
   removeElements,
@@ -18,12 +19,14 @@ import {
   reorderDecks,
   reorderElements,
   reorderScreens,
+  renameGroup,
   replaceElement,
   resizeElement,
   updateScreen,
   updateElement,
   updateElements,
   updateDeck,
+  ungroupElements,
 } from "../src/scene/operations";
 import { elementAlignmentBounds } from "../src/scene/overflow";
 import { ProjectHistory } from "../src/scene/history";
@@ -117,6 +120,55 @@ describe("scene operations", () => {
     expect(duplicatedElements).toHaveLength(4);
     expect(new Set(duplicatedElements.map((element) => element.id)).size).toBe(4);
     expect(duplicatedElements.find((element) => element.name === "bottom copy")).toMatchObject({ x: 10, y: 10 });
+  });
+
+  test("groups flat layers contiguously and preserves the group through duplication", () => {
+    let project = fixture();
+    project = addElement(project, "screen_operations", shape("bottom", 0, 0));
+    project = addElement(project, "screen_operations", shape("middle", 20, 20));
+    project = addElement(project, "screen_operations", shape("top", 40, 40));
+    project = groupElements(project, "screen_operations", ["bottom", "top"], { id: "group_pair", name: "Pair" });
+    expect(elements(project).map((element) => element.id)).toEqual(["middle", "bottom", "top"]);
+    expect(project.decks[0]?.groups).toEqual([{ id: "group_pair", name: "Pair", elementIds: ["bottom", "top"] }]);
+
+    project = renameGroup(project, "group_pair", "Hero pair");
+    expect(renameGroup(project, "group_pair", "Hero pair")).toBe(project);
+    const duplicated = duplicateElements(project, "screen_operations", ["bottom", "top"]);
+    expect(duplicated.decks[0]?.groups).toHaveLength(2);
+    expect(duplicated.decks[0]?.groups[1]).toMatchObject({ name: "Hero pair copy" });
+    expect(new Set(duplicated.decks[0]?.groups[1]?.elementIds).size).toBe(2);
+
+    const ungrouped = ungroupElements(duplicated, "group_pair");
+    expect(ungrouped.decks[0]?.groups.map((group) => group.name)).toEqual(["Hero pair copy"]);
+  });
+
+  test("repairs or dissolves groups when members are deleted", () => {
+    let project = fixture();
+    project = addElement(project, "screen_operations", shape("first", 0, 0));
+    project = addElement(project, "screen_operations", shape("second", 20, 20));
+    project = addElement(project, "screen_operations", shape("third", 40, 40));
+    project = groupElements(project, "screen_operations", ["first", "second", "third"], { id: "group_three" });
+    project = removeElements(project, "screen_operations", ["first"]);
+    expect(project.decks[0]?.groups[0]?.elementIds).toEqual(["second", "third"]);
+    project = removeElements(project, "screen_operations", ["second"]);
+    expect(project.decks[0]?.groups).toEqual([]);
+  });
+
+  test("remaps groups when duplicating screens and decks", () => {
+    let project = fixture();
+    project = addElement(project, "screen_operations", shape("first", 0, 0));
+    project = addElement(project, "screen_operations", shape("second", 20, 20));
+    project = groupElements(project, "screen_operations", ["first", "second"], { id: "group_pair", name: "Pair" });
+    const screenCopy = duplicateScreen(project, "screen_operations");
+    const copiedScreen = screenCopy.decks[0]?.screens[1];
+    const copiedGroup = screenCopy.decks[0]?.groups[1];
+    expect(copiedGroup?.name).toBe("Pair copy");
+    expect(copiedGroup?.elementIds).toEqual(copiedScreen?.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : []));
+
+    const deckCopy = duplicateDeck(project, "deck_operations");
+    expect(deckCopy.decks[1]?.groups[0]?.name).toBe("Pair");
+    expect(deckCopy.decks[1]?.groups[0]?.id).not.toBe("group_pair");
+    expect(deckCopy.decks[1]?.groups[0]?.elementIds).not.toEqual(["first", "second"]);
   });
 
   test("normalizes negative resize transforms and clamps to fixed deck bounds", () => {
@@ -358,6 +410,49 @@ describe("scene operations", () => {
 });
 
 describe("operation history", () => {
+  test("selects persistent groups atomically and allows isolated child editing", () => {
+    let initial = addElement(fixture(), "screen_operations", shape("first", 10, 10));
+    initial = addElement(initial, "screen_operations", shape("second", 200, 100));
+    const store = new EditorStore(initial, () => undefined);
+    store.setSelection(["first", "second"]);
+    expect(store.canGroupSelection()).toBe(true);
+    store.groupSelection();
+    const group = store.getSnapshot().project.decks[0]?.groups[0];
+    if (!group) throw new Error("Missing layer group.");
+    expect(group?.elementIds).toEqual(["first", "second"]);
+    expect(store.getSnapshot().selectedGroupIds).toEqual([group.id]);
+
+    store.setSelection([]);
+    store.toggleSelection("first");
+    expect(store.getSnapshot().selectedElementIds).toEqual(["first", "second"]);
+    store.toggleSelection("first", false, true);
+    expect(store.getSnapshot()).toMatchObject({ selectedElementIds: ["first"], selectedGroupIds: [] });
+    expect(store.canGroupSelection()).toBe(false);
+
+    store.setSelection(["first", "second"]);
+    store.groupSelection();
+    expect(store.getSnapshot().project.decks[0]?.groups).toHaveLength(1);
+  });
+
+  test("duplicates and pastes complete groups while keeping locked groups atomic", () => {
+    let initial = addElement(fixture(), "screen_operations", shape("first", 10, 10));
+    initial = addElement(initial, "screen_operations", shape("second", 200, 100));
+    initial = groupElements(initial, "screen_operations", ["first", "second"], { id: "group_pair", name: "Pair" });
+    initial = updateElement(initial, "screen_operations", "second", { locked: true });
+    const store = new EditorStore(initial, () => undefined);
+    store.selectGroup("group_pair");
+    store.nudge({ x: 10, y: 0 });
+    expect(elements(store.getSnapshot().project).map((element) => element.x)).toEqual([10, 200]);
+
+    store.updateElement("second", { locked: false });
+    store.selectGroup("group_pair");
+    store.copy();
+    store.paste();
+    expect(store.getSnapshot().project.decks[0]?.groups).toHaveLength(2);
+    expect(store.getSnapshot().selectedGroupIds).toHaveLength(1);
+    expect(store.getSnapshot().selectedElementIds).toHaveLength(2);
+  });
+
   test("commits a completed editor gesture once for autosave", () => {
     const initial = addElement(fixture(), "screen_operations", shape("dragged", 10, 10));
     const commits: Project[] = [];

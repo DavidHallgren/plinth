@@ -19,13 +19,14 @@ export type SceneContentsProps = {
   projectSlug: string;
   assets: readonly AssetMetadata[];
   selectedElementIds?: readonly string[];
+  interactionLockedElementIds?: ReadonlySet<string>;
   interactive?: boolean;
   compact?: boolean;
   targetScreenId?: string;
   offsetX?: number;
   offsetY?: number;
   register?: (targetScreenId: string, elementId: string, node: Konva.Node | null) => void;
-  onSelect?: (targetScreenId: string, elementId: string, additive: boolean) => void;
+  onSelect?: (targetScreenId: string, elementId: string, additive: boolean, isolate?: boolean) => void;
   onClearSelection?: (targetScreenId: string) => void;
   onGestureStart?: (label: string, targetScreenId: string) => void;
   onMoveEnd?: (targetScreenId: string, elementId: string, x: number, y: number) => void;
@@ -150,17 +151,18 @@ type ElementNodeProps = {
   projectSlug: string;
   assets: readonly AssetMetadata[];
   selected: boolean;
+  interactionLocked: boolean;
   interactive: boolean;
   targetScreenId: string;
   register: (targetScreenId: string, elementId: string, node: Konva.Node | null) => void;
-  onSelect: (targetScreenId: string, elementId: string, additive: boolean) => void;
+  onSelect: (targetScreenId: string, elementId: string, additive: boolean, isolate?: boolean) => void;
   onGestureStart: (label: string, targetScreenId: string) => void;
   onMoveEnd: (targetScreenId: string, elementId: string, x: number, y: number) => void;
 };
 
-function ElementNode({ screen, element, projectSlug, assets, selected, interactive, targetScreenId, register, onSelect, onGestureStart, onMoveEnd }: ElementNodeProps) {
+function ElementNode({ screen, element, projectSlug, assets, selected, interactionLocked, interactive, targetScreenId, register, onSelect, onGestureStart, onMoveEnd }: ElementNodeProps) {
   if (!element.visible) return null;
-  const draggable = interactive && !element.locked;
+  const draggable = interactive && !element.locked && !interactionLocked;
   const position = elementPosition(screen, element);
   const handleSelect = (event: KonvaEventObject<MouseEvent>) => {
     if (!interactive) return;
@@ -172,13 +174,18 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
     event.cancelBubble = true;
     onSelect(targetScreenId, element.id, event.evt.shiftKey);
   };
+  const handleIsolate = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!interactive) return;
+    event.cancelBubble = true;
+    onSelect(targetScreenId, element.id, false, true);
+  };
   const handleDragStart = () => {
-    if (!interactive || element.locked) return;
+    if (!interactive || element.locked || interactionLocked) return;
     if (!selected) onSelect(targetScreenId, element.id, false);
     onGestureStart("Move selection", targetScreenId);
   };
   const handleDragEnd = (event: KonvaEventObject<DragEvent>) => {
-    if (!interactive || element.locked) return;
+    if (!interactive || element.locked || interactionLocked) return;
     onMoveEnd(targetScreenId, element.id, event.target.x(), event.target.y());
   };
   const elementNodeProps = {
@@ -187,6 +194,8 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
     listening: interactive,
     onClick: interactive ? handleSelect : undefined,
     onTap: interactive ? handleTap : undefined,
+    onDblClick: interactive ? handleIsolate : undefined,
+    onDblTap: interactive ? handleIsolate : undefined,
     onDragStart: interactive ? handleDragStart : undefined,
     onDragEnd: interactive ? handleDragEnd : undefined,
   };
@@ -325,7 +334,7 @@ function CameraDefinition({ geometry }: { geometry: ReturnType<typeof calculateD
   return <Ellipse fill="#05060a" listening={false} radiusX={geometry.camera.width / 2} radiusY={geometry.camera.height / 2} x={geometry.camera.x + geometry.camera.width / 2} y={geometry.camera.y + geometry.camera.height / 2} />;
 }
 
-export function SceneContents({ screen, projectSlug, assets, selectedElementIds = [], interactive = false, compact = false, targetScreenId = screen.id, offsetX = 0, offsetY = 0, register = () => undefined, onSelect = () => undefined, onClearSelection = () => undefined, onGestureStart = () => undefined, onMoveEnd = () => undefined, children }: SceneContentsProps) {
+export function SceneContents({ screen, projectSlug, assets, selectedElementIds = [], interactionLockedElementIds = new Set(), interactive = false, compact = false, targetScreenId = screen.id, offsetX = 0, offsetY = 0, register = () => undefined, onSelect = () => undefined, onClearSelection = () => undefined, onGestureStart = () => undefined, onMoveEnd = () => undefined, children }: SceneContentsProps) {
   const selectedSet = new Set(selectedElementIds);
   const orderedElements = [...screen.elements].sort((left, right) => left.renderOrder - right.renderOrder);
   return (
@@ -336,6 +345,7 @@ export function SceneContents({ screen, projectSlug, assets, selectedElementIds 
           assets={assets}
           element={element}
           interactive={interactive}
+          interactionLocked={interactionLockedElementIds.has(element.id)}
           key={`${targetScreenId}:${element.id}`}
           onGestureStart={onGestureStart}
           onMoveEnd={onMoveEnd}

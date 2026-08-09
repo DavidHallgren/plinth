@@ -36,7 +36,11 @@ export function removeAssetUsages(project: Project, assetPath: AssetPath, remove
     });
     if (!deckChanged) return deck;
     projectChanged = true;
-    return { ...deck, screens, updatedAt };
+    const groups = deck.groups.flatMap((group) => {
+      const elementIds = group.elementIds.filter((elementId) => !removedIds.has(elementId));
+      return elementIds.length >= 2 ? [{ ...group, elementIds }] : [];
+    });
+    return { ...deck, groups, screens, updatedAt };
   });
   const assets = removeAsset ? project.assets.filter((asset) => asset.path !== assetPath) : project.assets;
   if (!projectChanged && assets.length === project.assets.length) return project;

@@ -8,6 +8,7 @@ import {
   EyeOff,
   FilePlus2,
   GripVertical,
+  Group as GroupIcon,
   Image,
   Link2,
   Lock,
@@ -18,10 +19,11 @@ import {
   RectangleHorizontal,
   Trash2,
   Type,
+  Ungroup,
   Unlock,
 } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
-import type { AssetMetadata, Deck, Project, SceneElement } from "../../lib/schema";
+import type { AssetMetadata, Deck, LayerGroup, Project, SceneElement } from "../../lib/schema";
 import { resolveDeckScreen } from "../../scene/overflow";
 import { ScreenThumbnail } from "../editor/screen-thumbnail";
 import { Button } from "../ui/button";
@@ -32,6 +34,8 @@ type ScreenNavigatorProps = {
   activeDeckId: string;
   activeScreenId: string;
   selectedElementIds: readonly string[];
+  selectedGroupIds: readonly string[];
+  canGroupSelection: boolean;
   assets: readonly AssetMetadata[];
   onSelectDeck: (deckId: string) => void;
   onAddDeck: () => void;
@@ -45,7 +49,13 @@ type ScreenNavigatorProps = {
   onDeleteScreen: (screenId: string) => void;
   onMoveScreen: (screenId: string, direction: -1 | 1) => void;
   onReorderScreen: (screenId: string, targetIndex: number) => void;
-  onSelectLayer: (elementId: string, additive: boolean) => void;
+  onSelectLayer: (elementId: string, additive: boolean, isolate?: boolean) => void;
+  onSelectGroup: (groupId: string, additive: boolean) => void;
+  onGroupSelection: () => void;
+  onUngroup: (groupId: string) => void;
+  onRenameGroup: (groupId: string, name: string) => void;
+  onDuplicateGroup: (groupId: string) => void;
+  onDeleteGroup: (groupId: string) => void;
   onRenameElement: (elementId: string, name: string) => void;
   onToggleVisible: (element: SceneElement) => void;
   onToggleLocked: (element: SceneElement) => void;
@@ -66,14 +76,17 @@ function navigatorRowState(selected: boolean) {
   return selected ? NAVIGATOR_ROW_SELECTED : NAVIGATOR_ROW_IDLE;
 }
 
-export function ScreenNavigator({ project, activeDeckId, activeScreenId, selectedElementIds, assets, onSelectDeck, onAddDeck, onEditDeck, onDuplicateDeck, onDeleteDeck, onMoveDeck, onSelectScreen, onAddScreen, onDuplicateScreen, onDeleteScreen, onMoveScreen, onReorderScreen, onSelectLayer, onRenameElement, onToggleVisible, onToggleLocked, onDuplicateElement, onDeleteElement, onMoveLayer, onReorderLayer, onGoToOwner }: ScreenNavigatorProps) {
+export function ScreenNavigator({ project, activeDeckId, activeScreenId, selectedElementIds, selectedGroupIds, canGroupSelection, assets, onSelectDeck, onAddDeck, onEditDeck, onDuplicateDeck, onDeleteDeck, onMoveDeck, onSelectScreen, onAddScreen, onDuplicateScreen, onDeleteScreen, onMoveScreen, onReorderScreen, onSelectLayer, onSelectGroup, onGroupSelection, onUngroup, onRenameGroup, onDuplicateGroup, onDeleteGroup, onRenameElement, onToggleVisible, onToggleLocked, onDuplicateElement, onDeleteElement, onMoveLayer, onReorderLayer, onGoToOwner }: ScreenNavigatorProps) {
   const activeDeck = project.decks.find((deck) => deck.id === activeDeckId) ?? project.decks[0];
   const activeScreen = activeDeck?.screens.find((screen) => screen.id === activeScreenId) ?? activeDeck?.screens[0];
   const [decksOpen, setDecksOpen] = useState(true);
   const [layersOpen, setLayersOpen] = useState(true);
   const [screenDropTarget, setScreenDropTarget] = useState<{ id: string; edge: DropEdge } | null>(null);
   const [layerDropTarget, setLayerDropTarget] = useState<{ id: string; edge: DropEdge } | null>(null);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set());
   const resolvedById = new Map(activeDeck && activeScreen ? resolveDeckScreen(activeDeck, activeScreen.id).map((element) => [element.id, element]) : []);
+  const groupsByElementId = new Map(activeDeck?.groups.flatMap((group) => group.elementIds.map((elementId) => [elementId, group] as const)) ?? []);
+  const renderedGroupIds = new Set<string>();
 
   return (
     <aside className="flex min-h-0 w-[276px] shrink-0 flex-col border-r border-white/[0.08] bg-[#171717]" onDragEnd={() => { setScreenDropTarget(null); setLayerDropTarget(null); }} onDragOver={(event) => { if (event.dataTransfer.types.includes(SCREEN_DRAG_TYPE)) setLayerDropTarget(null); if (event.dataTransfer.types.includes(LAYER_DRAG_TYPE)) setScreenDropTarget(null); }}>
@@ -97,13 +110,29 @@ export function ScreenNavigator({ project, activeDeckId, activeScreenId, selecte
         </section>
 
         <section className="flex min-h-0 flex-1 flex-col p-3">
-          <button className="flex w-full shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted hover:text-ink" onClick={() => setLayersOpen((open) => !open)} type="button">
-            {layersOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Focused layers <span className="ml-auto normal-case tracking-normal text-[10px] text-muted/60">{activeScreen.layers.length}</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button className="flex min-w-0 flex-1 shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted hover:text-ink" onClick={() => setLayersOpen((open) => !open)} type="button">
+              {layersOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Layers
+            </button>
+            <Button aria-label="Group selected layers" disabled={!canGroupSelection} onClick={onGroupSelection} size="icon" tooltip="Group selected layers (⌘G)" variant="ghost"><GroupIcon size={14} /></Button>
+          </div>
           {layersOpen ? <div className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">{[...activeScreen.layers].reverse().map((layer, displayIndex) => {
             const actualIndex = activeScreen.layers.length - 1 - displayIndex;
             const resolved = layer.kind === "owned" ? layer.element : resolvedById.get(layer.elementId);
             if (!resolved) return null;
+            const layerGroup = layer.kind === "owned" ? groupsByElementId.get(resolved.id) : undefined;
+            if (layerGroup) {
+              if (renderedGroupIds.has(layerGroup.id)) return null;
+              renderedGroupIds.add(layerGroup.id);
+              const members = layerGroup.elementIds.flatMap((elementId) => {
+                const memberLayerIndex = activeScreen.layers.findIndex((candidate) => candidate.kind === "owned" && candidate.element.id === elementId);
+                const member = resolvedById.get(elementId);
+                return member && memberLayerIndex >= 0 ? [{ element: member, actualIndex: memberLayerIndex }] : [];
+              }).reverse();
+              const representativeId = members[0]?.element.id;
+              if (!representativeId) return null;
+              return <GroupRow actualIndex={members[0]!.actualIndex} collapsed={collapsedGroupIds.has(layerGroup.id)} dropEdge={layerDropTarget?.id === representativeId ? layerDropTarget.edge : null} group={layerGroup} key={layerGroup.id} onCollapse={() => setCollapsedGroupIds((current) => { const next = new Set(current); next.has(layerGroup.id) ? next.delete(layerGroup.id) : next.add(layerGroup.id); return next; })} onDelete={onDeleteGroup} onDragFinished={() => setLayerDropTarget(null)} onDropTarget={(edge) => setLayerDropTarget((current) => current?.id === representativeId && current.edge === edge ? current : { id: representativeId, edge })} onDuplicate={onDuplicateGroup} onMove={onMoveLayer} onRename={onRenameGroup} onReorder={onReorderLayer} onSelect={onSelectGroup} onUngroup={onUngroup} representativeId={representativeId} selected={selectedGroupIds.includes(layerGroup.id)}>{members.map((member) => <LayerRow actualIndex={member.actualIndex} dropEdge={null} element={member.element} isLink={false} key={member.element.id} nested onDelete={onDeleteElement} onDragFinished={() => setLayerDropTarget(null)} onDropTarget={() => undefined} onDuplicate={onDuplicateElement} onGoToOwner={onGoToOwner} onMove={onMoveLayer} onRename={onRenameElement} onReorder={onReorderLayer} onSelect={onSelectLayer} onToggleLocked={onToggleLocked} onToggleVisible={onToggleVisible} selected={selectedElementIds.includes(member.element.id)} total={activeScreen.layers.length} />)}</GroupRow>;
+            }
             return <LayerRow actualIndex={actualIndex} dropEdge={layerDropTarget?.id === resolved.id ? layerDropTarget.edge : null} element={resolved} isLink={layer.kind === "overflow-link"} key={`${activeScreen.id}:${layer.kind}:${layer.kind === "owned" ? layer.element.id : `${layer.ownerScreenId}:${layer.elementId}`}`} linkOwner={layer.kind === "overflow-link" ? activeDeck.screens.find((screen) => screen.id === layer.ownerScreenId) : undefined} onDelete={onDeleteElement} onDragFinished={() => setLayerDropTarget(null)} onDropTarget={(edge) => setLayerDropTarget((current) => current?.id === resolved.id && current.edge === edge ? current : { id: resolved.id, edge })} onDuplicate={onDuplicateElement} onGoToOwner={onGoToOwner} onMove={onMoveLayer} onRename={onRenameElement} onReorder={onReorderLayer} onSelect={onSelectLayer} onToggleLocked={onToggleLocked} onToggleVisible={onToggleVisible} selected={selectedElementIds.includes(resolved.id)} total={activeScreen.layers.length} />;
           })}{activeScreen.layers.length === 0 ? <p className="px-2 py-8 text-center text-xs text-muted">Add text, a shape, an image, or a frame to begin.</p> : null}</div> : null}
         </section>
@@ -122,7 +151,27 @@ function ScreenRow({ deck, screen, index, total, selected, assets, projectSlug, 
   return <div className={`group relative flex items-center gap-1 rounded-lg border px-1 py-1 transition-opacity ${dragging ? "opacity-40" : ""} ${navigatorRowState(selected)}`} onDragOver={(event) => { if (!event.dataTransfer.types.includes(SCREEN_DRAG_TYPE)) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; onDropTarget(dropEdgeForEvent(event)); }} onDrop={(event) => { event.preventDefault(); const dragged = event.dataTransfer.getData(SCREEN_DRAG_TYPE); const edge = dropEdgeForEvent(event); onDragFinished(); if (dragged && dragged !== screen.id) onReorder(dragged, index + (edge === "after" ? 1 : 0)); }}>{dropEdge ? <DropIndicator edge={dropEdge} /> : null}<button aria-label={`Drag to reorder ${screen.name}`} className="plinth-focus-ring grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-muted/60 hover:bg-white/[0.06] hover:text-muted active:cursor-grabbing" draggable onDragEnd={() => { setDragging(false); onDragFinished(); }} onDragStart={(event) => { setDragging(true); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(SCREEN_DRAG_TYPE, screen.id); }} onKeyDown={(event) => { if (event.key === "ArrowUp" && index > 0) { event.preventDefault(); onMove(screen.id, -1); } else if (event.key === "ArrowDown" && index < total - 1) { event.preventDefault(); onMove(screen.id, 1); } }} title="Drag to reorder; use arrow keys for keyboard reordering" type="button"><GripVertical size={14} /></button><button className="flex min-w-0 flex-1 items-center gap-2 px-1 text-left" onClick={() => onSelect(screen.id)} type="button"><span className={`grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-md border ${selected ? "border-accent/30 bg-accent/15" : "border-white/10 bg-black/15"}`}><ScreenThumbnail assets={assets} projectSlug={projectSlug} screen={resolved} /></span><span className="min-w-0 flex-1"><span className={`block truncate text-xs font-medium ${selected ? "text-accent-soft" : "text-ink/80"}`}>{screen.name}</span></span></button><OverflowMenu ariaLabel={`More actions for ${screen.name}`} widthClass="w-32"><MenuAction icon={<Copy size={12} />} label="Duplicate" onClick={() => onDuplicate(screen.id)} /><MenuAction danger icon={<Trash2 size={12} />} label="Delete" onClick={() => onDelete(screen.id)} /></OverflowMenu></div>;
 }
 
-function LayerRow({ element, isLink, linkOwner, selected, actualIndex, total, dropEdge, onSelect, onRename, onToggleVisible, onToggleLocked, onDuplicate, onDelete, onMove, onReorder, onGoToOwner, onDropTarget, onDragFinished }: { element: SceneElement; isLink: boolean; linkOwner?: Deck["screens"][number]; selected: boolean; actualIndex: number; total: number; dropEdge: DropEdge | null; onSelect: (id: string, additive: boolean) => void; onRename: (id: string, name: string) => void; onToggleVisible: (element: SceneElement) => void; onToggleLocked: (element: SceneElement) => void; onDuplicate: (id: string) => void; onDelete: (id: string) => void; onMove: (id: string, direction: -1 | 1) => void; onReorder: (id: string, targetIndex: number) => void; onGoToOwner: (ownerScreenId: string, elementId: string) => void; onDropTarget: (edge: DropEdge) => void; onDragFinished: () => void }) {
+function GroupRow({ group, representativeId, selected, collapsed, actualIndex, dropEdge, children, onSelect, onCollapse, onRename, onUngroup, onDuplicate, onDelete, onMove, onReorder, onDropTarget, onDragFinished }: { group: LayerGroup; representativeId: string; selected: boolean; collapsed: boolean; actualIndex: number; dropEdge: DropEdge | null; children: ReactNode; onSelect: (id: string, additive: boolean) => void; onCollapse: () => void; onRename: (id: string, name: string) => void; onUngroup: (id: string) => void; onDuplicate: (id: string) => void; onDelete: (id: string) => void; onMove: (id: string, direction: -1 | 1) => void; onReorder: (id: string, targetIndex: number) => void; onDropTarget: (edge: DropEdge) => void; onDragFinished: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(group.name);
+  const commitName = () => {
+    const name = draftName.trim();
+    if (name && name !== group.name) onRename(group.id, name);
+    setEditing(false);
+  };
+  return <div className="space-y-0.5">
+    <div className={`group relative flex items-center gap-1 rounded-md border px-1 py-0.5 ${navigatorRowState(selected)}`} onDragOver={(event) => { if (!event.dataTransfer.types.includes(LAYER_DRAG_TYPE)) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; onDropTarget(dropEdgeForEvent(event)); }} onDrop={(event) => { event.preventDefault(); const dragged = event.dataTransfer.getData(LAYER_DRAG_TYPE); const edge = dropEdgeForEvent(event); onDragFinished(); if (dragged && dragged !== representativeId) onReorder(dragged, actualIndex + (edge === "before" ? 1 : 0)); }}>
+      {dropEdge ? <DropIndicator edge={dropEdge} /> : null}
+      <button aria-label={`Drag to reorder ${group.name}`} className="plinth-focus-ring grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-muted/60 hover:bg-white/[0.06] hover:text-muted" draggable onDragEnd={onDragFinished} onDragStart={(event) => { onSelect(group.id, false); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData(LAYER_DRAG_TYPE, representativeId); }} onKeyDown={(event) => { if (event.key === "ArrowUp") { event.preventDefault(); onMove(representativeId, 1); } else if (event.key === "ArrowDown") { event.preventDefault(); onMove(representativeId, -1); } }} type="button"><GripVertical size={14} /></button>
+      <button aria-label={collapsed ? `Expand ${group.name}` : `Collapse ${group.name}`} className="grid h-7 w-5 shrink-0 place-items-center text-muted" onClick={onCollapse} type="button">{collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}</button>
+      {editing ? <input aria-label={`Rename ${group.name}`} autoFocus className="h-6 min-w-0 flex-1 rounded border border-accent/40 bg-black/20 px-1 text-xs text-ink outline-none" onBlur={commitName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); else if (event.key === "Escape") { setDraftName(group.name); setEditing(false); } }} value={draftName} /> : <button className="min-w-0 flex-1 text-left" onClick={(event) => onSelect(group.id, event.shiftKey)} onDoubleClick={(event) => { event.preventDefault(); if (!selected) onSelect(group.id, false); setDraftName(group.name); setEditing(true); }} type="button"><span className="block truncate text-xs font-medium text-ink/90">{group.name}</span></button>}
+      <OverflowMenu ariaLabel={`More actions for ${group.name}`} widthClass="w-36"><MenuAction icon={<Pencil size={12} />} label="Rename" onClick={() => { setDraftName(group.name); setEditing(true); }} /><MenuAction icon={<Ungroup size={12} />} label="Ungroup" onClick={() => onUngroup(group.id)} /><MenuAction icon={<Copy size={12} />} label="Duplicate" onClick={() => onDuplicate(group.id)} /><MenuAction danger icon={<Trash2 size={12} />} label="Delete" onClick={() => onDelete(group.id)} /></OverflowMenu>
+    </div>
+    {!collapsed ? <div className="space-y-0.5 border-l border-white/10 pl-2">{children}</div> : null}
+  </div>;
+}
+
+function LayerRow({ element, isLink, linkOwner, selected, nested = false, actualIndex, total, dropEdge, onSelect, onRename, onToggleVisible, onToggleLocked, onDuplicate, onDelete, onMove, onReorder, onGoToOwner, onDropTarget, onDragFinished }: { element: SceneElement; isLink: boolean; linkOwner?: Deck["screens"][number]; selected: boolean; nested?: boolean; actualIndex: number; total: number; dropEdge: DropEdge | null; onSelect: (id: string, additive: boolean, isolate?: boolean) => void; onRename: (id: string, name: string) => void; onToggleVisible: (element: SceneElement) => void; onToggleLocked: (element: SceneElement) => void; onDuplicate: (id: string) => void; onDelete: (id: string) => void; onMove: (id: string, direction: -1 | 1) => void; onReorder: (id: string, targetIndex: number) => void; onGoToOwner: (ownerScreenId: string, elementId: string) => void; onDropTarget: (edge: DropEdge) => void; onDragFinished: () => void }) {
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [draftName, setDraftName] = useState(element.name);
@@ -144,7 +193,7 @@ function LayerRow({ element, isLink, linkOwner, selected, actualIndex, total, dr
   };
   return (
     <div
-      className={`group relative flex items-center gap-1 rounded-md border px-1 py-0.5 transition-opacity ${dragging ? "opacity-40" : ""} ${navigatorRowState(selected)}`}
+      className={`group relative flex items-center gap-1 rounded-md border px-1 py-0.5 transition-opacity ${nested ? "bg-black/10" : ""} ${dragging ? "opacity-40" : ""} ${navigatorRowState(selected)}`}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes(LAYER_DRAG_TYPE)) return;
         event.preventDefault();
@@ -191,7 +240,7 @@ function LayerRow({ element, isLink, linkOwner, selected, actualIndex, total, dr
           value={draftName}
         />
       ) : (
-        <button className="min-w-0 flex-1 text-left" onClick={(event) => onSelect(element.id, event.shiftKey)} type="button"><span className="block truncate text-xs text-ink/85">{element.name}</span></button>
+        <button className="min-w-0 flex-1 text-left" onClick={(event) => onSelect(element.id, event.shiftKey)} onDoubleClick={(event) => { event.preventDefault(); onSelect(element.id, false, true); }} type="button"><span className="block truncate text-xs text-ink/85">{element.name}</span></button>
       )}
       {isLink ? (
         <Button aria-label={`Go to owner of ${element.name}`} onClick={() => linkOwner && onGoToOwner(linkOwner.id, element.id)} size="icon" tooltip="Go to owner" variant="ghost"><Link2 size={12} /></Button>

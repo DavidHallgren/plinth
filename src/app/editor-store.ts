@@ -1,30 +1,34 @@
 import { createId } from "../lib/ids";
-import type { Project, SceneElement, Screen, ScreenPreset } from "../lib/schema";
+import type { LayerGroup, Project, SceneElement, Screen, ScreenPreset } from "../lib/schema";
 import {
   addElement,
   adjustElements,
   alignElements,
   distributeElements,
   duplicateElements,
+  groupElements,
   moveElements,
+  renameGroup,
   removeElements,
   reorderElements,
   resizeElement,
   updateElement,
   updateElements,
+  ungroupElements,
 } from "../scene/element-operations";
 import type { ElementAdjustment, ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput } from "../scene/element-operations";
 import { addDeck, addScreen, duplicateDeck, duplicateScreen, removeDeck, removeScreen, reorderDecks, reorderScreens, updateDeck, updateScreen } from "../scene/structure-operations";
 import type { AddDeckOptions, AddScreenOptions, DeckPatch, ScreenPatch } from "../scene/structure-operations";
 import { toggleElementOverflow, transferElementOwnership } from "../scene/overflow-operations";
 import { ProjectHistory, type ProjectOperation } from "../scene/history";
-import { resolveScreen } from "../scene/selectors";
+import { resolveScreen, selectGroupForElement } from "../scene/selectors";
 
 export type EditorSnapshot = {
   project: Project;
   activeDeckId: string;
   activeScreenId: string;
   selectedElementIds: string[];
+  selectedGroupIds: string[];
   zoom: number;
   clipboardCount: number;
   canUndo: boolean;
@@ -40,6 +44,7 @@ export class EditorStore {
   private commit: ProjectCommit;
   private snapshot: EditorSnapshot;
   private clipboard: SceneElement[] = [];
+  private clipboardGroups: Array<Pick<LayerGroup, "name" | "elementIds">> = [];
   private transactionBefore: Project | null = null;
 
   constructor(project: Project, onCommit: ProjectCommit) {
@@ -51,6 +56,7 @@ export class EditorStore {
       activeDeckId: deck?.id ?? "",
       activeScreenId: deck?.screens[0]?.id ?? "",
       selectedElementIds: [],
+      selectedGroupIds: [],
       zoom: 0.45,
       clipboardCount: 0,
       canUndo: false,
@@ -95,6 +101,7 @@ export class EditorStore {
       activeDeckId,
       activeScreenId,
       selectedElementIds: this.validSelection(project, activeScreenId, this.snapshot.selectedElementIds),
+      selectedGroupIds: this.validGroupSelection(project, activeScreenId, this.snapshot.selectedGroupIds, this.snapshot.selectedElementIds),
       canUndo: this.history.canUndo,
       canRedo: this.history.canRedo,
       isInTransaction: false,
@@ -104,13 +111,13 @@ export class EditorStore {
   setActiveDeck(deckId: string): void {
     const deck = this.history.project.decks.find((candidate) => candidate.id === deckId);
     if (!deck) return;
-    this.updateSnapshot({ activeDeckId: deckId, activeScreenId: deck.screens[0]?.id ?? "", selectedElementIds: [] });
+    this.updateSnapshot({ activeDeckId: deckId, activeScreenId: deck.screens[0]?.id ?? "", selectedElementIds: [], selectedGroupIds: [] });
   }
 
   setActiveScreen(screenId: string): void {
     for (const deck of this.history.project.decks) {
       if (deck.screens.some((screen) => screen.id === screenId)) {
-        this.updateSnapshot({ activeDeckId: deck.id, activeScreenId: screenId, selectedElementIds: [] });
+        this.updateSnapshot({ activeDeckId: deck.id, activeScreenId: screenId, selectedElementIds: [], selectedGroupIds: [] });
         return;
       }
     }
@@ -121,14 +128,36 @@ export class EditorStore {
   }
 
   setSelection(elementIds: readonly string[]): void {
-    this.updateSnapshot({ selectedElementIds: this.validSelection(this.history.project, this.snapshot.activeScreenId, elementIds) });
+    this.updateSnapshot({ selectedElementIds: this.validSelection(this.history.project, this.snapshot.activeScreenId, elementIds), selectedGroupIds: [] });
   }
 
-  toggleSelection(elementId: string, additive = false): void {
+  toggleSelection(elementId: string, additive = false, isolate = false): void {
+    const deck = this.activeDeck();
+    const available = new Set(resolveScreen(this.history.project, this.snapshot.activeScreenId).elements.map((element) => element.id));
+    const owned = new Set(this.activeScreen()?.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : []) ?? []);
+    const group = !isolate && deck ? selectGroupForElement(deck, elementId) : undefined;
+    const selectableGroup = group?.elementIds.every((memberId) => available.has(memberId) && owned.has(memberId)) ? group : undefined;
+    const ids = selectableGroup?.elementIds ?? [elementId];
     const selected = new Set(additive ? this.snapshot.selectedElementIds : []);
-    if (selected.has(elementId)) selected.delete(elementId);
-    else selected.add(elementId);
-    this.setSelection([...selected]);
+    const selectedGroups = new Set(additive ? this.snapshot.selectedGroupIds : []);
+    const removing = ids.every((id) => selected.has(id));
+    ids.forEach((id) => removing ? selected.delete(id) : selected.add(id));
+    if (selectableGroup) removing ? selectedGroups.delete(selectableGroup.id) : selectedGroups.add(selectableGroup.id);
+    this.updateSnapshot({
+      selectedElementIds: this.validSelection(this.history.project, this.snapshot.activeScreenId, [...selected]),
+      selectedGroupIds: [...selectedGroups],
+    });
+  }
+
+  selectGroup(groupId: string, additive = false): void {
+    const group = this.activeDeck()?.groups.find((candidate) => candidate.id === groupId);
+    if (!group) return;
+    const selected = new Set(additive ? this.snapshot.selectedElementIds : []);
+    const selectedGroups = new Set(additive ? this.snapshot.selectedGroupIds : []);
+    const removing = group.elementIds.every((id) => selected.has(id));
+    group.elementIds.forEach((id) => removing ? selected.delete(id) : selected.add(id));
+    removing ? selectedGroups.delete(group.id) : selectedGroups.add(group.id);
+    this.updateSnapshot({ selectedElementIds: [...selected], selectedGroupIds: [...selectedGroups] });
   }
 
   selectAll(): void {
@@ -145,6 +174,7 @@ export class EditorStore {
     this.updateSnapshot({
       project,
       selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds),
+      selectedGroupIds: this.validGroupSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedGroupIds, this.snapshot.selectedElementIds),
       canUndo: this.history.canUndo,
       canRedo: this.history.canRedo,
     });
@@ -176,7 +206,7 @@ export class EditorStore {
     const before = this.history.project;
     const project = this.history.undo();
     if (project === before) return;
-    this.updateSnapshot({ project, selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds), canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
+    this.updateSnapshot({ project, selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds), selectedGroupIds: this.validGroupSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedGroupIds, this.snapshot.selectedElementIds), canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
     this.commit(project);
   }
 
@@ -185,13 +215,16 @@ export class EditorStore {
     const before = this.history.project;
     const project = this.history.redo();
     if (project === before) return;
-    this.updateSnapshot({ project, selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds), canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
+    this.updateSnapshot({ project, selectedElementIds: this.validSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds), selectedGroupIds: this.validGroupSelection(project, this.snapshot.activeScreenId, this.snapshot.selectedGroupIds, this.snapshot.selectedElementIds), canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
     this.commit(project);
   }
 
   copy(): void {
     const screen = resolveScreen(this.history.project, this.snapshot.activeScreenId);
     const selected = screen.elements.filter((element) => this.snapshot.selectedElementIds.includes(element.id));
+    const selectedIds = new Set(selected.map((element) => element.id));
+    const ownedIds = new Set(this.activeScreen()?.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : []) ?? []);
+    this.clipboardGroups = (this.activeDeck()?.groups ?? []).filter((group) => group.elementIds.every((elementId) => selectedIds.has(elementId) && ownedIds.has(elementId))).map((group) => ({ name: group.name, elementIds: [...group.elementIds] }));
     this.clipboard = selected.map((element) => {
       const {
         ownerScreenId: _ownerScreenId,
@@ -208,13 +241,46 @@ export class EditorStore {
   paste(): void {
     if (this.clipboard.length === 0) return;
     const screenId = this.snapshot.activeScreenId;
-    const clipboard = this.clipboard.map((element) => ({ ...element, id: createId(element.type) }));
-    this.apply("Paste", (project) => clipboard.reduce((current, element, index) => addElement(current, screenId, {
-      ...element,
-      x: element.x + 24 + index * 8,
-      y: element.y + 24 + index * 8,
-    }), project));
+    const idMap = new Map(this.clipboard.map((element) => [element.id, createId(element.type)]));
+    const clipboard = this.clipboard.map((element) => ({ ...element, id: idMap.get(element.id)! }));
+    this.apply("Paste", (project) => {
+      const withElements = clipboard.reduce((current, element, index) => addElement(current, screenId, {
+        ...element,
+        x: element.x + 24 + index * 8,
+        y: element.y + 24 + index * 8,
+      }), project);
+      return this.clipboardGroups.reduce((current, group) => groupElements(current, screenId, group.elementIds.map((elementId) => idMap.get(elementId)!), { name: group.name }), withElements);
+    });
     this.setSelection(clipboard.map((element) => element.id));
+    const pastedGroups = this.activeDeck()?.groups.filter((group) => group.elementIds.every((elementId) => clipboard.some((element) => element.id === elementId))).map((group) => group.id) ?? [];
+    if (pastedGroups.length > 0) this.updateSnapshot({ selectedGroupIds: pastedGroups });
+  }
+
+  canGroupSelection(): boolean {
+    const ids = this.snapshot.selectedElementIds;
+    if (ids.length < 2 || this.snapshot.selectedGroupIds.length > 0) return false;
+    const owned = new Set(this.activeScreen()?.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : []) ?? []);
+    const grouped = new Set(this.activeDeck()?.groups.flatMap((group) => group.elementIds) ?? []);
+    return ids.every((elementId) => owned.has(elementId) && !grouped.has(elementId));
+  }
+
+  groupSelection(): void {
+    if (!this.canGroupSelection()) return;
+    const before = new Set(this.activeDeck()?.groups.map((group) => group.id) ?? []);
+    this.apply("Group layers", (project) => groupElements(project, this.snapshot.activeScreenId, this.snapshot.selectedElementIds));
+    const group = this.activeDeck()?.groups.find((candidate) => !before.has(candidate.id));
+    if (group) this.updateSnapshot({ selectedElementIds: [...group.elementIds], selectedGroupIds: [group.id] });
+  }
+
+  ungroupSelection(): void {
+    const ids = [...this.snapshot.selectedGroupIds];
+    if (ids.length === 0) return;
+    this.apply("Ungroup layers", (project) => ids.reduce((current, groupId) => ungroupElements(current, groupId), project));
+    this.updateSnapshot({ selectedGroupIds: [] });
+  }
+
+  renameGroup(groupId: string, name: string): void {
+    this.apply("Rename group", (project) => renameGroup(project, groupId, name));
   }
 
   deleteSelection(): void {
@@ -230,7 +296,10 @@ export class EditorStore {
     const screenId = this.snapshot.activeScreenId;
     const beforeIds = new Set(resolveScreen(this.history.project, screenId).elements.map((element) => element.id));
     this.apply("Duplicate selection", (project) => duplicateElements(project, screenId, ids));
-    this.setSelection(resolveScreen(this.history.project, screenId).elements.filter((element) => !beforeIds.has(element.id)).map((element) => element.id));
+    const duplicatedIds = resolveScreen(this.history.project, screenId).elements.filter((element) => !beforeIds.has(element.id)).map((element) => element.id);
+    this.setSelection(duplicatedIds);
+    const duplicatedGroups = this.activeDeck()?.groups.filter((group) => group.elementIds.every((elementId) => duplicatedIds.includes(elementId))).map((group) => group.id) ?? [];
+    if (duplicatedGroups.length > 0) this.updateSnapshot({ selectedGroupIds: duplicatedGroups });
   }
 
   duplicateElement(elementId: string): void {
@@ -241,13 +310,26 @@ export class EditorStore {
     if (duplicate) this.setSelection([duplicate.id]);
   }
 
+  duplicateGroup(groupId: string): void {
+    this.selectGroup(groupId);
+    this.duplicateSelection();
+  }
+
+  deleteGroup(groupId: string): void {
+    this.selectGroup(groupId);
+    this.deleteSelection();
+  }
+
   reorderElementByDirection(elementId: string, direction: -1 | 1): void {
     const screen = this.activeScreen();
     if (!screen) return;
     const ordered = [...resolveScreen(this.history.project, screen.id).elements].sort((left, right) => left.renderOrder - right.renderOrder);
-    const index = ordered.findIndex((element) => element.id === elementId);
+    const selectedIds = this.snapshot.selectedElementIds.includes(elementId) ? this.snapshot.selectedElementIds : [elementId];
+    const selected = new Set(selectedIds);
+    const indices = ordered.filter((element) => selected.has(element.id)).map((element) => element.renderOrder);
+    const index = indices.length > 0 ? Math.min(...indices) : -1;
     if (index < 0) return;
-    this.apply("Reorder layer", (project) => reorderElements(project, screen.id, [elementId], index + direction));
+    this.apply("Reorder layer", (project) => reorderElements(project, screen.id, selectedIds, index + direction));
   }
 
   reorderElementToIndex(elementId: string, targetIndex: number): void {
@@ -404,15 +486,30 @@ export class EditorStore {
     return this.history.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === this.snapshot.activeScreenId);
   }
 
+  private activeDeck() {
+    return this.history.project.decks.find((deck) => deck.id === this.snapshot.activeDeckId);
+  }
+
   private editableSelectedIds(): string[] {
     const selected = new Set(this.snapshot.selectedElementIds);
-    return resolveScreen(this.history.project, this.snapshot.activeScreenId).elements.filter((element) => selected.has(element.id) && !element.locked).map((element) => element.id);
+    const resolved = resolveScreen(this.history.project, this.snapshot.activeScreenId).elements;
+    const byId = new Map(resolved.map((element) => [element.id, element]));
+    const blockedGroupMembers = new Set((this.activeDeck()?.groups ?? []).filter((group) => this.snapshot.selectedGroupIds.includes(group.id) && group.elementIds.some((elementId) => byId.get(elementId)?.locked)).flatMap((group) => group.elementIds));
+    return resolved.filter((element) => selected.has(element.id) && !element.locked && !blockedGroupMembers.has(element.id)).map((element) => element.id);
   }
 
   private validSelection(project: Project, screenId: string, ids: readonly string[]): string[] {
     const screen = project.decks.flatMap((deck) => deck.screens).find((candidate) => candidate.id === screenId);
     const available = new Set(screen ? resolveScreen(project, screen.id).elements.map((element) => element.id) : []);
     return ids.filter((id) => available.has(id));
+  }
+
+  private validGroupSelection(project: Project, screenId: string, groupIds: readonly string[], selectedElementIds: readonly string[]): string[] {
+    const context = project.decks.find((deck) => deck.screens.some((screen) => screen.id === screenId));
+    if (!context) return [];
+    const available = new Set(resolveScreen(project, screenId).elements.map((element) => element.id));
+    const selected = new Set(selectedElementIds);
+    return groupIds.filter((groupId) => context.groups.some((group) => group.id === groupId && group.elementIds.every((elementId) => available.has(elementId) && selected.has(elementId))));
   }
 
   private updateSnapshot(values: Partial<EditorSnapshot>): void {

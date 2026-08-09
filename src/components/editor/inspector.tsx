@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  Group as GroupIcon,
   Link2,
   Lock,
   RotateCw,
@@ -20,7 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
-import type { AssetMetadata, Background, ProjectFontFamily, SceneElement, Shadow } from "../../lib/schema";
+import type { AssetMetadata, Background, LayerGroup, ProjectFontFamily, SceneElement, Shadow } from "../../lib/schema";
 import { getBuiltInFont, fontWeightRange } from "../../fonts/catalog";
 import type { ResolvedScreen } from "../../scene/selectors";
 import type { ElementAdjustment, ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate } from "../../scene/element-operations";
@@ -40,24 +41,28 @@ type InspectorProps = {
   onUploadFont: (file: File) => Promise<ProjectFontFamily | null>;
   onDeleteFont: (font: ProjectFontFamily) => Promise<void>;
   selectedElements: SceneElement[];
+  canGroupSelection: boolean;
   onUpdateScreen: (patch: ScreenPatch) => void;
   onUpdateElement: (elementId: string, patch: ElementPatch) => void;
   onUpdateElements: (updates: ElementUpdate[]) => void;
   onAlignSelection: (alignment: ElementAlignment) => void;
   onDistributeSelection: (distribution: ElementDistribution) => void;
   onAdjustSelection: (adjustment: ElementAdjustment, orderedElementIds: string[]) => void;
+  selectedGroup?: LayerGroup;
+  onGroupSelection: () => void;
+  onRenameGroup: (groupId: string, name: string) => void;
   onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void;
   onToggleOverflow: (elementId: string, enabled: boolean) => void;
   onMoveOwnership: (elementId: string) => void;
   ownerScreenName?: string;
 };
 
-export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
+export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, selectedGroup, canGroupSelection, onUpdateScreen, onUpdateElement, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection, onGroupSelection, onRenameGroup, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
     return <ScreenInspector assets={assets} screen={screen} onUpdate={onUpdateScreen} />;
   }
   if (selectedElements.length > 1) {
-    return <MultiSelectionInspector elements={selectedElements} onAdjustSelection={onAdjustSelection} onAlignSelection={onAlignSelection} onDistributeSelection={onDistributeSelection} onUpdateElements={onUpdateElements} />;
+    return <MultiSelectionInspector canGroupSelection={canGroupSelection} elements={selectedElements} group={selectedGroup} onAdjustSelection={onAdjustSelection} onAlignSelection={onAlignSelection} onDistributeSelection={onDistributeSelection} onGroupSelection={onGroupSelection} onRenameGroup={onRenameGroup} onUpdateElements={onUpdateElements} />;
   }
   const element = selectedElements[0];
   if (!element) return null;
@@ -82,7 +87,7 @@ function ScreenInspector({ screen, assets, onUpdate }: { screen: ResolvedScreen;
   );
 }
 
-function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection }: { elements: SceneElement[]; onUpdateElements: (updates: ElementUpdate[]) => void; onAlignSelection: (alignment: ElementAlignment) => void; onDistributeSelection: (distribution: ElementDistribution) => void; onAdjustSelection: (adjustment: ElementAdjustment, orderedElementIds: string[]) => void }) {
+function MultiSelectionInspector({ elements, group, canGroupSelection, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection, onGroupSelection, onRenameGroup }: { elements: SceneElement[]; group?: LayerGroup; canGroupSelection: boolean; onUpdateElements: (updates: ElementUpdate[]) => void; onAlignSelection: (alignment: ElementAlignment) => void; onDistributeSelection: (distribution: ElementDistribution) => void; onAdjustSelection: (adjustment: ElementAdjustment, orderedElementIds: string[]) => void; onGroupSelection: () => void; onRenameGroup: (groupId: string, name: string) => void }) {
   const opacity = elements.every((element) => element.opacity === elements[0]?.opacity) ? elements[0]?.opacity ?? 1 : undefined;
   const locked = elements.every((element) => element.locked);
   const visible = elements.every((element) => element.visible);
@@ -98,7 +103,9 @@ function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection,
   ];
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
-      <InspectorHeading title="Selection" detail={`${elements.length} layers`} />
+      <InspectorHeading title={group?.name ?? "Selection"} detail={group ? "group" : `${elements.length} layers`} />
+      {group ? <Section title="Identity"><GroupNameField group={group} onRename={onRenameGroup} /></Section> : null}
+      {canGroupSelection ? <Section title="Group"><Button className="w-full" onClick={onGroupSelection} size="sm" variant="secondary"><GroupIcon size={14} /> Create group</Button></Section> : null}
       <Section title="Arrange">
         <ArrangeSubsection title="Align">
           <div className="grid grid-cols-3 gap-1.5">
@@ -129,6 +136,17 @@ function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection,
       </Section>
     </div>
   );
+}
+
+function GroupNameField({ group, onRename }: { group: LayerGroup; onRename: (groupId: string, name: string) => void }) {
+  const [draft, setDraft] = useState(group.name);
+  useEffect(() => setDraft(group.name), [group.id, group.name]);
+  const commit = () => {
+    const name = draft.trim();
+    if (name && name !== group.name) onRename(group.id, name);
+    else setDraft(group.name);
+  };
+  return <Field label="Name"><Input onBlur={commit} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); else if (event.key === "Escape") setDraft(group.name); }} value={draft} /></Field>;
 }
 
 function ElementInspector({ element, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, onUpdate, onConvertImageToFrame, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onChangeTextFont: InspectorProps["onChangeTextFont"]; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {

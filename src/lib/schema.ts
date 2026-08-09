@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 10 as const;
+export const CURRENT_SCHEMA_VERSION = 11 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
@@ -310,6 +310,13 @@ export type OverflowLink = z.infer<typeof OverflowLinkSchema>;
 export const LayerEntrySchema = z.discriminatedUnion("kind", [OwnedLayerSchema, OverflowLinkSchema]);
 export type LayerEntry = z.infer<typeof LayerEntrySchema>;
 
+export const LayerGroupSchema = z.object({
+  id: IdSchema,
+  name: z.string().trim().min(1).max(120),
+  elementIds: z.array(IdSchema).min(2),
+}).strict();
+export type LayerGroup = z.infer<typeof LayerGroupSchema>;
+
 type ScreenData = {
   id: string;
   slug: string;
@@ -347,6 +354,7 @@ export const DeckSchema = z
     name: z.string().trim().min(1).max(120),
     width: DimensionSchema,
     height: DimensionSchema,
+    groups: z.array(LayerGroupSchema),
     screens: z.array(ScreenSchema).min(1),
     createdAt: TimestampSchema,
     updatedAt: TimestampSchema,
@@ -443,6 +451,7 @@ const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) =
   project.decks.forEach((deck, deckIndex) => {
     checkIdentity(deck.id, "deck", ["decks", deckIndex, "id"]);
     checkUniqueValue(deckSlugs, deck.slug, "deck slug", ["decks", deckIndex, "slug"]);
+    deck.groups.forEach((group, groupIndex) => checkIdentity(group.id, "layer group", ["decks", deckIndex, "groups", groupIndex, "id"]));
     deck.screens.forEach((screen, screenIndex) => {
       checkIdentity(screen.id, "screen", ["decks", deckIndex, "screens", screenIndex, "id"]);
       checkUniqueValue(screenSlugs, screen.slug, "screen slug", ["decks", deckIndex, "screens", screenIndex, "slug"]);
@@ -504,6 +513,49 @@ const ProjectIdentitySchema = ProjectBaseSchema.superRefine((project, context) =
       context.addIssue({ code: z.ZodIssueCode.custom, path, message: "Overflow link owner does not have overflow enabled." });
     }
   })));
+
+  project.decks.forEach((deck, deckIndex) => {
+    const owners = new Map<string, string>();
+    const layerIndexes = new Map<string, number>();
+    deck.screens.forEach((screen) => screen.layers.forEach((layer, layerIndex) => {
+      if (layer.kind === "owned") {
+        owners.set(layer.element.id, screen.id);
+        layerIndexes.set(layer.element.id, layerIndex);
+      }
+    }));
+    const groupedElements = new Map<string, number>();
+    deck.groups.forEach((group, groupIndex) => {
+      const memberIds = new Set<string>();
+      const ownerIds = new Set<string>();
+      group.elementIds.forEach((elementId, elementIndex) => {
+        const path = ["decks", deckIndex, "groups", groupIndex, "elementIds", elementIndex];
+        if (memberIds.has(elementId)) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path, message: `Layer group "${group.id}" contains duplicate element "${elementId}".` });
+          return;
+        }
+        memberIds.add(elementId);
+        const ownerId = owners.get(elementId);
+        if (!ownerId) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path, message: `Layer group "${group.id}" references missing element "${elementId}".` });
+          return;
+        }
+        ownerIds.add(ownerId);
+        const previousGroup = groupedElements.get(elementId);
+        if (previousGroup !== undefined) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path, message: `Element "${elementId}" belongs to more than one layer group.` });
+        } else {
+          groupedElements.set(elementId, groupIndex);
+        }
+      });
+      if (ownerIds.size > 1) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ["decks", deckIndex, "groups", groupIndex, "elementIds"], message: `Layer group "${group.id}" members must share one owner screen.` });
+      }
+      const indexes = group.elementIds.map((elementId) => layerIndexes.get(elementId)).filter((index): index is number => index !== undefined);
+      if (indexes.length === group.elementIds.length && indexes.some((index, position) => position > 0 && index !== indexes[position - 1]! + 1)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ["decks", deckIndex, "groups", groupIndex, "elementIds"], message: `Layer group "${group.id}" members must be contiguous in layer order.` });
+      }
+    });
+  });
 });
 
 export const ProjectSchema = ProjectIdentitySchema;

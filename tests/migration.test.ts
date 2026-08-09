@@ -25,6 +25,13 @@ function legacyDocument(overrides: Record<string, unknown> = {}) {
 }
 
 describe("project migrations", () => {
+  test("adds empty deck groups when migrating v10 projects", () => {
+    const current = createDefaultProject("Version ten", { now: timestamp });
+    const { groups: _groups, ...deck } = current.decks[0]!;
+    const migrated = parseProject({ ...current, schemaVersion: 10, decks: [deck] });
+    expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(migrated.decks[0]?.groups).toEqual([]);
+  });
   test("upgrades an unversioned legacy project to the current schema", () => {
     const migrated = parseProject({
       version: 0,

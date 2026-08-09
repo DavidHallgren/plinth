@@ -1,4 +1,4 @@
-import type { Deck, LayerEntry, Project, SceneElement, Screen } from "../lib/schema";
+import type { Deck, LayerEntry, LayerGroup, Project, SceneElement, Screen } from "../lib/schema";
 import { resolveDeckScreen, type ResolvedElement } from "./overflow";
 
 export type ResolvedScreen = Screen & {
@@ -49,6 +49,10 @@ export function selectSelectedElements(screen: { elements: readonly ResolvedElem
 
 export function selectSortedLayers(screen: { elements: readonly ResolvedElement[] }): ResolvedElement[] {
   return [...screen.elements].sort((left, right) => left.renderOrder - right.renderOrder);
+}
+
+export function selectGroupForElement(deck: Deck, elementId: string): LayerGroup | undefined {
+  return deck.groups.find((group) => group.elementIds.includes(elementId));
 }
 
 export function selectLayerEntries(screen: Screen): LayerEntry[] {

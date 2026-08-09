@@ -73,13 +73,14 @@ type DeckCanvasProps = {
   projectSlug: string;
   assets: readonly AssetMetadata[];
   selectedElementIds: readonly string[];
+  selectedGroupIds: readonly string[];
   zoom: number;
   fitRequest: string;
   fitMode: DeckFitMode;
   revealScreenRequest: number;
   onFitZoom: (zoom: number) => void;
   onFocusScreen: (screenId: string) => void;
-  onSelect: (targetScreenId: string, elementId: string, additive: boolean) => void;
+  onSelect: (targetScreenId: string, elementId: string, additive: boolean, isolate?: boolean) => void;
   onClearSelection: (targetScreenId: string) => void;
   onGestureStart: (label: string, targetScreenId: string) => void;
   onMoveEnd: (targetScreenId: string, elementId: string, x: number, y: number) => void;
@@ -88,7 +89,7 @@ type DeckCanvasProps = {
 
 const MIN_TRANSFORM_SIZE = 8;
 
-export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets, selectedElementIds, zoom, fitRequest, fitMode, revealScreenRequest, onFitZoom, onFocusScreen, onSelect, onClearSelection, onGestureStart, onMoveEnd, onTransformEnd }: DeckCanvasProps) {
+export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets, selectedElementIds, selectedGroupIds, zoom, fitRequest, fitMode, revealScreenRequest, onFitZoom, onFocusScreen, onSelect, onClearSelection, onGestureStart, onMoveEnd, onTransformEnd }: DeckCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -103,7 +104,11 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
   const focusedElements = focusedScreen?.elements ?? [];
   const selectionKey = selectedElementIds.join(":");
   const revealTriggerRef = useRef({ focusedIndex, focusedScreenId, revealScreenRequest, selectionKey });
-  const lockedElementIds = useMemo(() => new Set(focusedElements.filter((element) => element.locked).map((element) => element.id)), [focusedElements]);
+  const lockedElementIds = useMemo(() => {
+    const locked = new Set(focusedElements.filter((element) => element.locked).map((element) => element.id));
+    deck.groups.filter((group) => selectedGroupIds.includes(group.id) && group.elementIds.some((elementId) => locked.has(elementId))).forEach((group) => group.elementIds.forEach((elementId) => locked.add(elementId)));
+    return locked;
+  }, [deck.groups, focusedElements, selectedGroupIds]);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -254,12 +259,13 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
                   <SceneContents
                     assets={assets}
                     interactive
+                    interactionLockedElementIds={lockedElementIds}
                     key={screen.id}
                     offsetX={index * (deck.width + SCREEN_GAP / zoom)}
                     onClearSelection={(targetScreenId) => { onFocusScreen(targetScreenId); onClearSelection(targetScreenId); }}
                     onGestureStart={onGestureStart}
                     onMoveEnd={onMoveEnd}
-                    onSelect={(targetScreenId, elementId, additive) => { onFocusScreen(targetScreenId); onSelect(targetScreenId, elementId, additive); }}
+                    onSelect={(targetScreenId, elementId, additive, isolate) => { onFocusScreen(targetScreenId); onSelect(targetScreenId, elementId, additive, isolate); }}
                     projectSlug={projectSlug}
                     register={(targetScreenId, elementId, node) => {
                       const key = projectionKey(targetScreenId, elementId);

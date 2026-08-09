@@ -1,7 +1,7 @@
 import { createScreenPreset } from "../lib/defaults";
 import { createId, nowIso, slugify } from "../lib/ids";
-import { DeckSchema, LayerEntrySchema, ProjectSchema, SceneElementSchema, ScreenSchema } from "../lib/schema";
-import type { Deck, DeviceElement, ImageFit, LayerEntry, OwnedLayer, Point, Project, SceneElement, Screen, ScreenPreset, Shadow, TextStyle } from "../lib/schema";
+import { DeckSchema, LayerEntrySchema, LayerGroupSchema, ProjectSchema, SceneElementSchema, ScreenSchema } from "../lib/schema";
+import type { Deck, DeviceElement, ImageFit, LayerEntry, LayerGroup, OwnedLayer, Point, Project, SceneElement, Screen, ScreenPreset, Shadow, TextStyle } from "../lib/schema";
 import type { ShapeElement } from "../lib/schema";
 import { calculateTextAutoHeight } from "./text-geometry";
 import {
@@ -190,11 +190,22 @@ function layerElementId(layer: LayerEntry): string {
   return layer.kind === "owned" ? layer.element.id : layer.elementId;
 }
 
+function groupForElement(deck: Deck, elementId: string): LayerGroup | undefined {
+  return deck.groups.find((group) => group.elementIds.includes(elementId));
+}
+
+function repairGroups(groups: readonly LayerGroup[], removedIds: ReadonlySet<string> = new Set()): LayerGroup[] {
+  return groups.flatMap((group) => {
+    const elementIds = group.elementIds.filter((elementId) => !removedIds.has(elementId));
+    return elementIds.length >= 2 ? [{ ...group, elementIds }] : [];
+  });
+}
+
 function projectIds(project: Project): Set<string> {
   return new Set([
     project.id,
     ...project.assets.map((asset) => asset.id),
-    ...project.decks.flatMap((deck) => [deck.id, ...deck.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])]),
+    ...project.decks.flatMap((deck) => [deck.id, ...deck.groups.map((group) => group.id), ...deck.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])]),
   ]);
 }
 
@@ -299,7 +310,7 @@ function replaceOwnedElement(project: Project, deckId: string, ownerScreenId: st
   }));
 }
 
-function transferElementOwnershipInDeck(deck: Deck, elementId: string, targetScreenId: string): Deck {
+function transferSingleElementOwnershipInDeck(deck: Deck, elementId: string, targetScreenId: string): Deck {
   const owner = ownerOfElement(deck, elementId);
   const target = deck.screens.find((screen) => screen.id === targetScreenId);
   if (!owner) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${elementId}" was not found in deck "${deck.id}".`);
@@ -333,6 +344,23 @@ function transferElementOwnershipInDeck(deck: Deck, elementId: string, targetScr
   return touchDeck(deck, { screens: nextScreens });
 }
 
+function transferElementOwnershipInDeck(deck: Deck, elementId: string, targetScreenId: string): Deck {
+  const group = groupForElement(deck, elementId);
+  if (!group) return transferSingleElementOwnershipInDeck(deck, elementId, targetScreenId);
+  const transferred = group.elementIds.reduce((current, memberId) => transferSingleElementOwnershipInDeck(current, memberId, targetScreenId), deck);
+  const target = transferred.screens.find((screen) => screen.id === targetScreenId);
+  if (!target) return transferred;
+  const members = new Set(group.elementIds);
+  const indexed = target.layers.map((layer, index) => ({ layer, index }));
+  const selected = indexed.filter(({ layer }) => members.has(layerElementId(layer)));
+  const topmostIndex = Math.max(...selected.map(({ index }) => index));
+  const remaining = indexed.filter(({ layer }) => !members.has(layerElementId(layer)));
+  const insertionIndex = remaining.filter(({ index }) => index < topmostIndex).length;
+  const layers = remaining.map(({ layer }) => layer);
+  layers.splice(insertionIndex, 0, ...group.elementIds.map((memberId) => selected.find(({ layer }) => layerElementId(layer) === memberId)!.layer));
+  return touchDeck(transferred, { screens: transferred.screens.map((screen) => screen.id === targetScreenId ? touchScreen(screen, { layers }) : screen) });
+}
+
 /** Explicitly move a canonical element to another screen while preserving deck coordinates. */
 export function transferElementOwnership(project: Project, elementId: string, targetScreenId: string): Project;
 export function transferElementOwnership(project: Project, ownerScreenId: string, elementId: string, targetScreenId: string): Project;
@@ -358,9 +386,35 @@ function reconcileDeckOverflowLinks(inputDeck: Deck, transferOwnership: boolean)
   // owner and the transfer preserves the element's deck-global position.
   for (let pass = 0; transferOwnership && pass < deck.screens.length + 1; pass += 1) {
     let transferred = false;
+    for (const group of deck.groups) {
+      const owners = group.elementIds.map((elementId) => ownerOfElement(deck, elementId)).filter((owner): owner is NonNullable<typeof owner> => Boolean(owner));
+      const owner = owners[0]?.screen;
+      if (!owner || owners.length !== group.elementIds.length) continue;
+      const bounds = owners.map(({ screen, layer }) => elementDeckBounds(deck, screen.id, layer.element)).filter((value): value is NonNullable<typeof value> => Boolean(value));
+      if (bounds.length !== group.elementIds.length) continue;
+      const union = bounds.slice(1).reduce((current, value) => ({
+        left: Math.min(current.left, value.left),
+        top: Math.min(current.top, value.top),
+        right: Math.max(current.right, value.right),
+        bottom: Math.max(current.bottom, value.bottom),
+      }), bounds[0]!);
+      const centerX = (union.left + union.right) / 2;
+      const centerY = (union.top + union.bottom) / 2;
+      const centerOwner = deck.screens.find((screen) => {
+        const origin = screenOrigin(deck, screen.id);
+        return Boolean(origin && centerX >= origin.x && centerX < origin.x + deck.width && centerY >= 0 && centerY < deck.height);
+      });
+      if (!boundsIntersectScreen(deck, owner.id, union) && centerOwner && centerOwner.id !== owner.id) {
+        deck = transferElementOwnershipInDeck(deck, group.elementIds[0]!, centerOwner.id);
+        transferred = true;
+        break;
+      }
+    }
+    if (transferred) continue;
+    const groupedIds = new Set(deck.groups.flatMap((group) => group.elementIds));
     for (const screen of [...deck.screens]) {
       for (const layer of screen.layers) {
-        if (layer.kind !== "owned") continue;
+        if (layer.kind !== "owned" || groupedIds.has(layer.element.id)) continue;
         const bounds = elementDeckBounds(deck, screen.id, layer.element);
         const centerOwner = screenContainingElementCenter(deck, screen.id, layer.element);
         if (bounds && !boundsIntersectScreen(deck, screen.id, bounds) && centerOwner && centerOwner !== screen.id) {
@@ -449,12 +503,60 @@ export function addElement(project: Project, screenId: string, element: SceneEle
   return reconcileOverflowLinks(next);
 }
 
+export function groupElements(project: Project, screenId: string, elementIds: readonly string[], options: { id?: string; name?: string } = {}): Project {
+  const { deck, screen } = screenContextFor(project, screenId);
+  const ids = [...new Set(elementIds)];
+  if (ids.length < 2) throw new SceneOperationError("INVALID_OPERATION", "A layer group requires at least two elements.");
+  const selected = new Set(ids);
+  const ownedIds = new Set(screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : []));
+  const missing = ids.find((elementId) => !ownedIds.has(elementId));
+  if (missing) throw new SceneOperationError("INVALID_OPERATION", "Layer groups can only be created from elements owned by the focused screen.");
+  const grouped = ids.find((elementId) => groupForElement(deck, elementId));
+  if (grouped) throw new SceneOperationError("INVALID_OPERATION", `Element "${grouped}" already belongs to a layer group.`);
+
+  const indexed = screen.layers.map((layer, index) => ({ layer, index }));
+  const selectedLayers = indexed.filter(({ layer }) => selected.has(layerElementId(layer)));
+  const topmostIndex = Math.max(...selectedLayers.map(({ index }) => index));
+  const remaining = indexed.filter(({ layer }) => !selected.has(layerElementId(layer)));
+  const insertionIndex = remaining.filter(({ index }) => index < topmostIndex).length;
+  const nextLayers = remaining.map(({ layer }) => layer);
+  nextLayers.splice(insertionIndex, 0, ...selectedLayers.map(({ layer }) => layer));
+  const usedIds = projectIds(project);
+  const group = LayerGroupSchema.parse({
+    id: options.id ?? uniqueId("group", usedIds),
+    name: options.name?.trim() || "Group",
+    elementIds: selectedLayers.map(({ layer }) => layerElementId(layer)),
+  });
+  if (usedIds.has(group.id) && options.id) throw new SceneOperationError("INVALID_OPERATION", `Layer group id "${group.id}" is already in use.`);
+  return withDeck(project, deck.id, (current) => touchDeck(current, {
+    groups: [...current.groups, group],
+    screens: current.screens.map((candidate) => candidate.id === screen.id ? touchScreen(candidate, { layers: nextLayers }) : candidate),
+  }));
+}
+
+export function ungroupElements(project: Project, groupId: string): Project {
+  const deck = project.decks.find((candidate) => candidate.groups.some((group) => group.id === groupId));
+  if (!deck) throw new SceneOperationError("INVALID_OPERATION", `Layer group "${groupId}" was not found.`);
+  return withDeck(project, deck.id, (current) => touchDeck(current, { groups: current.groups.filter((group) => group.id !== groupId) }));
+}
+
+export function renameGroup(project: Project, groupId: string, name: string): Project {
+  const deck = project.decks.find((candidate) => candidate.groups.some((group) => group.id === groupId));
+  if (!deck) throw new SceneOperationError("INVALID_OPERATION", `Layer group "${groupId}" was not found.`);
+  const nextName = name.trim();
+  if (!nextName || deck.groups.some((group) => group.id === groupId && group.name === nextName)) return project;
+  return withDeck(project, deck.id, (current) => touchDeck(current, {
+    groups: current.groups.map((group) => group.id === groupId ? LayerGroupSchema.parse({ ...group, name: nextName }) : group),
+  }));
+}
+
 export function removeElements(project: Project, screenId: string, elementIds: string[]): Project {
   const { deck } = screenContextFor(project, screenId);
   const ids = new Set(elementIds);
   if (ids.size === 0) return project;
   for (const id of ids) elementContextFor(project, screenId, id);
   const nextDeck = touchDeck(deck, {
+    groups: repairGroups(deck.groups, ids),
     screens: deck.screens.map((screen) => touchScreen(screen, {
       layers: screen.layers.filter((layer) => !ids.has(layerElementId(layer))),
     })),
@@ -482,7 +584,13 @@ export function replaceElement(project: Project, screenId: string, elementId: st
 
 export function updateElements(project: Project, screenId: string, updates: ElementUpdate[] | Record<string, ElementPatch>): Project {
   const normalizedUpdates = Array.isArray(updates) ? updates : Object.entries(updates).map(([id, patch]) => ({ id, patch }));
-  return normalizedUpdates.reduce((current, update) => updateElement(current, screenId, update.id, update.patch), project);
+  let next = project;
+  for (const update of normalizedUpdates) {
+    const context = elementContextFor(next, screenId, update.id);
+    const nextElement = patchElement(context.deck, context.ownerLayer.element, update.patch, screenId, context.ownerScreen.id);
+    next = replaceOwnedElement(next, context.deck.id, context.ownerScreen.id, update.id, nextElement);
+  }
+  return next === project ? project : reconcileOverflowLinks(next);
 }
 
 type ArrangementParticipant = {
@@ -647,8 +755,9 @@ function targetLayerEntry(screen: Screen, elementId: string): LayerEntry | undef
 }
 
 export function reorderElements(project: Project, screenId: string, elementIds: string[], targetIndex: number): Project {
-  const { screen } = screenContextFor(project, screenId);
+  const { deck, screen } = screenContextFor(project, screenId);
   const selectedIds = new Set(elementIds);
+  elementIds.forEach((elementId) => groupForElement(deck, elementId)?.elementIds.forEach((memberId) => selectedIds.add(memberId)));
   for (const id of selectedIds) {
     if (!targetLayerEntry(screen, id)) throw new SceneOperationError("ELEMENT_NOT_FOUND", `Element "${id}" was not found in screen "${screenId}".`);
   }
@@ -673,18 +782,28 @@ export function duplicateElements(project: Project, screenId: string, elementIds
   }
   if (selected.length === 0) return project;
   const usedIds = projectIds(project);
+  const duplicateIds = new Map<string, string>();
   const duplicates = selected.map((element) => {
     const { ownerScreenId: _ownerScreenId, targetScreenId: _targetScreenId, isOverflowLink: _isOverflowLink, renderOrder: _renderOrder, ...canonicalElement } = element;
+    const id = uniqueId(element.type, usedIds);
+    duplicateIds.set(element.id, id);
     const duplicate = SceneElementSchema.parse({
       ...canonicalElement,
-      id: uniqueId(element.type, usedIds),
+      id,
       name: `${element.name} copy`,
       x: element.x + finite(offset.x, 24),
       y: element.y + finite(offset.y, 24),
     });
     return ownedLayer(clampElementToDeck(context.deck, duplicate));
   });
-  const next = withScreen(project, screenId, (current) => touchScreen(current, { layers: [...current.layers, ...duplicates] }));
+  const targetOwnedIds = new Set(context.screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : []));
+  const duplicatedGroups = context.deck.groups.flatMap((group) => group.elementIds.every((elementId) => ids.has(elementId) && targetOwnedIds.has(elementId))
+    ? [LayerGroupSchema.parse({ id: uniqueId("group", usedIds), name: `${group.name} copy`, elementIds: group.elementIds.map((elementId) => duplicateIds.get(elementId)) })]
+    : []);
+  const next = withDeck(project, context.deck.id, (deck) => touchDeck(deck, {
+    groups: [...deck.groups, ...duplicatedGroups],
+    screens: deck.screens.map((screen) => screen.id === screenId ? touchScreen(screen, { layers: [...screen.layers, ...duplicates] }) : screen),
+  }));
   return reconcileOverflowLinks(next);
 }
 
@@ -712,6 +831,7 @@ export function addDeck(project: Project, options: AddDeckOptions): Project {
     name: deckName,
     width,
     height,
+    groups: [],
     screens: [{
       ...screen,
       slug: uniqueScreenSlug(project, screen.slug),
@@ -720,7 +840,7 @@ export function addDeck(project: Project, options: AddDeckOptions): Project {
     createdAt: now,
     updatedAt: now,
   };
-  assertNoIdentityCollision(project, [deck.id, ...deck.screens.flatMap((candidate) => [candidate.id, ...candidate.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])], "Deck or screen");
+  assertNoIdentityCollision(project, [deck.id, ...deck.groups.map((group) => group.id), ...deck.screens.flatMap((candidate) => [candidate.id, ...candidate.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])], "Deck or screen");
   return touchProject(project, [...project.decks, DeckSchema.parse(deck)]);
 }
 
@@ -756,11 +876,16 @@ export function duplicateDeck(project: Project, deckId: string, overrides: Pick<
     id: uniqueId("deck", usedIds),
     name: overrides.name?.trim() || `${source.name} copy`,
     slug: uniqueDeckSlug(project, overrides.slug ?? `${source.slug}-copy`),
+    groups: source.groups.map((group) => LayerGroupSchema.parse({
+      ...group,
+      id: uniqueId("group", usedIds),
+      elementIds: group.elementIds.map((elementId) => elementIds.get(elementId)!),
+    })),
     screens,
     createdAt: now,
     updatedAt: now,
   };
-  assertNoIdentityCollision(project, [duplicate.id, ...duplicate.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])], "Deck or screen");
+  assertNoIdentityCollision(project, [duplicate.id, ...duplicate.groups.map((group) => group.id), ...duplicate.screens.flatMap((screen) => [screen.id, ...screen.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])])], "Deck or screen");
   return touchProject(project, [...project.decks, duplicate]);
 }
 
@@ -811,6 +936,7 @@ export function duplicateScreen(project: Project, deckIdOrScreenId: string, scre
   const values = typeof screenIdOrOverrides === "string" ? overrides : screenIdOrOverrides ?? {};
   const now = nowIso();
   const usedIds = projectIds(project);
+  const elementIds = new Map(context.screen.layers.flatMap((layer) => layer.kind === "owned" ? [[layer.element.id, uniqueId(layer.element.type, usedIds)] as const] : []));
   const duplicate = ScreenSchema.parse({
     ...context.screen,
     id: uniqueId("screen", usedIds),
@@ -818,13 +944,16 @@ export function duplicateScreen(project: Project, deckIdOrScreenId: string, scre
     slug: uniqueScreenSlug(project, values.slug ?? `${context.screen.slug}-copy`),
     exportSlug: uniqueScreenExportSlug(project, `${context.screen.exportSlug}-copy`),
     layers: context.screen.layers.flatMap((layer) => layer.kind === "owned"
-      ? [ownedLayer({ ...layer.element, id: uniqueId(layer.element.type, usedIds) }, layer.overflow)]
+      ? [ownedLayer({ ...layer.element, id: elementIds.get(layer.element.id)! }, layer.overflow)]
       : []),
     createdAt: now,
     updatedAt: now,
   });
-  assertNoIdentityCollision(project, [duplicate.id, ...duplicate.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])], "Screen or element");
-  return reconcileOverflowLinks(withDeck(project, context.deck.id, (deck) => touchDeck(deck, { screens: [...deck.screens, duplicate] })));
+  const duplicatedGroups = context.deck.groups.flatMap((group) => group.elementIds.every((elementId) => elementIds.has(elementId))
+    ? [LayerGroupSchema.parse({ id: uniqueId("group", usedIds), name: `${group.name} copy`, elementIds: group.elementIds.map((elementId) => elementIds.get(elementId)!) })]
+    : []);
+  assertNoIdentityCollision(project, [duplicate.id, ...duplicatedGroups.map((group) => group.id), ...duplicate.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : [])], "Screen or element");
+  return reconcileOverflowLinks(withDeck(project, context.deck.id, (deck) => touchDeck(deck, { groups: [...deck.groups, ...duplicatedGroups], screens: [...deck.screens, duplicate] })));
 }
 
 export function removeScreen(project: Project, deckIdOrScreenId: string, screenId?: string): Project {

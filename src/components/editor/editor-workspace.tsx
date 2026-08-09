@@ -107,6 +107,10 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const activeDeck = selectActiveDeck(snapshot.project, snapshot.activeDeckId);
   const activeScreen = resolveScreen(snapshot.project, snapshot.activeScreenId);
   const selectedElements = selectSelectedElements(activeScreen, snapshot.selectedElementIds);
+  const selectedGroup = snapshot.selectedGroupIds.length === 1
+    ? activeDeck.groups.find((group) => group.id === snapshot.selectedGroupIds[0] && group.elementIds.length === snapshot.selectedElementIds.length && group.elementIds.every((elementId) => snapshot.selectedElementIds.includes(elementId)))
+    : undefined;
+  const canGroupSelection = store.canGroupSelection();
   const selectedFrame = selectedElements.find((element) => element.type === "device");
   const frameTarget = {
     selectedFrameName: selectedFrame?.name ?? null,
@@ -222,6 +226,11 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           store.duplicateSelection();
           requestActiveScreenReveal();
         });
+        return;
+      }
+      if (command && event.key.toLowerCase() === "g") {
+        event.preventDefault();
+        run(() => event.shiftKey ? store.ungroupSelection() : store.groupSelection());
         return;
       }
       if (!command && event.key === "]") {
@@ -577,29 +586,37 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           activeDeckId={snapshot.activeDeckId}
           activeScreenId={snapshot.activeScreenId}
           assets={snapshot.project.assets}
+          canGroupSelection={canGroupSelection}
           onAddDeck={openNewDeck}
           onAddScreen={addNewScreen}
           onDeleteDeck={(deckId) => run(() => { if (snapshot.project.decks.length <= 1) throw new Error("A project must keep at least one deck."); const deck = snapshot.project.decks.find((candidate) => candidate.id === deckId); if (deck && window.confirm(`Delete “${deck.name}”?`)) store.removeDeckById(deckId); })}
           onDeleteElement={(elementId) => run(() => { store.setSelection([elementId]); store.deleteSelection(); })}
+          onDeleteGroup={(groupId) => run(() => store.deleteGroup(groupId))}
           onDeleteScreen={deleteScreen}
           onDuplicateDeck={(deckId) => run(() => store.duplicateDeckById(deckId))}
           onDuplicateElement={(elementId) => run(() => { store.duplicateElement(elementId); requestActiveScreenReveal(); })}
+          onDuplicateGroup={(groupId) => run(() => { store.duplicateGroup(groupId); requestActiveScreenReveal(); })}
           onDuplicateScreen={(screenId) => run(() => store.duplicateScreenById(activeDeck.id, screenId))}
           onEditDeck={openDeckEdit}
-          onGoToOwner={(ownerScreenId, elementId) => { commitInspectorTransaction(); store.setActiveScreen(ownerScreenId); store.setSelection([elementId]); }}
+          onGoToOwner={(ownerScreenId, elementId) => { commitInspectorTransaction(); store.setActiveScreen(ownerScreenId); store.toggleSelection(elementId); }}
           onMoveDeck={(deckId, direction) => run(() => { const index = snapshot.project.decks.findIndex((deck) => deck.id === deckId); store.reorderCurrentDecks([deckId], index + direction); })}
           onMoveLayer={(elementId, direction) => run(() => store.reorderElementByDirection(elementId, direction))}
           onMoveScreen={(screenId, direction) => run(() => { const index = activeDeck.screens.findIndex((screen) => screen.id === screenId); store.reorderCurrentScreens([screenId], index + direction); })}
           onRenameElement={(elementId, name) => run(() => store.updateElement(elementId, { name }))}
+          onRenameGroup={(groupId, name) => run(() => store.renameGroup(groupId, name))}
           onReorderLayer={(elementId, targetIndex) => run(() => { const current = store.getSnapshot().project.decks.find((deck) => deck.id === store.getSnapshot().activeDeckId)?.screens.find((screen) => screen.id === store.getSnapshot().activeScreenId); const sourceIndex = current?.layers.findIndex((layer) => (layer.kind === "owned" ? layer.element.id : layer.elementId) === elementId) ?? -1; store.reorderElementToIndex(elementId, sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex); })}
+          onGroupSelection={() => run(() => store.groupSelection())}
+          onUngroup={(groupId) => run(() => { store.selectGroup(groupId); store.ungroupSelection(); })}
+          onSelectGroup={(groupId, additive) => store.selectGroup(groupId, additive)}
           onReorderScreen={(screenId, targetIndex) => run(() => { const sourceIndex = activeDeck.screens.findIndex((screen) => screen.id === screenId); store.reorderCurrentScreens([screenId], sourceIndex >= 0 && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex); })}
           onSelectDeck={(deckId) => { commitInspectorTransaction(); store.setActiveDeck(deckId); }}
-          onSelectLayer={(elementId, additive) => store.toggleSelection(elementId, additive)}
+          onSelectLayer={(elementId, additive, isolate) => store.toggleSelection(elementId, additive, isolate)}
           onSelectScreen={(screenId) => { commitInspectorTransaction(); store.setActiveScreen(screenId); }}
           onToggleLocked={(element) => run(() => store.updateElement(element.id, { locked: !element.locked }))}
           onToggleVisible={(element) => run(() => store.updateElement(element.id, { visible: !element.visible }))}
           project={snapshot.project}
           selectedElementIds={snapshot.selectedElementIds}
+          selectedGroupIds={snapshot.selectedGroupIds}
         />
         <main className="flex min-w-0 flex-1 flex-col">
           <div
@@ -631,13 +648,14 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
                 store.moveSelection({ x: dx, y: dy }, targetScreenId);
                 store.commitTransaction();
               })}
-              onSelect={(targetScreenId, elementId, additive) => { store.focusScreen(targetScreenId); store.toggleSelection(elementId, additive); }}
+              onSelect={(targetScreenId, elementId, additive, isolate) => { store.focusScreen(targetScreenId); store.toggleSelection(elementId, additive, isolate); }}
               onTransformEnd={(targetScreenId, transforms) => run(() => {
                 store.updateElements(transforms.map((transform) => ({ id: transform.id, patch: transform })), targetScreenId);
                 store.commitTransaction();
               })}
               projectSlug={project.slug}
               selectedElementIds={snapshot.selectedElementIds}
+              selectedGroupIds={snapshot.selectedGroupIds}
               screens={activeDeck.screens.map((screen) => resolveScreen(snapshot.project, screen.id))}
               zoom={snapshot.zoom}
             />}
@@ -645,7 +663,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           </div>
         </main>
         <aside className="flex min-h-0 w-[276px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
-          <Inspector assets={snapshot.project.assets} fontBusy={fontBusy} onAdjustSelection={(adjustment, orderedElementIds) => { commitInspectorTransaction(); run(() => store.adjustSelection(adjustment, orderedElementIds)); }} onAlignSelection={(alignment) => { commitInspectorTransaction(); run(() => store.alignSelection(alignment)); }} onChangeTextFont={changeTextFont} onConvertImageToFrame={convertImageToFrame} onDeleteFont={async (font) => { try { await deleteFont(font); } catch (reason) { reportError(reason); } }} onDistributeSelection={(distribution) => { commitInspectorTransaction(); run(() => store.distributeSelection(distribution)); }} onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUploadFont={async (file) => { try { return await uploadFont(file); } catch (reason) { reportError(reason); return null; } }} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} projectFonts={snapshot.project.fonts} screen={activeScreen} selectedElements={selectedElements} />
+          <Inspector assets={snapshot.project.assets} canGroupSelection={canGroupSelection} fontBusy={fontBusy} onAdjustSelection={(adjustment, orderedElementIds) => { commitInspectorTransaction(); run(() => store.adjustSelection(adjustment, orderedElementIds)); }} onAlignSelection={(alignment) => { commitInspectorTransaction(); run(() => store.alignSelection(alignment)); }} onChangeTextFont={changeTextFont} onConvertImageToFrame={convertImageToFrame} onDeleteFont={async (font) => { try { await deleteFont(font); } catch (reason) { reportError(reason); } }} onDistributeSelection={(distribution) => { commitInspectorTransaction(); run(() => store.distributeSelection(distribution)); }} onGroupSelection={() => { commitInspectorTransaction(); run(() => store.groupSelection()); }} onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onRenameGroup={(groupId, name) => queueInspectorChange("Rename group", () => store.renameGroup(groupId, name))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUploadFont={async (file) => { try { return await uploadFont(file); } catch (reason) { reportError(reason); return null; } }} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} projectFonts={snapshot.project.fonts} screen={activeScreen} selectedElements={selectedElements} selectedGroup={selectedGroup} />
         </aside>
       </div> : <div className="grid min-h-0 flex-1 place-items-center text-sm text-ink" role="status">Loading exact project fonts…</div>}
 

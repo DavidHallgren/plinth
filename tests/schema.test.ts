@@ -145,6 +145,22 @@ describe("project schema", () => {
     }
   });
 
+  test("validates layer group membership and ownership", () => {
+    const project = createDefaultProject("Group schema fixture", { screenCount: 2 });
+    const deck = project.decks[0]!;
+    const members = deck.screens[0]!.layers.flatMap((layer) => layer.kind === "owned" ? [layer.element.id] : []).slice(0, 3);
+    const valid = ProjectSchema.parse({ ...project, decks: [{ ...deck, groups: [{ id: "group_valid", name: "Valid", elementIds: members.slice(0, 2) }] }] });
+    expect(valid.decks[0]?.groups[0]?.elementIds).toEqual(members.slice(0, 2));
+
+    const duplicateMembership = ProjectSchema.safeParse({ ...project, decks: [{ ...deck, groups: [{ id: "group_one", name: "One", elementIds: members.slice(0, 2) }, { id: "group_two", name: "Two", elementIds: members.slice(1, 3) }] }] });
+    expect(duplicateMembership.success).toBe(false);
+    if (!duplicateMembership.success) expect(duplicateMembership.error.issues.some((issue) => issue.message.includes("more than one"))).toBe(true);
+
+    const missingMember = ProjectSchema.safeParse({ ...project, decks: [{ ...deck, groups: [{ id: "group_missing", name: "Missing", elementIds: [members[0], "missing_element"] }] }] });
+    expect(missingMember.success).toBe(false);
+    if (!missingMember.success) expect(missingMember.error.issues.some((issue) => issue.message.includes("missing element"))).toBe(true);
+  });
+
   test("rejects screen dimensions and invalid deck dimensions in persisted JSON", () => {
     const project = createDefaultProject("Dimension fixture");
     const deck = project.decks[0];

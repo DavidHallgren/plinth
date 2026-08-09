@@ -606,6 +606,15 @@ function migrateVersionNine(source: Record<string, unknown>): Record<string, unk
   };
 }
 
+function migrateVersionTen(source: Record<string, unknown>): Record<string, unknown> {
+  const rawDecks = Array.isArray(source.decks) ? source.decks : [];
+  return {
+    ...source,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    decks: rawDecks.map((deckValue) => isRecord(deckValue) ? { ...deckValue, groups: [] } : deckValue),
+  };
+}
+
 export function migrateProject(input: unknown): unknown {
   if (!isRecord(input)) {
     throw new PlinthError("SCHEMA_INVALID", 422, "Project data must be a JSON object.");
@@ -625,16 +634,17 @@ export function migrateProject(input: unknown): unknown {
     );
   }
 
-  if (versionValue === 0) return migrateVersionNine(migrateVersionFive(migrateVersionZero(input)));
-  if (versionValue === 1) return migrateVersionNine(migrateVersionFive(migrateVersionOne(input)));
-  if (versionValue === 2) return migrateVersionNine(migrateVersionFive(migrateVersionTwo(input)));
-  if (versionValue === 3) return migrateVersionNine(migrateVersionFive(migrateVersionThree(input)));
-  if (versionValue === 4) return migrateVersionNine(migrateVersionFive(migrateVersionFour(input)));
-  if (versionValue === 5) return migrateVersionNine(migrateVersionFive(input));
-  if (versionValue === 6) return migrateVersionNine(migrateVersionEight(migrateVersionSeven(migrateVersionSix(input))));
-  if (versionValue === 7) return migrateVersionNine(migrateVersionEight(migrateVersionSeven(input)));
-  if (versionValue === 8) return migrateVersionNine(migrateVersionEight(input));
-  if (versionValue === 9) return migrateVersionNine(input);
+  if (versionValue === 0) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionZero(input))));
+  if (versionValue === 1) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionOne(input))));
+  if (versionValue === 2) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionTwo(input))));
+  if (versionValue === 3) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionThree(input))));
+  if (versionValue === 4) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionFour(input))));
+  if (versionValue === 5) return migrateVersionTen(migrateVersionNine(migrateVersionFive(input)));
+  if (versionValue === 6) return migrateVersionTen(migrateVersionNine(migrateVersionEight(migrateVersionSeven(migrateVersionSix(input)))));
+  if (versionValue === 7) return migrateVersionTen(migrateVersionNine(migrateVersionEight(migrateVersionSeven(input))));
+  if (versionValue === 8) return migrateVersionTen(migrateVersionNine(migrateVersionEight(input)));
+  if (versionValue === 9) return migrateVersionTen(migrateVersionNine(input));
+  if (versionValue === 10) return migrateVersionTen(input);
   return input;
 }
 
