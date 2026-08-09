@@ -1,5 +1,6 @@
 export {
   addElement,
+  adjustElements,
   alignElements,
   distributeElements,
   duplicateElements,
@@ -11,4 +12,4 @@ export {
   updateElement,
   updateElements,
 } from "./operations";
-export type { ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput } from "./operations";
+export type { ElementAdjustment, ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate, MoveDelta, ResizeElementInput } from "./operations";

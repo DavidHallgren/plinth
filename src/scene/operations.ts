@@ -78,6 +78,7 @@ export type ResizeElementInput = {
 export type MoveDelta = { x: number; y: number };
 export type ElementAlignment = "left" | "horizontal-center" | "right" | "top" | "vertical-center" | "bottom";
 export type ElementDistribution = "horizontal" | "vertical";
+export type ElementAdjustment = "width" | "height" | "rotation";
 
 export type AddDeckOptions = {
   id?: string;
@@ -578,6 +579,22 @@ export function distributeElements(project: Project, screenId: string, elementId
     cursor += (horizontal ? participant.bounds.right - participant.bounds.left : participant.bounds.bottom - participant.bounds.top) + gap;
   }
   return translateArrangedElements(project, participants, deltas);
+}
+
+/** Match one geometry value from the first selected layer onto the later selected layers. */
+export function adjustElements(project: Project, screenId: string, elementIds: readonly string[], adjustment: ElementAdjustment): Project {
+  if (elementIds.length < 2) return project;
+  const contexts = elementIds.map((elementId) => elementContextFor(project, screenId, elementId));
+  const reference = contexts[0]?.ownerLayer.element;
+  if (!reference) return project;
+
+  let next = project;
+  for (const context of contexts.slice(1)) {
+    if (context.ownerLayer.element.locked || context.ownerLayer.element[adjustment] === reference[adjustment]) continue;
+    const nextElement = patchElement(context.deck, context.ownerLayer.element, { [adjustment]: reference[adjustment] }, screenId, context.ownerScreen.id);
+    next = replaceOwnedElement(next, context.deck.id, context.ownerScreen.id, context.ownerLayer.element.id, nextElement);
+  }
+  return next === project ? project : reconcileOverflowLinks(next);
 }
 
 export function moveElements(project: Project, screenId: string, elementIds: string[], delta: MoveDelta): Project {

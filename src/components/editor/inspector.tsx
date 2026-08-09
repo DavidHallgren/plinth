@@ -12,6 +12,9 @@ import {
   EyeOff,
   Link2,
   Lock,
+  RotateCw,
+  StretchHorizontal,
+  StretchVertical,
   Trash2,
   Unlock,
 } from "lucide-react";
@@ -20,7 +23,7 @@ import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import type { AssetMetadata, Background, ProjectFontFamily, SceneElement, Shadow } from "../../lib/schema";
 import { getBuiltInFont, fontWeightRange } from "../../fonts/catalog";
 import type { ResolvedScreen } from "../../scene/selectors";
-import type { ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate } from "../../scene/element-operations";
+import type { ElementAdjustment, ElementAlignment, ElementDistribution, ElementPatch, ElementUpdate } from "../../scene/element-operations";
 import type { ScreenPatch } from "../../scene/structure-operations";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -42,18 +45,19 @@ type InspectorProps = {
   onUpdateElements: (updates: ElementUpdate[]) => void;
   onAlignSelection: (alignment: ElementAlignment) => void;
   onDistributeSelection: (distribution: ElementDistribution) => void;
+  onAdjustSelection: (adjustment: ElementAdjustment, orderedElementIds: string[]) => void;
   onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void;
   onToggleOverflow: (elementId: string, enabled: boolean) => void;
   onMoveOwnership: (elementId: string) => void;
   ownerScreenName?: string;
 };
 
-export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onAlignSelection, onDistributeSelection, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
+export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, onUpdateScreen, onUpdateElement, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
     return <ScreenInspector assets={assets} screen={screen} onUpdate={onUpdateScreen} />;
   }
   if (selectedElements.length > 1) {
-    return <MultiSelectionInspector elements={selectedElements} onAlignSelection={onAlignSelection} onDistributeSelection={onDistributeSelection} onUpdateElements={onUpdateElements} />;
+    return <MultiSelectionInspector elements={selectedElements} onAdjustSelection={onAdjustSelection} onAlignSelection={onAlignSelection} onDistributeSelection={onDistributeSelection} onUpdateElements={onUpdateElements} />;
   }
   const element = selectedElements[0];
   if (!element) return null;
@@ -78,11 +82,12 @@ function ScreenInspector({ screen, assets, onUpdate }: { screen: ResolvedScreen;
   );
 }
 
-function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection, onDistributeSelection }: { elements: SceneElement[]; onUpdateElements: (updates: ElementUpdate[]) => void; onAlignSelection: (alignment: ElementAlignment) => void; onDistributeSelection: (distribution: ElementDistribution) => void }) {
+function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection }: { elements: SceneElement[]; onUpdateElements: (updates: ElementUpdate[]) => void; onAlignSelection: (alignment: ElementAlignment) => void; onDistributeSelection: (distribution: ElementDistribution) => void; onAdjustSelection: (adjustment: ElementAdjustment, orderedElementIds: string[]) => void }) {
   const opacity = elements.every((element) => element.opacity === elements[0]?.opacity) ? elements[0]?.opacity ?? 1 : undefined;
   const locked = elements.every((element) => element.locked);
   const visible = elements.every((element) => element.visible);
   const editableCount = elements.filter((element) => !element.locked).length;
+  const adjustableCount = elements.slice(1).filter((element) => !element.locked).length;
   const alignmentActions: Array<{ alignment: ElementAlignment; label: string; icon: React.ReactNode }> = [
     { alignment: "left", label: "Align left", icon: <AlignHorizontalJustifyStart size={14} /> },
     { alignment: "horizontal-center", label: "Align horizontal centers", icon: <AlignHorizontalJustifyCenter size={14} /> },
@@ -95,13 +100,24 @@ function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection,
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <InspectorHeading title="Selection" detail={`${elements.length} layers`} />
       <Section title="Arrange">
-        <div className="grid grid-cols-3 gap-1.5">
-          {alignmentActions.map(({ alignment, label, icon }) => <Button aria-label={label} disabled={editableCount < 2} key={alignment} onClick={() => onAlignSelection(alignment)} size="icon" tooltip={label} variant="secondary">{icon}</Button>)}
-        </div>
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-          <Button disabled={editableCount < 3} onClick={() => onDistributeSelection("horizontal")} size="sm" tooltip="Equal horizontal gaps" variant="secondary"><AlignHorizontalSpaceBetween size={14} /> Horizontal</Button>
-          <Button disabled={editableCount < 3} onClick={() => onDistributeSelection("vertical")} size="sm" tooltip="Equal vertical gaps" variant="secondary"><AlignVerticalSpaceBetween size={14} /> Vertical</Button>
-        </div>
+        <ArrangeSubsection title="Align">
+          <div className="grid grid-cols-3 gap-1.5">
+            {alignmentActions.map(({ alignment, label, icon }) => <Button aria-label={label} disabled={editableCount < 2} key={alignment} onClick={() => onAlignSelection(alignment)} size="icon" tooltip={label} variant="secondary">{icon}</Button>)}
+          </div>
+        </ArrangeSubsection>
+        <ArrangeSubsection title="Distribute">
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button disabled={editableCount < 3} onClick={() => onDistributeSelection("horizontal")} size="sm" tooltip="Equal horizontal gaps" variant="secondary"><AlignHorizontalSpaceBetween size={14} /> Horizontal</Button>
+            <Button disabled={editableCount < 3} onClick={() => onDistributeSelection("vertical")} size="sm" tooltip="Equal vertical gaps" variant="secondary"><AlignVerticalSpaceBetween size={14} /> Vertical</Button>
+          </div>
+        </ArrangeSubsection>
+        <ArrangeSubsection title="Adjust">
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button disabled={adjustableCount < 1} onClick={() => onAdjustSelection("width", elements.map((element) => element.id))} size="sm" tooltip="Set later layers to the first layer's width" variant="secondary"><StretchHorizontal size={14} /> Same width</Button>
+            <Button disabled={adjustableCount < 1} onClick={() => onAdjustSelection("height", elements.map((element) => element.id))} size="sm" tooltip="Set later layers to the first layer's height" variant="secondary"><StretchVertical size={14} /> Same height</Button>
+            <Button disabled={adjustableCount < 1} onClick={() => onAdjustSelection("rotation", elements.map((element) => element.id))} size="sm" tooltip="Set later layers to the first layer's rotation" variant="secondary"><RotateCw size={14} /> Same rotation</Button>
+          </div>
+        </ArrangeSubsection>
         {editableCount !== elements.length ? <p className="mt-2 text-[10px] leading-4 text-muted">Locked layers are excluded. {editableCount} editable layer{editableCount === 1 ? "" : "s"} selected.</p> : null}
       </Section>
       <Section title="Common properties">
@@ -111,7 +127,6 @@ function MultiSelectionInspector({ elements, onUpdateElements, onAlignSelection,
           <ToggleButton active={!locked} icon={locked ? <Lock size={13} /> : <Unlock size={13} />} label={locked ? "Locked" : "Editable"} onClick={() => onUpdateElements(elements.map((element) => ({ id: element.id, patch: { locked: !locked } })))} />
         </div>
       </Section>
-      <p className="mt-4 text-xs leading-5 text-muted">Shift-click to edit multiple layers.</p>
     </div>
   );
 }
@@ -356,6 +371,10 @@ function InspectorHeading({ title, detail }: { title: string; detail: string }) 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return <details className="group border-b border-white/[0.07] py-3" open><summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold text-ink/90"><span>{title}</span><ChevronDown className="text-muted transition group-open:rotate-180" size={14} /></summary><div className="mt-3 space-y-3">{children}</div></details>;
+}
+
+function ArrangeSubsection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div className="space-y-1"><span className="block text-[10px] text-muted">{title}</span>{children}</div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

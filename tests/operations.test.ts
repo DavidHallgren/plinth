@@ -4,6 +4,7 @@ import { ProjectSchema, type DeviceElement, type ImageElement, type Project, typ
 import {
   addDeck,
   addElement,
+  adjustElements,
   addScreen,
   alignElements,
   distributeElements,
@@ -208,6 +209,23 @@ describe("scene operations", () => {
       expect(ordered[2]!.element.id).toBe("last");
       expect(ordered[0]!.element).toMatchObject({ x: 10, y: 10 });
       expect(ordered[2]!.element).toMatchObject({ x: 300, y: 220 });
+    }
+  });
+
+  test("matches the first selected layer's geometry on later unlocked layers", () => {
+    let project = fixture();
+    project = addElement(project, "screen_operations", { ...shape("first"), width: 120, height: 60, rotation: 18 });
+    project = addElement(project, "screen_operations", { ...shape("second"), width: 40, height: 90, rotation: -12 });
+    project = addElement(project, "screen_operations", { ...shape("locked"), width: 70, height: 110, rotation: 32, locked: true });
+
+    for (const adjustment of ["width", "height", "rotation"] as const) {
+      const adjusted = adjustElements(project, "screen_operations", ["first", "second", "locked"], adjustment);
+      const adjustedElements = elements(adjusted);
+      const first = adjustedElements.find((element) => element.id === "first");
+      const second = adjustedElements.find((element) => element.id === "second");
+      const locked = adjustedElements.find((element) => element.id === "locked");
+      expect(second?.[adjustment]).toBe(first?.[adjustment]);
+      expect(locked).toMatchObject({ width: 70, height: 110, rotation: 32, locked: true });
     }
   });
 
