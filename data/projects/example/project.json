@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 10,
+  "schemaVersion": 11,
   "id": "project_example",
   "slug": "example",
   "name": "Example",
@@ -64,10 +64,30 @@
   "decks": [
     {
       "id": "deck_example_campaign",
-      "slug": "example-campaign",
-      "name": "Example App Store campaign",
+      "slug": "example-iphone",
+      "name": "Example App iPhone",
       "width": 1320,
       "height": 2868,
+      "groups": [
+        {
+          "id": "group_002da47eb25e",
+          "name": "Feature B Card Group",
+          "elementIds": [
+            "cards_b_surface",
+            "cards_b_label",
+            "cards_b_copy"
+          ]
+        },
+        {
+          "id": "group_f5d15e6904ea",
+          "name": "Feature C Card Group",
+          "elementIds": [
+            "cards_c_surface",
+            "cards_c_label",
+            "cards_c_copy"
+          ]
+        }
+      ],
       "screens": [
         {
           "id": "screen_example_intro",
@@ -175,7 +195,7 @@
                 "x": 96,
                 "y": 150,
                 "width": 1128,
-                "height": 242,
+                "height": 308,
                 "rotation": 0,
                 "opacity": 1,
                 "locked": false,
@@ -186,11 +206,11 @@
                 "text": "Meet your new\nfavorite example.",
                 "style": {
                   "fontFamilyId": "builtin:quicksand",
-                  "fontSize": 130,
+                  "fontSize": 140,
                   "fontWeight": 700,
                   "italic": false,
                   "underline": false,
-                  "lineHeight": 0.93,
+                  "lineHeight": 1.1,
                   "letterSpacing": -5,
                   "color": "#ffffff",
                   "align": "left",
@@ -206,7 +226,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:29:48.447Z"
+          "updatedAt": "2026-08-09T13:52:40.049Z"
         },
         {
           "id": "screen_feature_cards",
@@ -245,64 +265,6 @@
                 "stroke": "#101425",
                 "strokeWidth": 1,
                 "radius": 44
-              },
-              "overflow": false
-            },
-            {
-              "kind": "owned",
-              "element": {
-                "id": "cards_b_surface",
-                "x": 675,
-                "y": 900,
-                "width": 525,
-                "height": 535,
-                "rotation": 7,
-                "opacity": 1,
-                "locked": false,
-                "visible": true,
-                "name": "Feature B card",
-                "shadow": {
-                  "color": "#05060a",
-                  "blur": 26,
-                  "offsetX": 0,
-                  "offsetY": 12,
-                  "opacity": 0.18
-                },
-                "type": "shape",
-                "shape": "rounded-rectangle",
-                "fill": "#c8ff3d",
-                "stroke": "#c8ff3d",
-                "strokeWidth": 1,
-                "radius": 44
-              },
-              "overflow": false
-            },
-            {
-              "kind": "owned",
-              "element": {
-                "id": "cards_c_surface",
-                "x": 250,
-                "y": 1510,
-                "width": 780,
-                "height": 590,
-                "rotation": -3,
-                "opacity": 1,
-                "locked": false,
-                "visible": true,
-                "name": "Feature C card",
-                "shadow": {
-                  "color": "#05060a",
-                  "blur": 16,
-                  "offsetX": 0,
-                  "offsetY": 8,
-                  "opacity": 0.24
-                },
-                "type": "shape",
-                "shape": "rounded-rectangle",
-                "fill": "#2357ff",
-                "stroke": "#2357ff",
-                "strokeWidth": 1,
-                "radius": 48
               },
               "overflow": false
             },
@@ -415,8 +377,8 @@
               "kind": "owned",
               "element": {
                 "id": "cards_a_copy",
-                "x": 145,
-                "y": 930,
+                "x": 148.66669474059995,
+                "y": 907.9948849104859,
                 "width": 390,
                 "height": 160,
                 "rotation": -6,
@@ -469,6 +431,35 @@
                 },
                 "cornerRadius": 0,
                 "alt": "Playful blue star mascot"
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_b_surface",
+                "x": 675,
+                "y": 900,
+                "width": 525,
+                "height": 535,
+                "rotation": 7,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature B card",
+                "shadow": {
+                  "color": "#05060a",
+                  "blur": 26,
+                  "offsetX": 0,
+                  "offsetY": 12,
+                  "opacity": 0.18
+                },
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#c8ff3d",
+                "stroke": "#c8ff3d",
+                "strokeWidth": 1,
+                "radius": 44
               },
               "overflow": false
             },
@@ -539,6 +530,35 @@
                   "shadow": null,
                   "autoHeight": true
                 }
+              },
+              "overflow": false
+            },
+            {
+              "kind": "owned",
+              "element": {
+                "id": "cards_c_surface",
+                "x": 250,
+                "y": 1510,
+                "width": 780,
+                "height": 590,
+                "rotation": -3,
+                "opacity": 1,
+                "locked": false,
+                "visible": true,
+                "name": "Feature C card",
+                "shadow": {
+                  "color": "#05060a",
+                  "blur": 16,
+                  "offsetX": 0,
+                  "offsetY": 8,
+                  "opacity": 0.24
+                },
+                "type": "shape",
+                "shape": "rounded-rectangle",
+                "fill": "#2357ff",
+                "stroke": "#2357ff",
+                "strokeWidth": 1,
+                "radius": 48
               },
               "overflow": false
             },
@@ -650,7 +670,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:29:48.447Z"
+          "updatedAt": "2026-08-09T13:51:54.681Z"
         },
         {
           "id": "screen_feature_a",
@@ -2037,9 +2057,9 @@
         }
       ],
       "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-09T12:29:48.448Z"
+      "updatedAt": "2026-08-09T13:52:40.049Z"
     }
   ],
   "createdAt": "2026-08-02T00:00:00.000Z",
-  "updatedAt": "2026-08-09T12:29:48.449Z"
+  "updatedAt": "2026-08-09T13:52:40.050Z"
 }
