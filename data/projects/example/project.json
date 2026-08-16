@@ -719,10 +719,10 @@
                 "name": "Cropped Feature A phone",
                 "shadow": {
                   "color": "#05060a",
-                  "blur": 34,
+                  "blur": 16,
                   "offsetX": 0,
-                  "offsetY": 18,
-                  "opacity": 0.28
+                  "offsetY": 8,
+                  "opacity": 0.24
                 },
                 "type": "device",
                 "preset": "iphone-17-pro",
@@ -818,7 +818,7 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:29:48.448Z"
+          "updatedAt": "2026-08-16T01:53:13.413Z"
         },
         {
           "id": "screen_feature_grid",
@@ -1893,10 +1893,10 @@
                 "name": "Closing Example phone",
                 "shadow": {
                   "color": "#05060a",
-                  "blur": 34,
+                  "blur": 16,
                   "offsetX": 0,
-                  "offsetY": 18,
-                  "opacity": 0.28
+                  "offsetY": 8,
+                  "opacity": 0.24
                 },
                 "type": "device",
                 "preset": "iphone-17-pro-max",
@@ -1967,7 +1967,13 @@
                 "locked": false,
                 "visible": true,
                 "name": "Closing star mascot",
-                "shadow": null,
+                "shadow": {
+                  "color": "#05060a",
+                  "blur": 16,
+                  "offsetX": 0,
+                  "offsetY": 8,
+                  "opacity": 0.24
+                },
                 "type": "image",
                 "assetPath": "assets/star-mascot-1da4434759e7.png",
                 "fit": "contain",
@@ -2053,13 +2059,13 @@
           ],
           "notes": "",
           "createdAt": "2026-08-02T00:00:00.000Z",
-          "updatedAt": "2026-08-09T12:29:48.448Z"
+          "updatedAt": "2026-08-16T01:52:50.859Z"
         }
       ],
       "createdAt": "2026-08-02T00:00:00.000Z",
-      "updatedAt": "2026-08-09T13:52:40.049Z"
+      "updatedAt": "2026-08-16T01:53:13.413Z"
     }
   ],
   "createdAt": "2026-08-02T00:00:00.000Z",
-  "updatedAt": "2026-08-09T13:52:40.050Z"
+  "updatedAt": "2026-08-16T01:53:13.416Z"
 }
