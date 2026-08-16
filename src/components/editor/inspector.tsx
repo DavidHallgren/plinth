@@ -157,7 +157,6 @@ function ElementInspector({ element, projectFonts, fontBusy, onChangeTextFont, o
       <InspectorHeading title={element.name} detail={isLinked ? `${elementTypeLabel} · linked projection` : elementTypeLabel} />
       {isLinked ? <div className="mb-3 rounded-lg border border-accent/20 bg-accent/[0.08] px-2.5 py-2 text-[10px] leading-4 text-muted">Editing the canonical element owned by {ownerScreenName ?? "another screen"}. Changes apply to every projection.</div> : null}
       <Section title="Transform">
-        <Field label="Name"><Input onChange={(event) => update({ name: event.target.value })} value={element.name} /></Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label="X"><NumberField disabled={element.locked} onChange={(value) => update({ x: value })} value={element.x} /></Field>
           <Field label="Y"><NumberField disabled={element.locked} onChange={(value) => update({ y: value })} value={element.y} /></Field>
