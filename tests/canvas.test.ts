@@ -4,6 +4,7 @@ import { createDefaultProject } from "../src/lib/defaults";
 import { resolveScreen } from "../src/scene/selectors";
 import { SceneContents, SceneRenderer, shapeVisualProps } from "../src/canvas/scene-renderer";
 import { konvaFontStyle } from "../src/canvas/text-style";
+import { fillFrameShadowSilhouette } from "../src/canvas/device-frame-shadow";
 
 describe("Konva text styles", () => {
   test("preserves exact numeric weight and italic in the canvas font descriptor", () => {
@@ -15,6 +16,29 @@ describe("Konva text styles", () => {
 });
 
 describe("scene renderer composition", () => {
+  test("fills enclosed frame apertures without filling exterior gaps", () => {
+    const width = 7;
+    const height = 7;
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    const setOpaque = (x: number, y: number) => { pixels[(y * width + x) * 4 + 3] = 255; };
+    for (let x = 1; x <= 5; x += 1) {
+      setOpaque(x, 1);
+      setOpaque(x, 5);
+    }
+    for (let y = 1; y <= 5; y += 1) {
+      setOpaque(1, y);
+      setOpaque(5, y);
+    }
+
+    const silhouette = fillFrameShadowSilhouette(pixels, width, height);
+    expect(silhouette[(3 * width + 3) * 4 + 3]).toBe(255);
+    expect(silhouette[(0 * width + 3) * 4 + 3]).toBe(0);
+
+    pixels[(1 * width + 3) * 4 + 3] = 0;
+    const openSilhouette = fillFrameShadowSilhouette(pixels, width, height);
+    expect(openSilhouette[(3 * width + 3) * 4 + 3]).toBe(0);
+  });
+
   test("keeps layer ownership outside reusable screen contents", () => {
     const project = createDefaultProject("Renderer fixture");
     const sourceScreen = project.decks[0]?.screens[0];
