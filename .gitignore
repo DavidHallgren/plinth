@@ -5,22 +5,8 @@ dist/
 .env.*
 !.env.example
 *.log
-# Runtime project data is private by default. Keep only the generic example.
-/data/*
-!/data/projects/
-/data/projects/*
-!/data/projects/example/
-/data/projects/example/*
-!/data/projects/example/project.json
-!/data/projects/example/assets/
-/data/projects/example/assets/*
-!/data/projects/example/assets/example-feature-grid-*.svg
-!/data/projects/example/assets/example-phone-*.svg
-!/data/projects/example/assets/beachball-*.png
-!/data/projects/example/assets/star-mascot-*.png
-!/data/projects/example/exports/
-/data/projects/example/exports/*
-!/data/projects/example/exports/.gitkeep
+# Legacy runtime project data is private. Tracked examples live under fixtures/.
+/data/
 src/styles.generated.css
 .bun/
 .idea/

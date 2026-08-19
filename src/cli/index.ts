@@ -31,6 +31,7 @@ Options:
   --name <name>                         Set a project, deck, or screen name
   --width <pixels>                      Set the deck width at creation
   --height <pixels>                     Set the deck height at creation
+  --data-dir <path>                     Use a specific Plinth project directory
 `;
 
 type ParsedArgs = {
@@ -235,7 +236,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const storage = new ProjectStorage();
+  const storage = new ProjectStorage(parsed.options.get("data-dir"));
   const result = await run(parsed, storage);
   printResult(result.value, parsed.json);
   if (result.valid === false) {

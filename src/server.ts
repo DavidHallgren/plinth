@@ -26,8 +26,24 @@ import {
   handleDeleteFont,
 } from "./lib/api";
 import { ProjectStorage } from "./lib/storage";
+import { openEditorInBrowser, parseServerRuntimeOptions, resolveServerPort, serverHelp } from "./lib/runtime-options";
 
-const storage = new ProjectStorage(Bun.env.PLINTH_DATA_ROOT ?? undefined);
+let runtimeOptions;
+try {
+  runtimeOptions = parseServerRuntimeOptions(process.argv.slice(2), { environment: Bun.env });
+} catch (error) {
+  console.error(`INVALID_OPTIONS: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+}
+
+if (runtimeOptions.showHelp) {
+  console.log(serverHelp());
+  process.exit(0);
+}
+
+const storage = new ProjectStorage(runtimeOptions.dataDirectory);
+await storage.initialize();
+const serverPort = await resolveServerPort(runtimeOptions.port, runtimeOptions.hostname);
 
 const routes = {
   "/api/health": {
@@ -84,8 +100,8 @@ const routes = {
 };
 
 export const server = Bun.serve({
-  port: Number(Bun.env.PORT ?? 3000),
-  hostname: Bun.env.HOST ?? "127.0.0.1",
+  port: serverPort,
+  hostname: runtimeOptions.hostname,
   development: Bun.env.NODE_ENV !== "production",
   routes,
   fetch: () => new Response("Not found", { status: 404 }),
@@ -97,4 +113,8 @@ export const server = Bun.serve({
 
 if (import.meta.main) {
   console.log(`Plinth running at ${server.url}`);
+  console.log(`Projects: ${runtimeOptions.dataDirectory}`);
+  if (runtimeOptions.openBrowser && !openEditorInBrowser(server.url.toString())) {
+    console.warn(`Could not open the default browser. Open ${server.url} manually.`);
+  }
 }

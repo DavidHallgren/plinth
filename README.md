@@ -8,7 +8,26 @@ This also makes Plinth a particularly willing accomplice for ChatGPT Work and Co
 
 In short: Plinth makes polished screenshots without taking your files hostage or turning “move this text three pixels left” into a recurring subscription.
 
-## Setup
+## Run the standalone app
+
+Release builds are self-contained and do not require Bun or a repository checkout. Starting Plinth chooses an available local port, opens the editor in the default browser, and stores projects under `~/Library/Application Support/Plinth/projects` on macOS.
+
+```sh
+./plinth
+```
+
+Runtime options:
+
+```text
+--data-dir <path>  Store projects in this directory
+--port <number>    Listen on an exact port; 0 chooses an available port
+--no-open          Do not open the default browser
+--help             Show runtime help
+```
+
+`PLINTH_DATA_ROOT`, `PORT`, `HOST`, and `PLINTH_NO_OPEN` provide equivalent environment configuration. Linux defaults to `$XDG_DATA_HOME/plinth/projects` or `~/.local/share/plinth/projects`; Windows defaults to `%LOCALAPPDATA%\Plinth\projects`.
+
+## Development setup
 
 Plinth requires Bun 1.3 or newer.
 
@@ -17,7 +36,7 @@ bun install
 bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The bundled example project is stored in `data/projects/example/`; other projects under `data/` are ignored by Git.
+Open [http://localhost:3000](http://localhost:3000). Development uses the same platform application-data directory as the standalone app, so projects no longer depend on the repository checkout. On the first launch into an empty project directory, Plinth copies its bundled example from `fixtures/projects/example/`. The copy is an ordinary editable project and stays deleted if you remove it.
 
 The project picker lives at `/`. Open editors use `/projects/<project-id>`, where the stable persisted ID keeps bookmarks and reloads working even if the project's editable slug changes. Other browser paths show the app's not-found state.
 
@@ -30,9 +49,11 @@ bun run build      # Build the standalone executable
 bun run tool help  # Show CLI commands
 ```
 
+`bun run build` creates a clean `dist/` distribution containing the standalone executable, Plinth's license, `THIRD_PARTY_NOTICES.md`, and the original bundled-font license files.
+
 ## Project storage
 
-Projects are stored under `data/projects/<slug>/` with a human-readable `project.json`, an `assets/` directory, and generated `exports/`. Image data is never embedded in project JSON.
+Projects are stored under the platform application-data directory described above in both standalone and development modes. Pass `--data-dir` to either the server or CLI to use another root. Opening the app with a fresh, empty root seeds a writable copy of the bundled example project once; a small initialization marker prevents a deleted example from returning. Every project contains a human-readable `project.json`, an `assets/` directory, and generated `exports/`. Image data is never embedded in project JSON.
 
 The asset library provides searchable grid and list views, editable display names, stored filename details, usage navigation, and image or frame placement. The shared frame menu can also wrap a selected canvas image or change an existing frame from the inspector. Stored filenames remain immutable and content-addressed. Uploads are validated by content and decoded before use; deleting a referenced asset also deletes its image/device layers and resets matching backgrounds so project JSON cannot retain broken references.
 
@@ -51,6 +72,8 @@ Plinth includes a CLI for inspecting and managing projects:
 ```sh
 bun run tool help
 ```
+
+The CLI uses the platform application-data directory by default. Pass `--data-dir <path>` to inspect or modify an isolated project directory instead.
 
 PNG rendering remains in the browser editor.
 

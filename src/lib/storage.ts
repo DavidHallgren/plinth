@@ -1,5 +1,5 @@
 import { cp, mkdir, readdir, readFile, realpath, rename as fsRename, rm, stat, unlink } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { createDefaultProject } from "./defaults";
 import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
@@ -19,6 +19,8 @@ import { removeAssetUsages } from "./asset-mutations";
 import { ExportRunRegistry } from "./export-storage";
 import { filesystemErrorCode, writePrettyJsonAtomic } from "./project-storage";
 import { assertFontPath, MAX_FONT_BYTES, MAX_PROJECT_FONT_BYTES, validateFontBytes } from "./font-validation";
+import { defaultProjectDirectory, resolveDataDirectory } from "./runtime-options";
+import { seedExampleProject, type ExampleSeedResult } from "./example-project";
 export { writePrettyJsonAtomic } from "./project-storage";
 
 export type ProjectMetadata = {
@@ -128,13 +130,18 @@ export class ProjectStorage {
   private readonly mutationLock = new ProjectMutationLock();
   private readonly exportRuns = new ExportRunRegistry();
 
-  constructor(rootDir = Bun.env.PLINTH_DATA_ROOT ?? join(process.cwd(), "data", "projects")) {
-    this.rootDir = resolve(rootDir);
+  constructor(rootDir = Bun.env.PLINTH_DATA_ROOT ?? defaultProjectDirectory()) {
+    this.rootDir = resolveDataDirectory(rootDir);
   }
 
   async ensureRoot(): Promise<void> {
     await mkdir(this.rootDir, { recursive: true });
     await assertDirectoryContained(this.rootDir, this.rootDir, true);
+  }
+
+  async initialize(): Promise<ExampleSeedResult> {
+    await this.ensureRoot();
+    return seedExampleProject(this.rootDir);
   }
 
   projectDirectory(slug: string): string {
