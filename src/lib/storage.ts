@@ -163,7 +163,7 @@ export class ProjectStorage {
     return resolveWithin(this.projectSubdirectory(slug, "exports"), assertExportFileName(fileName));
   }
 
-  private async configuredExportRoot(project: Project): Promise<string> {
+  private async configuredExportRoot(project: Project, createIfMissing = false): Promise<string> {
     const configuredPath = project.settings.exportDirectory?.trim();
     if (!configuredPath) {
       throw new PlinthError("EXPORT_DIRECTORY_NOT_CONFIGURED", 422, "Configure an export folder for this project before exporting to a folder.");
@@ -172,14 +172,35 @@ export class ProjectStorage {
       throw new PlinthError("EXPORT_DIRECTORY_INVALID", 422, `The configured export folder must be an absolute path: "${configuredPath}".`, { path: configuredPath });
     }
 
+    let directoryStats: Awaited<ReturnType<typeof stat>>;
     try {
-      const directoryStats = await stat(configuredPath);
-      if (!directoryStats.isDirectory()) {
-        throw new PlinthError("EXPORT_DIRECTORY_INVALID", 422, `The configured export folder is not a directory: "${configuredPath}".`, { path: configuredPath });
+      directoryStats = await stat(configuredPath);
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") {
+        throw new PlinthError("EXPORT_DIRECTORY_UNAVAILABLE", 422, `The configured export folder is unavailable: "${configuredPath}".`, {
+          path: configuredPath,
+          cause: error instanceof Error ? error.message : String(error),
+        });
       }
+      if (!createIfMissing) {
+        throw new PlinthError("EXPORT_DIRECTORY_MISSING", 422, `The configured export folder does not exist: "${configuredPath}".`, { path: configuredPath });
+      }
+      try {
+        await mkdir(configuredPath, { recursive: true });
+        directoryStats = await stat(configuredPath);
+      } catch (creationError) {
+        throw new PlinthError("EXPORT_DIRECTORY_WRITE_FAILED", 422, `Plinth could not create the configured export folder: "${configuredPath}".`, {
+          path: configuredPath,
+          cause: creationError instanceof Error ? creationError.message : String(creationError),
+        });
+      }
+    }
+    if (!directoryStats.isDirectory()) {
+      throw new PlinthError("EXPORT_DIRECTORY_INVALID", 422, `The configured export folder is not a directory: "${configuredPath}".`, { path: configuredPath });
+    }
+    try {
       return await realpath(configuredPath);
     } catch (error) {
-      if (isPlinthError(error)) throw error;
       throw new PlinthError("EXPORT_DIRECTORY_UNAVAILABLE", 422, `The configured export folder is unavailable: "${configuredPath}".`, {
         path: configuredPath,
         cause: error instanceof Error ? error.message : String(error),
@@ -187,9 +208,9 @@ export class ProjectStorage {
     }
   }
 
-  async createExportRun(slug: string): Promise<ExportRun> {
+  async createExportRun(slug: string, options: { createDirectory?: boolean } = {}): Promise<ExportRun> {
     const project = await this.loadProject(slug);
-    const exportRoot = await this.configuredExportRoot(project);
+    const exportRoot = await this.configuredExportRoot(project, options.createDirectory);
     const baseName = timestampDirectoryName();
 
     for (let suffix = 0; suffix < 100; suffix += 1) {

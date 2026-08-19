@@ -91,7 +91,7 @@ describe("export API and storage", () => {
     expect(Array.from(await readFile(payload.data.export.absolutePath))).toEqual(Array.from(pngFixture(320, 240)));
   });
 
-  test("returns clear errors when the configured folder is missing or unavailable", async () => {
+  test("requires confirmation before creating a missing configured folder", async () => {
     const storage = await temporaryStorage();
     const created = await storage.createProject({ name: "Missing export folder", slug: "missing-export-folder", description: "Folder export" });
 
@@ -99,10 +99,21 @@ describe("export API and storage", () => {
     expect(missingConfiguration.status).toBe(422);
     expect(await missingConfiguration.json()).toMatchObject({ error: { code: "EXPORT_DIRECTORY_NOT_CONFIGURED", message: expect.stringContaining("Configure an export folder") } });
 
-    await storage.saveProject({ ...created, settings: { ...created.settings, exportDirectory: join(storage.rootDir, "does-not-exist") } });
-    const unavailable = await apiAction(() => handleCreateExportRun(new Request("http://plinth.test/api/projects/missing-export-folder/export-runs", { method: "POST" }), storage));
-    expect(unavailable.status).toBe(422);
-    expect(await unavailable.json()).toMatchObject({ error: { code: "EXPORT_DIRECTORY_UNAVAILABLE", message: expect.stringContaining("unavailable") } });
+    const exportRoot = join(storage.rootDir, "does-not-exist", "screenshots");
+    await storage.saveProject({ ...created, settings: { ...created.settings, exportDirectory: exportRoot } });
+    const missing = await apiAction(() => handleCreateExportRun(new Request("http://plinth.test/api/projects/missing-export-folder/export-runs", { method: "POST" }), storage));
+    expect(missing.status).toBe(422);
+    expect(await missing.json()).toMatchObject({ error: { code: "EXPORT_DIRECTORY_MISSING", message: expect.stringContaining("does not exist"), details: { path: exportRoot } } });
+
+    const confirmed = await handleCreateExportRun(new Request("http://plinth.test/api/projects/missing-export-folder/export-runs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ createDirectory: true }),
+    }), storage);
+    expect(confirmed.status).toBe(201);
+    expect((await stat(exportRoot)).isDirectory()).toBe(true);
+    const confirmedPayload = await confirmed.json() as { data: { exportRun: { absolutePath: string } } };
+    expect(confirmedPayload.data.exportRun.absolutePath.startsWith(`${await realpath(exportRoot)}/`)).toBe(true);
   });
 
   test("validates membership, metadata, dimensions, signature, and atomic persistence", async () => {

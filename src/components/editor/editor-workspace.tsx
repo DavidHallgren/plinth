@@ -693,7 +693,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           <Input id="rename-project-slug" onChange={(event) => setRenameSlug(event.target.value)} value={renameSlug} />
           <label className="block pt-2 text-xs font-medium text-muted" htmlFor="edit-project-export-directory">Export folder</label>
           <Input id="edit-project-export-directory" onChange={(event) => setRenameExportDirectory(event.target.value)} placeholder="/absolute/path/to/exports" value={renameExportDirectory} />
-          <p className="text-[10px] leading-4 text-muted">Folder exports create timestamped directories inside this existing absolute path.</p>
+          <p className="text-[10px] leading-4 text-muted">Folder exports create timestamped directories here. Missing folders can be created when exporting.</p>
         </form>
       </Dialog>
 
@@ -724,7 +724,6 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
         activeDeckId={snapshot.activeDeckId}
         activeScreenId={snapshot.activeScreenId}
         onBeforeExport={flushPendingSave}
-        onError={setLocalError}
         onExportDirectoryChange={(directory) => run(() => {
           const current = store.getSnapshot().project;
           if (current.settings.exportDirectory === directory) return;

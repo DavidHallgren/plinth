@@ -163,7 +163,7 @@ export function ProjectPicker({ projects, loading, error, onOpen, onCreate, onDe
           <Input id="create-project-slug" maxLength={64} onChange={(event) => setSlug(event.target.value)} placeholder="Generated from the name" value={slug} />
           <label className="block pt-2 text-xs font-medium text-muted" htmlFor="create-project-export-directory">Export folder <span className="font-normal text-muted/70">(optional)</span></label>
           <Input id="create-project-export-directory" maxLength={4096} onChange={(event) => setExportDirectory(event.target.value)} placeholder="/absolute/path/to/exports" value={exportDirectory} />
-          <p className="text-[10px] leading-4 text-muted">Folder exports create timestamped directories inside this existing absolute path.</p>
+          <p className="text-[10px] leading-4 text-muted">Folder exports create timestamped directories here. Missing folders can be created when exporting.</p>
           <label className="block pt-2 text-xs font-medium text-muted" htmlFor="create-project-deck-preset">First deck size</label>
           <select className="plinth-focus-ring h-10 w-full rounded-xl border border-line bg-black/20 px-3 text-sm text-ink outline-none focus:border-accent/70" id="create-project-deck-preset" onChange={(event) => { const value = event.target.value as ScreenPreset; setDeckPreset(value); const definition = getPresetDefinition(value); if (definition) { setDeckWidth(definition.width); setDeckHeight(definition.height); } }} value={deckPreset}>{APP_STORE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}<option value="custom">Exact custom size</option></select>
           <div className="grid grid-cols-2 gap-2">

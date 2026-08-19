@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Stage } from "../../canvas/react-konva";
 import type { Project } from "../../lib/schema";
 import { resolveScreen, type ResolvedScreen } from "../../scene/selectors";
-import { apiFetch } from "../../lib/client-api";
+import { ApiClientError, apiFetch, jsonRequest } from "../../lib/client-api";
 import { buildExportPlan, type ExportScope } from "../../lib/export-validation";
 import { waitForSceneReady } from "../../canvas/export-readiness";
 import { SceneRenderer } from "../../canvas/scene-renderer";
@@ -19,7 +19,6 @@ type ExportDialogProps = {
   activeDeckId: string;
   activeScreenId: string;
   onOpenChange: (open: boolean) => void;
-  onError?: (message: string) => void;
   onBeforeExport?: () => Promise<Project>;
   onExportDirectoryChange?: (directory: string | null) => void;
   onRenderingChange?: (rendering: boolean) => void;
@@ -35,6 +34,22 @@ type ExportRow = {
   error?: string;
   downloaded?: boolean;
 };
+
+type ExportAlert = {
+  title: string;
+  message: string;
+};
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function errorPath(error: ApiClientError, fallback: string): string {
+  if (error.details && typeof error.details === "object" && "path" in error.details && typeof error.details.path === "string") {
+    return error.details.path;
+  }
+  return fallback;
+}
 
 function statusText(status: ExportStatus): string {
   if (status === "rendering") return "Rendering…";
@@ -76,12 +91,13 @@ function planForProject(sourceProject: Project, scope: ExportScope): Array<{ scr
   });
 }
 
-export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOpenChange, onError, onBeforeExport, onExportDirectoryChange, onRenderingChange }: ExportDialogProps) {
+export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOpenChange, onBeforeExport, onExportDirectoryChange, onRenderingChange }: ExportDialogProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [mode, setMode] = useState<"screen" | "deck" | "all">("screen");
   const [destination, setDestination] = useState<"download" | "folder">("download");
   const [exportDirectory, setExportDirectory] = useState(project.settings.exportDirectory ?? "");
-  const [destinationError, setDestinationError] = useState<string | null>(null);
+  const [missingExportDirectory, setMissingExportDirectory] = useState<string | null>(null);
+  const [exportAlert, setExportAlert] = useState<ExportAlert | null>(null);
   const [rows, setRows] = useState<ExportRow[]>([]);
   const [renderScreen, setRenderScreen] = useState<ResolvedScreen | null>(null);
   const [renderProject, setRenderProject] = useState<Project | null>(null);
@@ -131,8 +147,15 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
   }, [project.settings.exportDirectory]);
 
   useEffect(() => {
-    if (planError) onError?.(planError);
-  }, [onError, planError]);
+    if (!open) {
+      setMissingExportDirectory(null);
+      setExportAlert(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open && planError) setExportAlert({ title: "Could not prepare export", message: planError });
+  }, [open, planError]);
 
   async function waitForStage(screenId: string): Promise<Konva.Stage> {
     void screenId;
@@ -163,10 +186,10 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
     setRows((current) => current.map((row) => row.screen.id === screenId ? { ...row, ...values } : row));
   }
 
-  async function runExport(): Promise<void> {
+  async function runExport(createDirectory = false): Promise<void> {
     if (destination === "folder" && !configuredExportDirectory) return;
     setExporting(true);
-    setDestinationError(null);
+    setExportAlert(null);
     onRenderingChange?.(true);
     try {
       onExportDirectoryChange?.(configuredExportDirectory || null);
@@ -174,7 +197,7 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
       try {
         sourceProject = (await onBeforeExport?.()) ?? project;
       } catch (error) {
-        onError?.(error instanceof Error ? error.message : "The project could not be saved before export.");
+        setExportAlert({ title: "Could not prepare export", message: errorMessage(error, "The project could not be saved before export.") });
         return;
       }
       let sourcePlan: Array<{ screen: ResolvedScreen; fileName: string }>;
@@ -184,26 +207,36 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
         sourceScope = mode === "screen" ? { mode: "screen", screenId: activeScreenId } : mode === "deck" ? { mode: "deck", deckId: sourceDeck?.id ?? activeDeckId } : { mode: "all" };
         sourcePlan = planForProject(sourceProject, sourceScope);
       } catch (error) {
-        onError?.(error instanceof Error ? error.message : "The export plan is invalid.");
+        setExportAlert({ title: "Could not prepare export", message: errorMessage(error, "The export plan is invalid.") });
         return;
       }
       const selected = sourcePlan;
       if (selected.length === 0) {
-        onError?.("There is no screen available to export.");
+        setExportAlert({ title: "Nothing to export", message: "There is no screen available to export." });
         return;
       }
       let exportRun: { id: string; absolutePath: string } | null = null;
       if (destination === "folder") {
         try {
-          const result = await apiFetch<{ exportRun: { id: string; absolutePath: string } }>(`/api/projects/${encodeURIComponent(sourceProject.slug)}/export-runs`, { method: "POST" });
+          const result = await apiFetch<{ exportRun: { id: string; absolutePath: string } }>(
+            `/api/projects/${encodeURIComponent(sourceProject.slug)}/export-runs`,
+            createDirectory ? jsonRequest({ createDirectory: true }) : { method: "POST" },
+          );
           exportRun = result.exportRun;
         } catch (error) {
-          const message = error instanceof Error ? error.message : "The server could not create the timestamped export directory.";
-          setDestinationError(`Could not export to the configured folder. ${message}`);
+          if (error instanceof ApiClientError && error.code === "EXPORT_DIRECTORY_MISSING") {
+            setMissingExportDirectory(errorPath(error, configuredExportDirectory));
+          } else {
+            setExportAlert({
+              title: "Could not export to folder",
+              message: errorMessage(error, "The server could not create the timestamped export directory."),
+            });
+          }
           return;
         }
       }
       const initialRows = selected.map(({ screen, fileName }) => ({ screen, fileName, status: "pending" as const }));
+      const exportFailures: Array<{ screenName: string; message: string }> = [];
       setRows(initialRows);
       for (const item of initialRows) {
         updateRow(item.screen.id, { status: "rendering", error: undefined, path: undefined, downloaded: false });
@@ -227,7 +260,8 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
           if (destination === "download") downloadBlob(blob, item.fileName);
           updateRow(item.screen.id, { status: "done", path: result.export.absolutePath ?? result.export.relativePath, downloaded: destination === "download" });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "The screen could not be exported.";
+          const message = errorMessage(error, "The screen could not be exported.");
+          exportFailures.push({ screenName: item.screen.name, message });
           updateRow(item.screen.id, { status: "error", error: message });
         } finally {
           setRenderScreen(null);
@@ -235,6 +269,15 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
           stageRef.current = null;
           await nextFrame();
         }
+      }
+      if (exportFailures.length === 1) {
+        const failure = exportFailures[0];
+        if (failure) setExportAlert({ title: `Could not export ${failure.screenName}`, message: failure.message });
+      } else if (exportFailures.length > 1) {
+        setExportAlert({
+          title: `${exportFailures.length} screenshots could not be exported`,
+          message: exportFailures.map((failure) => `${failure.screenName}: ${failure.message}`).join("\n"),
+        });
       }
     } finally {
       setRenderScreen(null);
@@ -260,7 +303,7 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
     if (exporting || mode === nextMode) return;
     setMode(nextMode);
     setRows([]);
-    setDestinationError(null);
+    setExportAlert(null);
   }
 
   function selectDestination(nextDestination: typeof destination): void {
@@ -268,7 +311,7 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
     if (nextDestination === "download") onExportDirectoryChange?.(configuredExportDirectory || null);
     setDestination(nextDestination);
     setRows([]);
-    setDestinationError(null);
+    setExportAlert(null);
   }
 
   return (
@@ -336,8 +379,8 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
                   disabled={exporting}
                   id="project-export-directory"
                   onBlur={() => onExportDirectoryChange?.(configuredExportDirectory || null)}
-                  onChange={(event) => { setExportDirectory(event.target.value); setDestinationError(null); }}
-                  placeholder="Existing absolute directory"
+                  onChange={(event) => { setExportDirectory(event.target.value); setExportAlert(null); }}
+                  placeholder="Absolute directory"
                   value={exportDirectory}
                 />
               </div>
@@ -351,7 +394,6 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
               </div>
             )}
           </div>
-          {destinationError ? <p className="rounded-xl border border-red-300/20 bg-red-400/[0.08] px-3 py-2 text-[11px] leading-5 text-red-200" role="alert">{destinationError}</p> : null}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-black/10">
             <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-2">
               <p className="text-[10px] font-medium uppercase tracking-[0.13em] text-muted">Export queue</p>
@@ -387,7 +429,6 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
                             </span>
                           </div>
                           {row?.path ? <p className="mt-1 truncate text-[10px] text-emerald-200/75" title={row.path}>{row.downloaded ? "Download started" : `Saved to ${row.path}`}</p> : null}
-                          {row?.error ? <p className="mt-1 text-[10px] leading-4 text-red-200" role="alert">{row.error}</p> : null}
                         </div>
                       );
                     })}
@@ -397,6 +438,42 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
             </div>
           </div>
         </div>
+      </Dialog>
+      <Dialog
+        description="The configured export folder does not exist."
+        footer={(
+          <>
+            <Button disabled={exporting} onClick={() => setMissingExportDirectory(null)} variant="ghost">Cancel</Button>
+            <Button
+              disabled={exporting}
+              onClick={() => {
+                setMissingExportDirectory(null);
+                void runExport(true);
+              }}
+              variant="primary"
+            >
+              Create Folder
+            </Button>
+          </>
+        )}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !exporting) setMissingExportDirectory(null);
+        }}
+        open={missingExportDirectory !== null}
+        title="Create export folder?"
+      >
+        <div className="space-y-3 text-sm leading-6 text-muted">
+          <p>Plinth will create this folder and any missing parent folders:</p>
+          <p className="break-all rounded-xl border border-line bg-black/20 px-3 py-2 font-mono text-xs leading-5 text-ink">{missingExportDirectory}</p>
+        </div>
+      </Dialog>
+      <Dialog
+        footer={<Button onClick={() => setExportAlert(null)} variant="primary">OK</Button>}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setExportAlert(null); }}
+        open={exportAlert !== null}
+        title={exportAlert?.title ?? "Export failed"}
+      >
+        <p className="whitespace-pre-line text-sm leading-6 text-muted">{exportAlert?.message}</p>
       </Dialog>
       {renderScreen ? (
         <div aria-hidden="true" className="pointer-events-none fixed -left-[100000px] top-0 h-px w-px overflow-hidden opacity-0">

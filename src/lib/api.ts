@@ -81,6 +81,12 @@ const ExportMetadataSchema = z
   })
   .strict();
 
+const CreateExportRunRequestSchema = z
+  .object({
+    createDirectory: z.boolean().optional(),
+  })
+  .strict();
+
 type ApiAction = () => Response | Promise<Response>;
 
 export function success<T>(data: T, status = 200): Response {
@@ -412,7 +418,10 @@ export async function handleCreateExport(request: Request, storage: ProjectStora
 }
 
 export async function handleCreateExportRun(request: Request, storage: ProjectStorage): Promise<Response> {
-  const result = await storage.createExportRun(pathSegment(request, 3));
+  const options = request.body === null
+    ? {}
+    : parseBody(CreateExportRunRequestSchema, await jsonBody(request));
+  const result = await storage.createExportRun(pathSegment(request, 3), options);
   return success({ exportRun: result }, 201);
 }
 
