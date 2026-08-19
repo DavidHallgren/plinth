@@ -11,6 +11,7 @@ import {
   duplicateDeck,
   duplicateElements,
   duplicateScreen,
+  createImageCropCallout,
   groupElements,
   moveElements,
   removeDeck,
@@ -54,6 +55,10 @@ function shape(id: string, x = 20, y = 20): ShapeElement {
     stroke: "#ffffff",
     strokeWidth: 1,
     radius: 12,
+    strokeDash: "solid",
+    lineCap: "butt",
+    startMarker: "none",
+    endMarker: "none",
   };
 }
 
@@ -92,6 +97,43 @@ function elements(project: Project) {
 }
 
 describe("scene operations", () => {
+  test("creates a crop callout without a connector or duplicated asset data", () => {
+    const image: ImageElement = {
+      id: "image_callout_source",
+      type: "image",
+      name: "Source screenshot",
+      x: 40,
+      y: 40,
+      width: 220,
+      height: 160,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      visible: true,
+      shadow: null,
+      assetPath: "assets/screenshot.png",
+      fit: "cover",
+      position: { x: 0.7, y: 0.35 },
+      crop: null,
+      cornerRadius: 12,
+      border: null,
+      backgroundColor: null,
+      alt: "Screenshot",
+    };
+    let project = fixture();
+    project = { ...project, assets: [{ id: "asset_callout", kind: "image", name: "Screenshot", sourceFileName: "screenshot.png", path: "assets/screenshot.png", fileName: "screenshot.png", mimeType: "image/png", width: 1200, height: 800, byteSize: 10 }] };
+    project = createImageCropCallout(addElement(project, "screen_operations", image), "screen_operations", image.id);
+
+    const screen = project.decks[0]?.screens[0];
+    const created = screen?.layers.flatMap((layer) => layer.kind === "owned" && layer.element.id !== image.id ? [layer.element] : []) ?? [];
+    const callout = created.find((element) => element.type === "image");
+    expect(callout).toMatchObject({ type: "image", assetPath: image.assetPath, border: { color: "#ffffff", dash: "solid" } });
+    expect(callout?.type === "image" && callout.cornerRadius).toBe(callout?.width ? callout.width / 2 : 0);
+    expect(callout?.type === "image" && callout.crop).not.toBeNull();
+    expect(created).toHaveLength(1);
+    expect(project.decks[0]?.groups).toHaveLength(0);
+    expect(project.assets).toHaveLength(1);
+  });
   test("adds, updates, moves, and removes normalized elements using deck bounds", () => {
     const project = fixture();
     const added = addElement(project, "screen_operations", shape("shape_one", 340, 280));
@@ -311,7 +353,10 @@ describe("scene operations", () => {
       assetPath: "assets/screenshot.png",
       fit: "cover",
       position: { x: 0.5, y: 0.5 },
+      crop: null,
       cornerRadius: 12,
+      border: null,
+      backgroundColor: null,
       alt: "Screenshot",
     };
     let project = addElement(fixture(), "screen_operations", shape("below"));

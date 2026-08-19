@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import { useMemo, type ReactNode } from "react";
-import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Text } from "./react-konva";
+import { Arrow, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Text } from "./react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { AssetMetadata, GradientStop } from "../lib/schema";
 import { getDevicePreset } from "../devices/presets";
@@ -120,10 +120,14 @@ function shadowProps(shadow: ResolvedElement["shadow"]): Record<string, unknown>
 }
 
 export function shapeVisualProps(element: Extract<ResolvedElement, { type: "shape" }>): Record<string, unknown> {
+  const dash = element.strokeDash === "dashed" ? [Math.max(6, element.strokeWidth * 3), Math.max(4, element.strokeWidth * 2)] : element.strokeDash === "dotted" ? [Math.max(1, element.strokeWidth), Math.max(3, element.strokeWidth * 1.75)] : undefined;
   return {
     fill: element.fill,
     stroke: element.stroke,
     strokeWidth: element.strokeWidth,
+    dash,
+    lineCap: element.lineCap,
+    lineJoin: element.lineCap === "round" ? "round" : "miter",
     ...shadowProps(element.shadow),
   };
 }
@@ -233,8 +237,17 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
     if (element.shape === "ellipse") {
       return <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}><Ellipse {...shapeProps} radiusX={element.width / 2} radiusY={element.height / 2} x={element.width / 2} y={element.height / 2} /></Group>;
     }
-    if (element.shape === "line") {
-      return <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}><Line {...shapeProps} points={[0, element.height / 2, element.width, element.height / 2]} /></Group>;
+    if (element.shape === "line" || element.shape === "arrow") {
+      const pointerLength = Math.max(8, element.strokeWidth * 3);
+      const pointerWidth = Math.max(8, element.strokeWidth * 2.5);
+      const useArrow = element.shape === "arrow" || element.startMarker === "arrow" || element.endMarker === "arrow";
+      return <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}>
+        {useArrow
+          ? <Arrow {...shapeProps} fill={element.stroke} pointerAtBeginning={element.startMarker === "arrow"} pointerAtEnding={element.shape === "arrow" || element.endMarker === "arrow"} pointerLength={pointerLength} pointerWidth={pointerWidth} points={[0, element.height / 2, element.width, element.height / 2]} />
+          : <Line {...shapeProps} points={[0, element.height / 2, element.width, element.height / 2]} />}
+        {element.startMarker === "dot" ? <Ellipse fill={element.stroke} radiusX={pointerWidth / 2} radiusY={pointerWidth / 2} x={0} y={element.height / 2} /> : null}
+        {element.endMarker === "dot" ? <Ellipse fill={element.stroke} radiusX={pointerWidth / 2} radiusY={pointerWidth / 2} x={element.width} y={element.height / 2} /> : null}
+      </Group>;
     }
     return <Rect {...elementNodeProps} {...shapeProps} cornerRadius={element.shape === "rounded-rectangle" ? element.radius : 0} name={`element-${element.id}`} ref={registerNode} />;
   }
@@ -242,7 +255,7 @@ function ElementNode({ screen, element, projectSlug, assets, selected, interacti
   if (element.type === "image") {
     return (
       <Group {...elementNodeProps} name={`element-${element.id}`} ref={registerNode}>
-        <AssetImageLayer asset={assetFor(assets, element.assetPath)} assetPath={element.assetPath} cornerRadius={element.cornerRadius} fit={element.fit} height={element.height} label={`Missing ${element.assetPath}`} listening={interactive} position={element.position} projectSlug={projectSlug} width={element.width} />
+        <AssetImageLayer asset={assetFor(assets, element.assetPath)} assetPath={element.assetPath} backgroundColor={element.backgroundColor ?? undefined} border={element.border} cornerRadius={element.cornerRadius} crop={element.crop} fit={element.fit} height={element.height} label={`Missing ${element.assetPath}`} listening={interactive} position={element.position} projectSlug={projectSlug} shadow={element.shadow} width={element.width} />
       </Group>
     );
   }

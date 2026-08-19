@@ -1,8 +1,8 @@
 import Konva from "konva";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { Group, Image as KonvaImage, Rect, Text } from "./react-konva";
-import type { AssetMetadata, ImageFit, Point } from "../lib/schema";
-import { calculateImageCoverCrop, calculateImageFitGeometry } from "../devices/geometry";
+import type { AssetMetadata, ImageBorder, ImageFit, NormalizedCrop, Point, Shadow } from "../lib/schema";
+import { calculateImageCoverCrop, calculateImageFitGeometry, calculateNormalizedImageCrop } from "../devices/geometry";
 import { clearImageCache as clearImageCacheEntries, imageCacheVersion, imageResourceState, loadImageResource, subscribeImageCache, type ImageResource } from "./image-cache";
 
 export type { ImageResource } from "./image-cache";
@@ -48,8 +48,11 @@ export type AssetImageLayerProps = {
   height: number;
   fit: ImageFit;
   position: Point;
+  crop?: NormalizedCrop | null;
   cornerRadius: number;
   backgroundColor?: string;
+  border?: ImageBorder | null;
+  shadow?: Shadow | null;
   listening?: boolean;
   compact?: boolean;
   label?: string;
@@ -57,7 +60,7 @@ export type AssetImageLayerProps = {
   cachePixelRatio?: number;
 };
 
-export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, fit, position, cornerRadius, backgroundColor, listening = false, compact = false, label, blur = 0, cachePixelRatio = 1 }: AssetImageLayerProps) {
+export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, fit, position, crop = null, cornerRadius, backgroundColor, border = null, shadow = null, listening = false, compact = false, label, blur = 0, cachePixelRatio = 1 }: AssetImageLayerProps) {
   const imageNodeRef = useRef<Konva.Image>(null);
   const source = assetPath ? assetUrl(projectSlug, assetPath) : null;
   const resource = useLoadedImage(source);
@@ -74,6 +77,9 @@ export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, 
   const coverCrop = useMemo(() => fit === "cover" && blur === 0
     ? calculateImageCoverCrop(sourceWidth, sourceHeight, width, height, position)
     : null, [blur, fit, height, position, sourceHeight, sourceWidth, width]);
+  const explicitCrop = useMemo(() => crop ? calculateNormalizedImageCrop(sourceWidth, sourceHeight, crop) : null, [crop, sourceHeight, sourceWidth]);
+  const renderedCrop = explicitCrop ?? coverCrop;
+  const borderDash = border?.dash === "dashed" ? [Math.max(4, border.width * 3), Math.max(3, border.width * 2)] : border?.dash === "dotted" ? [Math.max(1, border.width), Math.max(3, border.width * 1.75)] : undefined;
   const statusLabel = resource.status === "loading" ? "Loading asset…" : resource.error ?? label ?? "Missing asset";
   useEffect(() => {
     const node = imageNodeRef.current;
@@ -86,29 +92,37 @@ export function AssetImageLayer({ projectSlug, assetPath, asset, width, height, 
   const blurScale = blur > 0 ? 1 + (blur * 4) / Math.max(1, Math.min(geometry.width, geometry.height)) : 1;
   const renderWidth = geometry.width * blurScale;
   const renderHeight = geometry.height * blurScale;
+  const shadowImageProps = renderedCrop
+    ? { crop: renderedCrop, width, height, x: 0, y: 0 }
+    : { width: renderWidth, height: renderHeight, x: geometry.x - (renderWidth - geometry.width) / 2, y: geometry.y - (renderHeight - geometry.height) / 2 };
   return (
-    <Group clipFunc={(context) => roundedRectPath(context, width, height, cornerRadius)}>
-      {listening ? <Rect fill="#000000" height={height} opacity={0.001} width={width} /> : null}
-      {backgroundColor ? <Rect fill={backgroundColor} height={height} listening={false} width={width} /> : null}
-      {resource.status === "ready" && resource.image ? (
-        <KonvaImage
+    <Group>
+      {shadow && backgroundColor ? <Rect cornerRadius={cornerRadius} fill={backgroundColor} height={height} listening={false} shadowBlur={shadow.blur} shadowColor={shadow.color} shadowOffsetX={shadow.offsetX} shadowOffsetY={shadow.offsetY} shadowOpacity={shadow.opacity} width={width} /> : null}
+      {shadow && !backgroundColor && resource.status === "ready" && resource.image ? <KonvaImage {...shadowImageProps} image={resource.image} listening={false} shadowBlur={shadow.blur} shadowColor={shadow.color} shadowOffsetX={shadow.offsetX} shadowOffsetY={shadow.offsetY} shadowOpacity={shadow.opacity} /> : null}
+      <Group clipFunc={(context) => roundedRectPath(context, width, height, cornerRadius)}>
+        {listening ? <Rect fill="#000000" height={height} opacity={0.001} width={width} /> : null}
+        {backgroundColor ? <Rect fill={backgroundColor} height={height} listening={false} width={width} /> : null}
+        {resource.status === "ready" && resource.image ? (
+          <KonvaImage
           blurRadius={blur * cachePixelRatio}
-          crop={coverCrop ?? undefined}
+          crop={renderedCrop ?? undefined}
           filters={blur > 0 ? [Konva.Filters.Blur] : undefined}
-          height={coverCrop ? height : renderHeight}
+          height={renderedCrop ? height : renderHeight}
           image={resource.image}
           listening={listening}
           ref={imageNodeRef}
-          width={coverCrop ? width : renderWidth}
-          x={coverCrop ? 0 : geometry.x - (renderWidth - geometry.width) / 2}
-          y={coverCrop ? 0 : geometry.y - (renderHeight - geometry.height) / 2}
+          width={renderedCrop ? width : renderWidth}
+          x={renderedCrop ? 0 : geometry.x - (renderWidth - geometry.width) / 2}
+          y={renderedCrop ? 0 : geometry.y - (renderHeight - geometry.height) / 2}
         />
-      ) : (
+        ) : (
         <>
           <Rect dash={compact ? [3, 3] : [10, 8]} fill="#1a1a1a" height={height} listening={listening} stroke="#828282" strokeWidth={compact ? 1 : 2} width={width} />
           {!compact ? <Text align="center" fill={resource.status === "loading" ? "#dedede" : "#ffb6b6"} fontFamily="Inter, ui-sans-serif, system-ui, sans-serif" fontSize={Math.max(11, Math.min(18, width * 0.035))} listening={false} text={statusLabel} width={width - 24} x={12} y={height / 2 - 12} /> : null}
         </>
-      )}
+        )}
+      </Group>
+      {border && border.width > 0 ? <Rect cornerRadius={cornerRadius} dash={borderDash} fill="transparent" height={height} listening={false} stroke={border.color} strokeWidth={border.width} width={width} /> : null}
     </Group>
   );
 }

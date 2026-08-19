@@ -41,6 +41,10 @@ function shape(id: string, values: Partial<ShapeElement> = {}): ShapeElement {
     stroke: "#ffffff",
     strokeWidth: 1,
     radius: 12,
+    strokeDash: "solid",
+    lineCap: "butt",
+    startMarker: "none",
+    endMarker: "none",
     ...values,
   };
 }
@@ -320,7 +324,10 @@ describe("screen overflow model", () => {
       assetPath: "assets/linked.png" as const,
       fit: "cover" as const,
       position: { x: 0.5, y: 0.5 },
+      crop: null,
       cornerRadius: 0,
+      border: null,
+      backgroundColor: null,
       alt: "linked",
     };
     const text = {

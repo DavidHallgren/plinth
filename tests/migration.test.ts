@@ -25,6 +25,43 @@ function legacyDocument(overrides: Record<string, unknown> = {}) {
 }
 
 describe("project migrations", () => {
+  test("adds crop, border, and overlay stroke defaults when migrating v11 projects", () => {
+    const current = createDefaultProject("Version eleven", { now: timestamp });
+    const deck = current.decks[0]!;
+    const screen = deck.screens[0]!;
+    const layers = screen.layers.map((layer) => {
+      if (layer.kind !== "owned" || layer.element.type !== "shape") return layer;
+      const { strokeDash: _strokeDash, lineCap: _lineCap, startMarker: _startMarker, endMarker: _endMarker, ...element } = layer.element;
+      return { ...layer, element };
+    });
+    layers.push({
+      kind: "owned",
+      overflow: false,
+      element: {
+        id: "image_v11",
+        type: "image",
+        name: "Legacy image",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        visible: true,
+        shadow: null,
+        assetPath: "assets/legacy.png",
+        fit: "cover",
+        position: { x: 0.5, y: 0.5 },
+        cornerRadius: 0,
+        alt: "Legacy",
+      },
+    } as never);
+    const migrated = parseProject({ ...current, schemaVersion: 11, decks: [{ ...deck, screens: [{ ...screen, layers }] }], assets: [{ id: "asset_v11", kind: "image", name: "Legacy", sourceFileName: "legacy.png", path: "assets/legacy.png", fileName: "legacy.png", mimeType: "image/png", width: 100, height: 100, byteSize: 10 }] });
+    const elements = ownedElements(migrated.decks[0]!.screens[0]!);
+    expect(elements.find((element) => element.type === "image")).toMatchObject({ crop: null, border: null, backgroundColor: null });
+    expect(elements.find((element) => element.type === "shape")).toMatchObject({ strokeDash: "solid", lineCap: "butt", startMarker: "none", endMarker: "none" });
+  });
   test("adds empty deck groups when migrating v10 projects", () => {
     const current = createDefaultProject("Version ten", { now: timestamp });
     const { groups: _groups, ...deck } = current.decks[0]!;

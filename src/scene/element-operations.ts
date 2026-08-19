@@ -1,5 +1,6 @@
 export {
   addElement,
+  createImageCropCallout,
   adjustElements,
   alignElements,
   distributeElements,

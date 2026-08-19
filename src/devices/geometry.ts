@@ -34,6 +34,20 @@ export type ImageCropGeometry = {
   height: number;
 };
 
+export function calculateNormalizedImageCrop(
+  sourceWidth: number,
+  sourceHeight: number,
+  crop: { x: number; y: number; width: number; height: number },
+): ImageCropGeometry {
+  const sourceW = Math.max(1, sourceWidth);
+  const sourceH = Math.max(1, sourceHeight);
+  const width = Math.min(1, Math.max(0.000001, crop.width));
+  const height = Math.min(1, Math.max(0.000001, crop.height));
+  const x = Math.min(1 - width, Math.max(0, crop.x));
+  const y = Math.min(1 - height, Math.max(0, crop.y));
+  return { x: x * sourceW, y: y * sourceH, width: width * sourceW, height: height * sourceH };
+}
+
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0.5));
 }

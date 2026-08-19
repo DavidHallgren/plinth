@@ -2,6 +2,7 @@ import { createId } from "../lib/ids";
 import type { LayerGroup, Project, SceneElement, Screen, ScreenPreset } from "../lib/schema";
 import {
   addElement,
+  createImageCropCallout,
   adjustElements,
   alignElements,
   distributeElements,
@@ -308,6 +309,14 @@ export class EditorStore {
     this.apply("Duplicate layer", (project) => duplicateElements(project, screenId, [elementId]));
     const duplicate = resolveScreen(this.history.project, screenId).elements.find((element) => !beforeIds.has(element.id));
     if (duplicate) this.setSelection([duplicate.id]);
+  }
+
+  createCropCallout(elementId: string): void {
+    const screenId = this.snapshot.activeScreenId;
+    const beforeIds = new Set(resolveScreen(this.history.project, screenId).elements.map((element) => element.id));
+    this.apply("Create crop callout", (project) => createImageCropCallout(project, screenId, elementId));
+    const createdIds = resolveScreen(this.history.project, screenId).elements.filter((element) => !beforeIds.has(element.id)).map((element) => element.id);
+    this.updateSnapshot({ selectedElementIds: createdIds, selectedGroupIds: [] });
   }
 
   duplicateGroup(groupId: string): void {

@@ -8,6 +8,7 @@ import {
   AlignVerticalJustifyStart,
   AlignVerticalSpaceBetween,
   ChevronDown,
+  Crop,
   Eye,
   EyeOff,
   Group as GroupIcon,
@@ -52,12 +53,16 @@ type InspectorProps = {
   onGroupSelection: () => void;
   onRenameGroup: (groupId: string, name: string) => void;
   onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void;
+  onCreateCropCallout: (elementId: string) => void;
+  editingCropElementId?: string | null;
+  onBeginCropEdit: (elementId: string) => void;
+  onFinishCropEdit: () => void;
   onToggleOverflow: (elementId: string, enabled: boolean) => void;
   onMoveOwnership: (elementId: string) => void;
   ownerScreenName?: string;
 };
 
-export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, selectedGroup, canGroupSelection, onUpdateScreen, onUpdateElement, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection, onGroupSelection, onRenameGroup, onConvertImageToFrame, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
+export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, selectedElements, selectedGroup, canGroupSelection, onUpdateScreen, onUpdateElement, onUpdateElements, onAlignSelection, onDistributeSelection, onAdjustSelection, onGroupSelection, onRenameGroup, onConvertImageToFrame, onCreateCropCallout, editingCropElementId = null, onBeginCropEdit, onFinishCropEdit, onToggleOverflow, onMoveOwnership, ownerScreenName }: InspectorProps) {
   if (selectedElements.length === 0) {
     return <ScreenInspector assets={assets} screen={screen} onUpdate={onUpdateScreen} />;
   }
@@ -69,7 +74,7 @@ export function Inspector({ screen, assets, projectFonts, fontBusy, onChangeText
   const resolved = screen.elements.find((candidate) => candidate.id === element.id);
   const ownedLayer = screen.layers.find((layer): layer is Extract<typeof layer, { kind: "owned" }> => layer.kind === "owned" && layer.element.id === element.id);
   const ownerScreen = resolved?.ownerScreenId === screen.id ? undefined : resolved?.ownerScreenId;
-  return <ElementInspector element={element} fontBusy={fontBusy} isLinked={Boolean(resolved?.isOverflowLink)} onChangeTextFont={onChangeTextFont} onConvertImageToFrame={onConvertImageToFrame} onDeleteFont={onDeleteFont} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} onUploadFont={onUploadFont} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} projectFonts={projectFonts} />;
+  return <ElementInspector cropEditing={editingCropElementId === element.id} element={element} fontBusy={fontBusy} isLinked={Boolean(resolved?.isOverflowLink)} onBeginCropEdit={onBeginCropEdit} onChangeTextFont={onChangeTextFont} onConvertImageToFrame={onConvertImageToFrame} onCreateCropCallout={onCreateCropCallout} onDeleteFont={onDeleteFont} onFinishCropEdit={onFinishCropEdit} onMoveOwnership={onMoveOwnership} onToggleOverflow={onToggleOverflow} onUpdate={onUpdateElement} onUploadFont={onUploadFont} overflowEnabled={Boolean(ownedLayer?.overflow) || screen.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === element.id)} ownerScreenName={ownerScreen ? ownerScreenName : undefined} projectFonts={projectFonts} />;
 }
 
 function ScreenInspector({ screen, assets, onUpdate }: { screen: ResolvedScreen; assets: readonly AssetMetadata[]; onUpdate: (patch: ScreenPatch) => void }) {
@@ -149,7 +154,7 @@ function GroupNameField({ group, onRename }: { group: LayerGroup; onRename: (gro
   return <Field label="Name"><Input onBlur={commit} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); else if (event.key === "Escape") setDraft(group.name); }} value={draft} /></Field>;
 }
 
-function ElementInspector({ element, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, onUpdate, onConvertImageToFrame, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onChangeTextFont: InspectorProps["onChangeTextFont"]; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
+function ElementInspector({ element, projectFonts, fontBusy, onChangeTextFont, onUploadFont, onDeleteFont, onUpdate, onConvertImageToFrame, onCreateCropCallout, cropEditing, onBeginCropEdit, onFinishCropEdit, overflowEnabled, onToggleOverflow, isLinked, ownerScreenName, onMoveOwnership }: { element: SceneElement; projectFonts: readonly ProjectFontFamily[]; fontBusy: boolean; onChangeTextFont: InspectorProps["onChangeTextFont"]; onUploadFont: (file: File) => Promise<ProjectFontFamily | null>; onDeleteFont: (font: ProjectFontFamily) => Promise<void>; onUpdate: (id: string, patch: ElementPatch) => void; onConvertImageToFrame: (elementId: string, presetId: DevicePresetId) => void; onCreateCropCallout: (elementId: string) => void; cropEditing: boolean; onBeginCropEdit: (elementId: string) => void; onFinishCropEdit: () => void; overflowEnabled: boolean; onToggleOverflow: (elementId: string, enabled: boolean) => void; isLinked: boolean; ownerScreenName?: string; onMoveOwnership: (elementId: string) => void }) {
   const update = (patch: ElementPatch) => onUpdate(element.id, patch);
   const elementTypeLabel = element.type === "device" ? "frame" : element.type;
   return (
@@ -175,7 +180,7 @@ function ElementInspector({ element, projectFonts, fontBusy, onChangeTextFont, o
       {element.type === "text" ? <TextControls element={element} fontBusy={fontBusy} onChangeTextFont={onChangeTextFont} onDeleteFont={onDeleteFont} onUpdate={update} onUploadFont={onUploadFont} projectFonts={projectFonts} /> : null}
       {element.type === "shape" ? <ShapeControls element={element} onUpdate={update} /> : null}
       {element.type === "device" ? <FrameControls element={element} onUpdate={update} /> : null}
-      {element.type === "image" ? <ImageControls element={element} onAddFrame={(presetId) => onConvertImageToFrame(element.id, presetId)} onUpdate={update} /> : null}
+      {element.type === "image" ? <ImageControls cropEditing={cropEditing} element={element} onAddFrame={(presetId) => onConvertImageToFrame(element.id, presetId)} onBeginCropEdit={() => onBeginCropEdit(element.id)} onCreateCallout={() => onCreateCropCallout(element.id)} onFinishCropEdit={onFinishCropEdit} onUpdate={update} /> : null}
     </div>
   );
 }
@@ -242,17 +247,20 @@ function TextControls({ element, projectFonts, fontBusy, onChangeTextFont, onUpl
 }
 
 function ShapeControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "shape" }>; onUpdate: (patch: ElementPatch) => void }) {
-  const isLine = element.shape === "line";
+  const isLine = element.shape === "line" || element.shape === "arrow";
   const isRoundedRectangle = element.shape === "rounded-rectangle";
   return (
     <Section title="Shape">
-      <Field label="Type"><select className={selectClass} onChange={(event) => onUpdate({ shape: event.target.value as Extract<typeof element.shape, string> })} value={element.shape}><option value="rectangle">Rectangle</option><option value="rounded-rectangle">Rounded rectangle</option><option value="ellipse">Ellipse</option><option value="line">Line</option></select></Field>
+      <Field label="Type"><select className={selectClass} onChange={(event) => onUpdate({ shape: event.target.value as Extract<typeof element.shape, string> })} value={element.shape}><option value="rectangle">Rectangle</option><option value="rounded-rectangle">Rounded rectangle</option><option value="ellipse">Ellipse</option><option value="line">Line</option><option value="arrow">Arrow</option></select></Field>
       <div className="grid grid-cols-2 gap-2">
         {!isLine ? <Field label="Fill"><ColorField onChange={(fill) => { if (fill) onUpdate({ fill }); }} value={element.fill} /></Field> : null}
         <Field label={isLine ? "Color" : "Stroke"}><ColorField onChange={(stroke) => { if (stroke) onUpdate({ stroke }); }} value={element.stroke} /></Field>
         <Field label="Stroke width"><NumberField min={0} onChange={(strokeWidth) => onUpdate({ strokeWidth })} value={element.strokeWidth} /></Field>
         {isRoundedRectangle ? <Field label="Radius"><NumberField min={0} onChange={(radius) => onUpdate({ radius })} value={element.radius} /></Field> : null}
+        <Field label="Stroke style"><select className={selectClass} onChange={(event) => onUpdate({ strokeDash: event.target.value as typeof element.strokeDash })} value={element.strokeDash}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></Field>
+        <Field label="Line cap"><select className={selectClass} onChange={(event) => onUpdate({ lineCap: event.target.value as typeof element.lineCap })} value={element.lineCap}><option value="butt">Butt</option><option value="round">Round</option><option value="square">Square</option></select></Field>
       </div>
+      {isLine ? <div className="grid grid-cols-2 gap-2"><Field label="Start marker"><select className={selectClass} onChange={(event) => onUpdate({ startMarker: event.target.value as typeof element.startMarker })} value={element.startMarker}><option value="none">None</option><option value="arrow">Arrow</option><option value="dot">Dot</option></select></Field><Field label="End marker"><select className={selectClass} onChange={(event) => onUpdate({ endMarker: event.target.value as typeof element.endMarker })} value={element.endMarker}><option value="none">None</option><option value="arrow">Arrow</option><option value="dot">Dot</option></select></Field></div> : null}
       <ShadowControls shadow={element.shadow} onChange={(shadow) => onUpdate({ shadow })} />
     </Section>
   );
@@ -291,14 +299,23 @@ function FrameControls({ element, onUpdate }: { element: Extract<SceneElement, {
   );
 }
 
-function ImageControls({ element, onAddFrame, onUpdate }: { element: Extract<SceneElement, { type: "image" }>; onAddFrame: (presetId: DevicePresetId) => void; onUpdate: (patch: ElementPatch) => void }) {
+function ImageControls({ element, cropEditing, onAddFrame, onCreateCallout, onBeginCropEdit, onFinishCropEdit, onUpdate }: { element: Extract<SceneElement, { type: "image" }>; cropEditing: boolean; onAddFrame: (presetId: DevicePresetId) => void; onCreateCallout: () => void; onBeginCropEdit: () => void; onFinishCropEdit: () => void; onUpdate: (patch: ElementPatch) => void }) {
+  const crop = element.crop;
+  const border = element.border;
   return (
     <Section title="Image">
+      <Button className="w-full" disabled={element.locked} onClick={onCreateCallout} size="sm" variant="secondary"><Crop size={14} /> Create crop callout</Button>
+      <Button className="w-full" disabled={element.locked} onClick={cropEditing ? onFinishCropEdit : onBeginCropEdit} size="sm" variant={cropEditing ? "primary" : "secondary"}><Crop size={14} /> {cropEditing ? "Done cropping" : "Edit crop visually"}</Button>
       <FramePresetMenu disabled={element.locked} label="Add frame" onSelect={onAddFrame} />
       <Field label="Image"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.assetPath}>{assetFileName(element.assetPath)}</p></Field>
       <Field label="Alt text"><Input onChange={(event) => onUpdate({ alt: event.target.value })} value={element.alt} /></Field>
       <Field label="Fit"><select className={selectClass} onChange={(event) => onUpdate({ fit: event.target.value as "contain" | "cover" | "stretch" })} value={element.fit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
-      <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ position: { ...element.position, x } })} step={0.05} value={element.position.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ position: { ...element.position, y } })} step={0.05} value={element.position.y} /></Field><Field label="Corner radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius} /></Field></div>
+      {!crop ? <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ position: { ...element.position, x } })} step={0.05} value={element.position.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ position: { ...element.position, y } })} step={0.05} value={element.position.y} /></Field></div> : null}
+      <div className="flex items-center justify-between"><span className="text-[11px] font-medium text-muted">Explicit crop</span><Button onClick={() => onUpdate({ crop: crop ? null : { x: 0.25, y: 0.25, width: 0.5, height: 0.5 } })} size="sm" variant={crop ? "secondary" : "ghost"}>{crop ? "Reset" : "Enable"}</Button></div>
+      {crop ? <div className="grid grid-cols-2 gap-2"><Field label="Crop X"><NumberField max={1 - crop.width} min={0} onChange={(x) => onUpdate({ crop: { ...crop, x } })} step={0.01} value={crop.x} /></Field><Field label="Crop Y"><NumberField max={1 - crop.height} min={0} onChange={(y) => onUpdate({ crop: { ...crop, y } })} step={0.01} value={crop.y} /></Field><Field label="Crop width"><NumberField max={1 - crop.x} min={0.01} onChange={(width) => onUpdate({ crop: { ...crop, width } })} step={0.01} value={crop.width} /></Field><Field label="Crop height"><NumberField max={1 - crop.y} min={0.01} onChange={(height) => onUpdate({ crop: { ...crop, height } })} step={0.01} value={crop.height} /></Field></div> : null}
+      <div className="grid grid-cols-2 gap-2"><Field label="Corner radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius} /></Field><Field label="Background"><ColorField allowNone onChange={(backgroundColor) => onUpdate({ backgroundColor })} value={element.backgroundColor} /></Field></div>
+      <div className="flex items-center justify-between"><span className="text-[11px] font-medium text-muted">Border</span><Button onClick={() => onUpdate({ border: border ? null : { color: "#ffffff", width: 4, dash: "solid" } })} size="sm" variant={border ? "secondary" : "ghost"}>{border ? "On" : "Off"}</Button></div>
+      {border ? <div className="grid grid-cols-2 gap-2"><Field label="Color"><ColorField onChange={(color) => { if (color) onUpdate({ border: { ...border, color } }); }} value={border.color} /></Field><Field label="Width"><NumberField min={0} onChange={(width) => onUpdate({ border: { ...border, width } })} value={border.width} /></Field><Field label="Style"><select className={selectClass} onChange={(event) => onUpdate({ border: { ...border, dash: event.target.value as typeof border.dash } })} value={border.dash}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></Field></div> : null}
       <ShadowControls shadow={element.shadow} onChange={(shadow) => onUpdate({ shadow })} />
     </Section>
   );
@@ -417,10 +434,10 @@ function NumberField({ value, onChange, min, max, step = 1, disabled = false, ar
   return <Input aria-label={ariaLabel} className="h-8 rounded-lg px-2 text-xs" disabled={disabled} max={max} min={min} onBlur={commit} onChange={(event) => setDraft(event.target.value)} onFocus={() => setFocused(true)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } if (event.key === "Escape") { setDraft(String(value)); setFocused(false); } }} step={step} type="number" value={draft} />;
 }
 
-function ColorField({ value, onChange, allowNone = false }: { value: string; onChange: (value: string | null) => void; allowNone?: boolean }) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  const colorValue = /^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff";
+function ColorField({ value, onChange, allowNone = false }: { value: string | null; onChange: (value: string | null) => void; allowNone?: boolean }) {
+  const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => setDraft(value ?? ""), [value]);
+  const colorValue = /^#[0-9a-f]{6}$/i.test(value ?? "") ? value! : "#ffffff";
   return <div className="flex items-center gap-1.5"><input aria-label="Color swatch" className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line bg-transparent p-0.5" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value); }} type="color" value={colorValue} /><Input className="h-8 min-w-0 rounded-lg px-2 text-xs" onChange={(event) => { setDraft(event.target.value); onChange(event.target.value || (allowNone ? null : "#ffffff")); }} value={draft} />{allowNone ? <Button aria-label="Clear color" onClick={() => { setDraft(""); onChange(null); }} size="icon" tooltip="Clear color" variant="ghost"><Trash2 size={12} /></Button> : null}</div>;
 }
 

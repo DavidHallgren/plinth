@@ -71,7 +71,10 @@ function elementHeight(element: SceneElement): number {
 }
 
 function elementStrokeWidth(element: SceneElement): number {
-  return element.type === "shape" ? element.strokeWidth : 0;
+  if (element.type === "image") return element.border?.width ?? 0;
+  if (element.type !== "shape") return 0;
+  const hasMarker = element.shape === "arrow" || element.startMarker !== "none" || element.endMarker !== "none";
+  return hasMarker ? Math.max(element.strokeWidth, element.strokeWidth * 2.5) : element.strokeWidth;
 }
 
 /** Transformed element geometry used by alignment tools. Visual effects such as shadows are excluded. */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { AssetMetadata, DeviceElement, Project, ScreenPreset, ImageElement, ShapeElement, TextElement } from "../../lib/schema";
+import type { AssetMetadata, DeviceElement, NormalizedCrop, Project, ScreenPreset, ImageElement, ShapeElement, TextElement } from "../../lib/schema";
 import { createId, nowIso } from "../../lib/ids";
 import { EditorStore } from "../../app/editor-store";
 import { resolveScreen, selectActiveDeck, selectAssetUsages, selectSelectedElements } from "../../scene/selectors";
@@ -19,6 +19,7 @@ import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import { useAssetMutations } from "../../hooks/use-asset-mutations";
 import { useFontMutations } from "../../hooks/use-font-mutations";
 import { ensureFontReady, ensureProjectFonts, projectFontLoadKey } from "../../fonts/font-registry";
+import { calculateImageCoverCrop } from "../../devices/geometry";
 
 type EditorWorkspaceProps = {
   project: Project;
@@ -37,6 +38,13 @@ export function shouldIgnoreEditorShortcutTarget(target: EventTarget | null): bo
   if (candidate.isContentEditable === true) return true;
   if (typeof candidate.closest !== "function") return false;
   return Boolean(candidate.closest("input, textarea, select, [contenteditable]"));
+}
+
+export function initialCropForImage(element: ImageElement, asset: AssetMetadata | undefined): NormalizedCrop {
+  if (element.crop) return element.crop;
+  if (element.fit !== "cover" || !asset) return { x: 0, y: 0, width: 1, height: 1 };
+  const crop = calculateImageCoverCrop(asset.width, asset.height, element.width, element.height, element.position);
+  return { x: crop.x / asset.width, y: crop.y / asset.height, width: crop.width / asset.width, height: crop.height / asset.height };
 }
 
 export function EditorWorkspace({ project, error, onProjectChange, onProjectSynced, onSaveNow, onBack, onRenameProject, readOnly = false }: EditorWorkspaceProps) {
@@ -72,6 +80,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportRendering, setExportRendering] = useState(false);
+  const [editingCropElementId, setEditingCropElementId] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
   const fontLoadKey = projectFontLoadKey(project);
@@ -190,9 +199,44 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
   const fitZoom = useCallback((zoom: number) => store.setZoom(zoom), [store]);
   const requestActiveScreenReveal = useCallback(() => setRevealScreenRequest((value) => value + 1), []);
 
+  function beginCropEdit(elementId: string): void {
+    commitInspectorTransaction();
+    const element = resolveScreen(store.getSnapshot().project, store.getSnapshot().activeScreenId).elements.find((candidate) => candidate.id === elementId);
+    if (!element || element.type !== "image" || element.locked) return;
+    if (editingCropElementId) finishCropEdit(true);
+    const asset = store.getSnapshot().project.assets.find((candidate) => candidate.path === element.assetPath);
+    store.beginTransaction("Edit image crop");
+    store.updateElement(element.id, { crop: initialCropForImage(element, asset) });
+    store.setSelection([element.id]);
+    setEditingCropElementId(element.id);
+  }
+
+  function finishCropEdit(commit: boolean): void {
+    if (!editingCropElementId) return;
+    if (store.getSnapshot().isInTransaction) {
+      if (commit) store.commitTransaction();
+      else store.cancelTransaction();
+    }
+    setEditingCropElementId(null);
+  }
+
+  useEffect(() => {
+    if (!editingCropElementId) return;
+    if (snapshot.activeScreenId === activeScreen.id && snapshot.selectedElementIds.includes(editingCropElementId)) return;
+    if (store.getSnapshot().isInTransaction) store.commitTransaction();
+    setEditingCropElementId(null);
+  }, [activeScreen.id, editingCropElementId, snapshot.activeScreenId, snapshot.selectedElementIds, store]);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (readOnly) return;
+      if (editingCropElementId && (event.key === "Enter" || event.key === "Escape")) {
+        event.preventDefault();
+        if (event.key === "Enter") store.commitTransaction();
+        else store.cancelTransaction();
+        setEditingCropElementId(null);
+        return;
+      }
       if (shouldIgnoreEditorShortcutTarget(event.target)) return;
       const command = event.metaKey || event.ctrlKey;
       if (command && event.key.toLowerCase() === "z") {
@@ -261,7 +305,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [readOnly, requestActiveScreenReveal, run, store]);
+  }, [editingCropElementId, readOnly, requestActiveScreenReveal, run, store]);
 
   function addText() {
     const element: TextElement = {
@@ -306,11 +350,11 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
     const element: ShapeElement = {
       id: createId("shape"),
       type: "shape",
-      name: shape === "line" ? "Line" : "Shape",
+      name: shape === "line" ? "Line" : shape === "arrow" ? "Arrow" : "Shape",
       x: Math.round(activeScreen.width * 0.12),
       y: Math.round(activeScreen.height * 0.62),
       width: Math.round(activeScreen.width * 0.5),
-      height: shape === "line" ? 12 : Math.round(activeScreen.height * 0.12),
+      height: shape === "line" || shape === "arrow" ? 12 : Math.round(activeScreen.height * 0.12),
       rotation: 0,
       opacity: 1,
       locked: false,
@@ -319,8 +363,12 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       shape,
       fill: "#b0b0b0",
       stroke: "#dedede",
-      strokeWidth: shape === "line" ? 4 : 1,
+      strokeWidth: shape === "line" || shape === "arrow" ? 4 : 1,
       radius: shape === "rounded-rectangle" ? 28 : 0,
+      strokeDash: "solid",
+      lineCap: shape === "line" || shape === "arrow" ? "round" : "butt",
+      startMarker: "none",
+      endMarker: shape === "arrow" ? "arrow" : "none",
     };
     run(() => {
       store.apply("Add shape", (current) => addElement(current, activeScreen.id, element));
@@ -350,7 +398,10 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       assetPath: asset.path,
       fit: "cover",
       position: { x: 0.5, y: 0.5 },
+      crop: null,
       cornerRadius: Math.min(32, Math.round(Math.min(width, height) * 0.06)),
+      border: null,
+      backgroundColor: null,
       alt: asset.name,
     };
     run(() => {
@@ -629,11 +680,13 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
             {exportRendering ? <div className="grid min-h-0 flex-1 place-items-center text-xs text-muted">Rendering export…</div> : <DeckCanvas
               assets={snapshot.project.assets}
               deck={activeDeck}
+              editingCropElementId={editingCropElementId}
               fitMode={fitMode}
               fitRequest={`${activeDeck.id}:${fitRequest}`}
               focusedScreenId={snapshot.activeScreenId}
               revealScreenRequest={revealScreenRequest}
               onClearSelection={() => store.setSelection([])}
+              onCropChange={(targetScreenId, elementId, crop) => run(() => store.updateElement(elementId, { crop }, targetScreenId))}
               onFitZoom={fitZoom}
               onFocusScreen={(screenId) => store.focusScreen(screenId)}
               onGestureStart={(label, targetScreenId) => { store.focusScreen(targetScreenId); commitInspectorTransaction(); store.beginTransaction(label); }}
@@ -663,7 +716,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
           </div>
         </main>
         <aside className="flex min-h-0 w-[276px] shrink-0 flex-col border-l border-white/[0.08] bg-[#171717]">
-          <Inspector assets={snapshot.project.assets} canGroupSelection={canGroupSelection} fontBusy={fontBusy} onAdjustSelection={(adjustment, orderedElementIds) => { commitInspectorTransaction(); run(() => store.adjustSelection(adjustment, orderedElementIds)); }} onAlignSelection={(alignment) => { commitInspectorTransaction(); run(() => store.alignSelection(alignment)); }} onChangeTextFont={changeTextFont} onConvertImageToFrame={convertImageToFrame} onDeleteFont={async (font) => { try { await deleteFont(font); } catch (reason) { reportError(reason); } }} onDistributeSelection={(distribution) => { commitInspectorTransaction(); run(() => store.distributeSelection(distribution)); }} onGroupSelection={() => { commitInspectorTransaction(); run(() => store.groupSelection()); }} onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onRenameGroup={(groupId, name) => queueInspectorChange("Rename group", () => store.renameGroup(groupId, name))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUploadFont={async (file) => { try { return await uploadFont(file); } catch (reason) { reportError(reason); return null; } }} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} projectFonts={snapshot.project.fonts} screen={activeScreen} selectedElements={selectedElements} selectedGroup={selectedGroup} />
+          <Inspector assets={snapshot.project.assets} canGroupSelection={canGroupSelection} editingCropElementId={editingCropElementId} fontBusy={fontBusy} onAdjustSelection={(adjustment, orderedElementIds) => { commitInspectorTransaction(); run(() => store.adjustSelection(adjustment, orderedElementIds)); }} onAlignSelection={(alignment) => { commitInspectorTransaction(); run(() => store.alignSelection(alignment)); }} onBeginCropEdit={beginCropEdit} onChangeTextFont={changeTextFont} onConvertImageToFrame={convertImageToFrame} onCreateCropCallout={(elementId) => { commitInspectorTransaction(); run(() => { store.createCropCallout(elementId); requestActiveScreenReveal(); }); }} onDeleteFont={async (font) => { try { await deleteFont(font); } catch (reason) { reportError(reason); } }} onDistributeSelection={(distribution) => { commitInspectorTransaction(); run(() => store.distributeSelection(distribution)); }} onFinishCropEdit={() => finishCropEdit(true)} onGroupSelection={() => { commitInspectorTransaction(); run(() => store.groupSelection()); }} onMoveOwnership={(elementId) => queueInspectorChange("Move ownership", () => store.moveOwnershipToFocusedScreen(elementId))} onRenameGroup={(groupId, name) => queueInspectorChange("Rename group", () => store.renameGroup(groupId, name))} onToggleOverflow={(elementId, enabled) => queueInspectorChange("Toggle overflow", () => store.toggleElementOverflow(elementId, enabled))} onUpdateElement={(elementId, patch) => editingCropElementId === elementId ? run(() => store.updateElement(elementId, patch)) : queueInspectorChange("Edit element", () => store.updateElement(elementId, patch))} onUpdateElements={(updates) => queueInspectorChange("Edit selection", () => store.updateElements(updates))} onUpdateScreen={(patch) => queueInspectorChange("Edit screen", () => store.updateCurrentScreen(patch))} onUploadFont={async (file) => { try { return await uploadFont(file); } catch (reason) { reportError(reason); return null; } }} ownerScreenName={focusedOwnerScreen ? snapshot.project.decks.flatMap((deck) => deck.screens).find((screen) => screen.id === focusedOwnerScreen)?.name : undefined} projectFonts={snapshot.project.fonts} screen={activeScreen} selectedElements={selectedElements} selectedGroup={selectedGroup} />
         </aside>
       </div> : <div className="grid min-h-0 flex-1 place-items-center text-sm text-ink" role="status">Loading exact project fonts…</div>}
 

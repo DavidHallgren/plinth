@@ -6,7 +6,7 @@ import { apiAction, handleDeleteAsset, handleGetAsset, handleListAssets, handleR
 import { deriveAssetFileName, assertAssetPath, assetPathForFileName, MAX_ASSET_BYTES, validateImageBytes } from "../src/lib/asset-validation";
 import { createDefaultProject, createScreenPreset } from "../src/lib/defaults";
 import { addElement, toggleElementOverflow } from "../src/scene/operations";
-import { calculateDeviceScreenGeometry, calculateImageCoverCrop, calculateImageFitGeometry, thumbnailSize } from "../src/devices/geometry";
+import { calculateDeviceScreenGeometry, calculateImageCoverCrop, calculateImageFitGeometry, calculateNormalizedImageCrop, thumbnailSize } from "../src/devices/geometry";
 import { getDevicePreset } from "../src/devices/presets";
 import { ProjectStorage } from "../src/lib/storage";
 import type { AssetMetadata } from "../src/lib/schema";
@@ -80,6 +80,7 @@ describe("asset validation and geometry", () => {
     expect(calculateImageCoverCrop(200, 100, 100, 100)).toEqual({ x: 50, y: 0, width: 100, height: 100 });
     expect(calculateImageCoverCrop(200, 100, 100, 100, { x: 0, y: 0.5 })).toEqual({ x: 0, y: 0, width: 100, height: 100 });
     expect(calculateImageCoverCrop(100, 200, 100, 100, { x: 0.5, y: 1 })).toEqual({ x: 0, y: 100, width: 100, height: 100 });
+    expect(calculateNormalizedImageCrop(1200, 800, { x: 0.25, y: 0.1, width: 0.5, height: 0.4 })).toEqual({ x: 300, y: 80, width: 600, height: 320 });
     const preset = getDevicePreset("iphone-17-pro-max");
     if (!preset) throw new Error("Missing device preset");
     const geometry = calculateDeviceScreenGeometry(preset, 1470, 3000);
@@ -220,7 +221,10 @@ describe("asset storage and API", () => {
       assetPath: asset.path,
       fit: "cover",
       position: { x: 0.5, y: 0.5 },
+      crop: null,
       cornerRadius: 0,
+      border: null,
+      backgroundColor: null,
       alt: "Cleanup",
     }), ownerScreen.id, "image_cleanup", true);
     expect(targetScreen.id && project.decks[0]?.screens[1]?.layers.some((layer) => layer.kind === "overflow-link" && layer.elementId === "image_cleanup")).toBe(true);
@@ -253,6 +257,10 @@ describe("asset storage and API", () => {
       stroke: "#c4baff",
       strokeWidth: 1,
       radius: 18,
+      strokeDash: "solid" as const,
+      lineCap: "butt" as const,
+      startMarker: "none" as const,
+      endMarker: "none" as const,
     };
     let current = addElement(initial, screenId, unsavedShape);
     const queue = createAssetMutationQueue();
@@ -311,7 +319,10 @@ describe("asset storage and API", () => {
       assetPath: first.asset.path,
       fit: "cover" as const,
       position: { x: 0.5, y: 0.5 },
+      crop: null,
       cornerRadius: 12,
+      border: null,
+      backgroundColor: null,
       alt: "Placed asset",
     };
     const device = {

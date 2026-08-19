@@ -1,7 +1,7 @@
 import { createScreenPreset } from "../lib/defaults";
 import { createId, nowIso, slugify } from "../lib/ids";
 import { DeckSchema, LayerEntrySchema, LayerGroupSchema, ProjectSchema, SceneElementSchema, ScreenSchema } from "../lib/schema";
-import type { Deck, DeviceElement, ImageFit, LayerEntry, LayerGroup, OwnedLayer, Point, Project, SceneElement, Screen, ScreenPreset, Shadow, TextStyle } from "../lib/schema";
+import type { Deck, DeviceElement, ImageBorder, ImageFit, LayerEntry, LayerGroup, NormalizedCrop, OwnedLayer, Point, Project, SceneElement, Screen, ScreenPreset, Shadow, TextStyle } from "../lib/schema";
 import type { ShapeElement } from "../lib/schema";
 import { calculateTextAutoHeight } from "./text-geometry";
 import {
@@ -65,7 +65,14 @@ export type ElementPatch = {
   assetPath?: string;
   fit?: ImageFit;
   position?: Point;
+  crop?: NormalizedCrop | null;
+  border?: ImageBorder | null;
+  backgroundColor?: string | null;
   alt?: string;
+  strokeDash?: "solid" | "dashed" | "dotted";
+  lineCap?: "butt" | "round" | "square";
+  startMarker?: "none" | "arrow" | "dot";
+  endMarker?: "none" | "arrow" | "dot";
 };
 export type ElementUpdate = { id: string; patch: ElementPatch };
 export type ResizeElementInput = {
@@ -501,6 +508,63 @@ export function addElement(project: Project, screenId: string, element: SceneEle
   const nextElement = clampElementToDeck(deck, SceneElementSchema.parse(element));
   const next = withScreen(project, screenId, (current) => touchScreen(current, { layers: [...current.layers, ownedLayer(nextElement)] }));
   return reconcileOverflowLinks(next);
+}
+
+function centeredCrop(position: Point, width: number, height: number): NormalizedCrop {
+  const safeWidth = clamp(width, 0.01, 1);
+  const safeHeight = clamp(height, 0.01, 1);
+  return {
+    x: clamp(position.x - safeWidth / 2, 0, 1 - safeWidth),
+    y: clamp(position.y - safeHeight / 2, 0, 1 - safeHeight),
+    width: safeWidth,
+    height: safeHeight,
+  };
+}
+
+/** Create an editable crop callout from an image while reusing its immutable asset. */
+export function createImageCropCallout(project: Project, screenId: string, elementId: string): Project {
+  const context = screenContextFor(project, screenId);
+  const source = resolveDeckScreen(context.deck, screenId).find((element) => element.id === elementId);
+  if (!source || source.type !== "image") throw new SceneOperationError("INVALID_OPERATION", "Crop callouts can only be created from an image layer.");
+  if (source.locked) throw new SceneOperationError("INVALID_OPERATION", "Unlock the image before creating a crop callout.");
+
+  const asset = project.assets.find((candidate) => candidate.path === source.assetPath);
+  const sourceAspect = asset ? asset.width / Math.max(1, asset.height) : 1;
+  const cropWidth = 0.32;
+  const cropHeight = Math.min(1, cropWidth * sourceAspect);
+  const crop = source.crop ?? centeredCrop(source.position, cropWidth, cropHeight);
+  const size = Math.max(80, Math.round(Math.min(Math.min(source.width, source.height) * 0.65, Math.min(context.deck.width, context.deck.height) * 0.27)));
+  const gap = Math.max(24, Math.round(size * 0.18));
+  const centeredX = clamp(source.x + source.width / 2 - size / 2, 0, Math.max(0, context.deck.width - size));
+  const centeredY = clamp(source.y + source.height / 2 - size / 2, 0, Math.max(0, context.deck.height - size));
+  const placements = [
+    { x: source.x + source.width + gap, y: centeredY },
+    { x: source.x - gap - size, y: centeredY },
+    { x: centeredX, y: source.y - gap - size },
+    { x: centeredX, y: source.y + source.height + gap },
+  ];
+  const placement = placements.find(({ x, y }) => x >= 0 && y >= 0 && x + size <= context.deck.width && y + size <= context.deck.height) ?? placements[0]!;
+  const calloutX = clamp(placement.x, 0, Math.max(0, context.deck.width - size));
+  const calloutY = clamp(placement.y, 0, Math.max(0, context.deck.height - size));
+  const usedIds = projectIds(project);
+  const calloutId = uniqueId("image", usedIds);
+  const { ownerScreenId: _ownerScreenId, targetScreenId: _targetScreenId, isOverflowLink: _isOverflowLink, renderOrder: _renderOrder, ...canonicalSource } = source;
+  const callout = SceneElementSchema.parse({
+    ...canonicalSource,
+    id: calloutId,
+    name: `${source.name} crop callout`,
+    x: calloutX,
+    y: calloutY,
+    width: size,
+    height: size,
+    rotation: 0,
+    crop,
+    cornerRadius: size / 2,
+    border: { color: "#ffffff", width: Math.max(3, Math.round(size * 0.025)), dash: "solid" },
+    backgroundColor: "#ffffff",
+    shadow: { color: "#05060a", blur: Math.max(12, Math.round(size * 0.08)), offsetX: 0, offsetY: Math.max(6, Math.round(size * 0.035)), opacity: 0.35 },
+  });
+  return addElement(project, screenId, callout);
 }
 
 export function groupElements(project: Project, screenId: string, elementIds: readonly string[], options: { id?: string; name?: string } = {}): Project {

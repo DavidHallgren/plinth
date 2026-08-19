@@ -49,7 +49,10 @@ describe("project schema", () => {
       assetPath: "assets/fixture.svg",
       fit: "cover" as const,
       position: { x: 0.5, y: 0.5 },
+      crop: null,
       cornerRadius: 0,
+      border: null,
+      backgroundColor: null,
       alt: "Fixture asset",
     };
 

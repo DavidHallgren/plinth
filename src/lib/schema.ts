@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { APP_STORE_PRESETS } from "../scene/presets";
 
-export const CURRENT_SCHEMA_VERSION = 11 as const;
+export const CURRENT_SCHEMA_VERSION = 12 as const;
 
 const IdSchema = z.string().min(1).max(96);
 const ColorSchema = z.string().min(1).max(128);
@@ -74,6 +74,28 @@ export const NormalizedPointSchema = z
   })
   .strict();
 export type NormalizedPoint = z.infer<typeof NormalizedPointSchema>;
+export const NormalizedCropSchema = z
+  .object({
+    x: z.number().min(0).max(1).finite(),
+    y: z.number().min(0).max(1).finite(),
+    width: z.number().positive().max(1).finite(),
+    height: z.number().positive().max(1).finite(),
+  })
+  .strict()
+  .superRefine((crop, context) => {
+    if (crop.x + crop.width > 1) context.addIssue({ code: "custom", message: "Crop width exceeds the source image.", path: ["width"] });
+    if (crop.y + crop.height > 1) context.addIssue({ code: "custom", message: "Crop height exceeds the source image.", path: ["height"] });
+  });
+export type NormalizedCrop = z.infer<typeof NormalizedCropSchema>;
+
+export const ImageBorderSchema = z
+  .object({
+    color: ColorSchema,
+    width: z.number().min(0).finite(),
+    dash: z.enum(["solid", "dashed", "dotted"]),
+  })
+  .strict();
+export type ImageBorder = z.infer<typeof ImageBorderSchema>;
 
 export const LinearGradientBackgroundSchema = z
   .object({
@@ -199,18 +221,25 @@ export const ImageElementSchema = ElementFrameSchema.extend({
   assetPath: AssetPathSchema,
   fit: ImageFitSchema,
   position: NormalizedPointSchema,
+  crop: NormalizedCropSchema.nullable(),
   cornerRadius: z.number().min(0).finite(),
+  border: ImageBorderSchema.nullable(),
+  backgroundColor: ColorSchema.nullable(),
   alt: z.string().max(500),
 }).strict();
 export type ImageElement = z.infer<typeof ImageElementSchema>;
 
 export const ShapeElementSchema = ElementFrameSchema.extend({
   type: z.literal("shape"),
-  shape: z.enum(["rectangle", "rounded-rectangle", "ellipse", "line"]),
+  shape: z.enum(["rectangle", "rounded-rectangle", "ellipse", "line", "arrow"]),
   fill: ColorSchema,
   stroke: ColorSchema,
   strokeWidth: z.number().min(0).finite(),
   radius: z.number().min(0).finite(),
+  strokeDash: z.enum(["solid", "dashed", "dotted"]),
+  lineCap: z.enum(["butt", "round", "square"]),
+  startMarker: z.enum(["none", "arrow", "dot"]),
+  endMarker: z.enum(["none", "arrow", "dot"]),
 }).strict();
 export type ShapeElement = z.infer<typeof ShapeElementSchema>;
 

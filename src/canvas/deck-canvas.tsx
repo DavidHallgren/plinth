@@ -1,10 +1,11 @@
 import type Konva from "konva";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Layer, Stage, Transformer } from "./react-konva";
-import type { AssetMetadata, Deck } from "../lib/schema";
+import type { AssetMetadata, Deck, NormalizedCrop } from "../lib/schema";
 import type { ResolvedScreen } from "../scene/selectors";
 import { elementLocalBounds, projectionKey } from "../scene/overflow";
 import { SceneContents } from "./scene-renderer";
+import { CropEditorOverlay } from "./crop-editor-overlay";
 
 export type CanvasTransform = {
   id: string;
@@ -74,6 +75,7 @@ type DeckCanvasProps = {
   assets: readonly AssetMetadata[];
   selectedElementIds: readonly string[];
   selectedGroupIds: readonly string[];
+  editingCropElementId?: string | null;
   zoom: number;
   fitRequest: string;
   fitMode: DeckFitMode;
@@ -85,11 +87,12 @@ type DeckCanvasProps = {
   onGestureStart: (label: string, targetScreenId: string) => void;
   onMoveEnd: (targetScreenId: string, elementId: string, x: number, y: number) => void;
   onTransformEnd: (targetScreenId: string, transforms: CanvasTransform[]) => void;
+  onCropChange?: (targetScreenId: string, elementId: string, crop: NormalizedCrop) => void;
 };
 
 const MIN_TRANSFORM_SIZE = 8;
 
-export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets, selectedElementIds, selectedGroupIds, zoom, fitRequest, fitMode, revealScreenRequest, onFitZoom, onFocusScreen, onSelect, onClearSelection, onGestureStart, onMoveEnd, onTransformEnd }: DeckCanvasProps) {
+export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets, selectedElementIds, selectedGroupIds, editingCropElementId = null, zoom, fitRequest, fitMode, revealScreenRequest, onFitZoom, onFocusScreen, onSelect, onClearSelection, onGestureStart, onMoveEnd, onTransformEnd, onCropChange = () => undefined }: DeckCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -102,13 +105,16 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
   const focusedIndex = Math.max(0, screens.findIndex((screen) => screen.id === focusedScreenId));
   const focusedScreen = screens[focusedIndex] ?? screens[0];
   const focusedElements = focusedScreen?.elements ?? [];
+  const cropEditorCandidate = focusedElements.find((element) => element.id === editingCropElementId);
+  const cropEditorElement = cropEditorCandidate?.type === "image" ? cropEditorCandidate : undefined;
   const selectionKey = selectedElementIds.join(":");
   const revealTriggerRef = useRef({ focusedIndex, focusedScreenId, revealScreenRequest, selectionKey });
   const lockedElementIds = useMemo(() => {
     const locked = new Set(focusedElements.filter((element) => element.locked).map((element) => element.id));
     deck.groups.filter((group) => selectedGroupIds.includes(group.id) && group.elementIds.some((elementId) => locked.has(elementId))).forEach((group) => group.elementIds.forEach((elementId) => locked.add(elementId)));
+    if (editingCropElementId) locked.add(editingCropElementId);
     return locked;
-  }, [deck.groups, focusedElements, selectedGroupIds]);
+  }, [deck.groups, editingCropElementId, focusedElements, selectedGroupIds]);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -179,12 +185,12 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
     const transformer = transformerRef.current;
     if (!transformer) return;
     const nodes = selectedElementIds
-      .filter((id) => !lockedElementIds.has(id))
+      .filter((id) => id !== editingCropElementId && !lockedElementIds.has(id))
       .map((id) => nodeRefs.current.get(projectionKey(focusedScreenId, id)))
       .filter((node): node is Konva.Node => Boolean(node));
     transformer.nodes(nodes);
     transformer.getLayer()?.batchDraw();
-  }, [focusedScreenId, focusedElements, lockedElementIds, selectedElementIds]);
+  }, [editingCropElementId, focusedScreenId, focusedElements, lockedElementIds, selectedElementIds]);
 
   const beginPan = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!shouldBeginCanvasPan(event.button, event)) return;
@@ -277,6 +283,7 @@ export function DeckCanvas({ deck, screens, focusedScreenId, projectSlug, assets
                     targetScreenId={screen.id}
                   >
                     {screen.id === focusedScreenId ? transformer : null}
+                    {screen.id === focusedScreenId && cropEditorElement ? <CropEditorOverlay asset={assets.find((asset) => asset.path === cropEditorElement.assetPath)} element={cropEditorElement} onChange={(crop) => onCropChange(screen.id, cropEditorElement.id, crop)} projectSlug={projectSlug} /> : null}
                   </SceneContents>
                 ))}
               </Layer>

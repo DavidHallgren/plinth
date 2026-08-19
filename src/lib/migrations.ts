@@ -261,7 +261,10 @@ function migrateElement(value: unknown, index: number, assets: AssetMetadata[]):
       assetPath: legacyAssetPath(value.assetPath ?? value.assetId, assets),
       fit: value.fit === "contain" ? "contain" : value.fit === "fill" || value.fit === "stretch" ? "stretch" : "cover",
       position: normalizePoint(value.position),
+      crop: null,
       cornerRadius: Math.max(0, asFiniteNumber(value.cornerRadius, 0)),
+      border: null,
+      backgroundColor: null,
       alt: typeof value.alt === "string" ? value.alt : "Asset placeholder",
     };
   }
@@ -276,6 +279,10 @@ function migrateElement(value: unknown, index: number, assets: AssetMetadata[]):
       stroke: asString(value.stroke, "#8b7cff"),
       strokeWidth: Math.max(0, asFiniteNumber(value.strokeWidth, 0)),
       radius: Math.max(0, asFiniteNumber(value.radius, 0)),
+      strokeDash: "solid",
+      lineCap: shape === "line" ? "round" : "butt",
+      startMarker: "none",
+      endMarker: "none",
     };
   }
 
@@ -615,6 +622,48 @@ function migrateVersionTen(source: Record<string, unknown>): Record<string, unkn
   };
 }
 
+function migrateVersionEleven(source: Record<string, unknown>): Record<string, unknown> {
+  const rawDecks = Array.isArray(source.decks) ? source.decks : [];
+  return {
+    ...source,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    decks: rawDecks.map((deckValue) => {
+      if (!isRecord(deckValue)) return deckValue;
+      const screens = Array.isArray(deckValue.screens) ? deckValue.screens : [];
+      return {
+        ...deckValue,
+        screens: screens.map((screenValue) => {
+          if (!isRecord(screenValue)) return screenValue;
+          const layers = Array.isArray(screenValue.layers) ? screenValue.layers : [];
+          return {
+            ...screenValue,
+            layers: layers.map((layerValue) => {
+              if (!isRecord(layerValue) || layerValue.kind !== "owned" || !isRecord(layerValue.element)) return layerValue;
+              const element = layerValue.element;
+              if (element.type === "image") {
+                return { ...layerValue, element: { ...element, crop: null, border: null, backgroundColor: null } };
+              }
+              if (element.type === "shape") {
+                return {
+                  ...layerValue,
+                  element: {
+                    ...element,
+                    strokeDash: "solid",
+                    lineCap: element.shape === "line" ? "round" : "butt",
+                    startMarker: "none",
+                    endMarker: element.shape === "arrow" ? "arrow" : "none",
+                  },
+                };
+              }
+              return layerValue;
+            }),
+          };
+        }),
+      };
+    }),
+  };
+}
+
 export function migrateProject(input: unknown): unknown {
   if (!isRecord(input)) {
     throw new PlinthError("SCHEMA_INVALID", 422, "Project data must be a JSON object.");
@@ -634,17 +683,18 @@ export function migrateProject(input: unknown): unknown {
     );
   }
 
-  if (versionValue === 0) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionZero(input))));
-  if (versionValue === 1) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionOne(input))));
-  if (versionValue === 2) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionTwo(input))));
-  if (versionValue === 3) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionThree(input))));
-  if (versionValue === 4) return migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionFour(input))));
-  if (versionValue === 5) return migrateVersionTen(migrateVersionNine(migrateVersionFive(input)));
-  if (versionValue === 6) return migrateVersionTen(migrateVersionNine(migrateVersionEight(migrateVersionSeven(migrateVersionSix(input)))));
-  if (versionValue === 7) return migrateVersionTen(migrateVersionNine(migrateVersionEight(migrateVersionSeven(input))));
-  if (versionValue === 8) return migrateVersionTen(migrateVersionNine(migrateVersionEight(input)));
-  if (versionValue === 9) return migrateVersionTen(migrateVersionNine(input));
-  if (versionValue === 10) return migrateVersionTen(input);
+  if (versionValue === 0) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionZero(input)))));
+  if (versionValue === 1) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionOne(input)))));
+  if (versionValue === 2) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionTwo(input)))));
+  if (versionValue === 3) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionThree(input)))));
+  if (versionValue === 4) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionFive(migrateVersionFour(input)))));
+  if (versionValue === 5) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionFive(input))));
+  if (versionValue === 6) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionEight(migrateVersionSeven(migrateVersionSix(input))))));
+  if (versionValue === 7) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionEight(migrateVersionSeven(input)))));
+  if (versionValue === 8) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(migrateVersionEight(input))));
+  if (versionValue === 9) return migrateVersionEleven(migrateVersionTen(migrateVersionNine(input)));
+  if (versionValue === 10) return migrateVersionEleven(migrateVersionTen(input));
+  if (versionValue === 11) return migrateVersionEleven(input);
   return input;
 }
 

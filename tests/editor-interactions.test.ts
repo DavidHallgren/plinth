@@ -1,15 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
+import { initialCropForImage, shouldIgnoreEditorShortcutTarget } from "../src/components/editor/editor-workspace";
 import { fitDeckZoom, fitFocusedScreenZoom, fitScreenWidthZoom, horizontalVisibilityRatio, revealScrollDelta, shouldBeginCanvasPan, shouldRevealScreenHorizontally } from "../src/canvas/deck-canvas";
 import { calculateTextAutoHeight } from "../src/scene/text-geometry";
 import { createDefaultProject } from "../src/lib/defaults";
-import { ProjectSchema, type TextElement } from "../src/lib/schema";
+import { ProjectSchema, type AssetMetadata, type ImageElement, type TextElement } from "../src/lib/schema";
 import { addElement, reorderElements } from "../src/scene/operations";
 import { ownedElements } from "./helpers";
 import { projectionKey } from "../src/scene/overflow";
 import { rebaseProjectAfterRename } from "../src/hooks/use-project-persistence";
 
 describe("editor interaction guards and geometry", () => {
+  test("starts visual crop editing from the currently visible cover region", () => {
+    const asset: AssetMetadata = { id: "asset-crop", kind: "image", name: "Crop", sourceFileName: "crop.png", path: "assets/crop.png", fileName: "crop.png", mimeType: "image/png", width: 200, height: 100, byteSize: 10 };
+    const image: ImageElement = { id: "image-crop", type: "image", name: "Crop", x: 0, y: 0, width: 100, height: 100, rotation: 0, opacity: 1, locked: false, visible: true, shadow: null, assetPath: asset.path, fit: "cover", position: { x: 0.5, y: 0.5 }, crop: null, cornerRadius: 0, border: null, backgroundColor: null, alt: "Crop" };
+    expect(initialCropForImage(image, asset)).toEqual({ x: 0.25, y: 0, width: 0.5, height: 1 });
+    expect(initialCropForImage({ ...image, fit: "contain" }, asset)).toEqual({ x: 0, y: 0, width: 1, height: 1 });
+  });
   test("does not intercept typing targets, including contenteditable descendants", () => {
     const input = { closest: (selector: string) => selector.includes("input") ? input : null } as unknown as EventTarget;
     const editor = { isContentEditable: true, closest: () => null } as unknown as EventTarget;

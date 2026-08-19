@@ -139,6 +139,10 @@ function shapeElement(
     ...frame(id, name, values),
     type: "shape",
     shadow: null,
+    strokeDash: "solid",
+    lineCap: "butt",
+    startMarker: "none",
+    endMarker: "none",
     ...overrides,
   };
 }

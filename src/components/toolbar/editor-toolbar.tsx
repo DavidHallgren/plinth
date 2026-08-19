@@ -27,7 +27,7 @@ type EditorToolbarProps = {
   onRedo: () => void;
   onAddText: () => void;
   onOpenAssets: () => void;
-  onAddShape: (shape: "rectangle" | "rounded-rectangle" | "ellipse" | "line") => void;
+  onAddShape: (shape: "rectangle" | "rounded-rectangle" | "ellipse" | "line" | "arrow") => void;
   onZoomChange: (zoom: number) => void;
   onDefaultZoom: () => void;
   onFitDeck: () => void;
@@ -75,6 +75,7 @@ export function EditorToolbar({
             <ShapeMenuItem label="Rounded rectangle" icon={<Square className="rounded" size={13} />} onClick={() => onAddShape("rounded-rectangle")} />
             <ShapeMenuItem label="Ellipse" icon={<Circle size={13} />} onClick={() => onAddShape("ellipse")} />
             <ShapeMenuItem label="Line" icon={<Minus size={13} />} onClick={() => onAddShape("line")} />
+            <ShapeMenuItem label="Arrow" icon={<Minus size={13} />} onClick={() => onAddShape("arrow")} />
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="mx-2 hidden h-5 w-px bg-white/10 lg:block" />
