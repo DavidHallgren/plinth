@@ -8,13 +8,15 @@ This also makes Plinth a particularly willing accomplice for ChatGPT Work and Co
 
 In short: Plinth makes polished screenshots without taking your files hostage or turning “move this text three pixels left” into a recurring subscription.
 
-## Run the standalone app
+## Current standalone build
 
-Release builds are self-contained and do not require Bun or a repository checkout. Starting Plinth chooses an available local port, opens the editor in the default browser, and stores projects under `~/Library/Application Support/Plinth/projects` on macOS.
+`bun run build` produces a self-contained executable that does not require Bun or a repository checkout. Starting it chooses an available local port, opens the editor in the default browser, and stores projects under `~/Library/Application Support/Plinth/projects` on macOS.
 
 ```sh
-./plinth
+./dist/plinth
 ```
+
+There is not yet a published binary release or Homebrew formula. The compiled executable currently launches the editor server; the development project-management CLI described below is not yet exposed as installed `plinth` subcommands.
 
 Runtime options:
 
@@ -55,6 +57,22 @@ bun run tool help  # Show CLI commands
 
 Projects are stored under the platform application-data directory described above in both standalone and development modes. Pass `--data-dir` to either the server or CLI to use another root. Opening the app with a fresh, empty root seeds a writable copy of the bundled example project once; a small initialization marker prevents a deleted example from returning. Every project contains a human-readable `project.json`, an `assets/` directory, and generated `exports/`. Image data is never embedded in project JSON.
 
+The default roots are:
+
+```text
+macOS:  ~/Library/Application Support/Plinth/projects
+Linux:  $XDG_DATA_HOME/plinth/projects or ~/.local/share/plinth/projects
+Windows: %LOCALAPPDATA%\Plinth\projects
+```
+
+Each immediate child directory is one project, for example `~/Library/Application Support/Plinth/projects/zibyzi-cards/`. Runtime projects are not stored in this repository. The tracked example in `fixtures/projects/example/` is an immutable seed source, not the live editable copy.
+
+## Agent workflows today
+
+Plinth projects are deliberately legible enough for an agent to inspect and edit, but the polished installed-agent workflow is not built yet. Work performed from this repository benefits from the repository `AGENTS.md`, source code, tests, and `bun run tool`. A standalone executable does not currently install a Plinth skill, add agent instructions to project folders, expose an “Open in Codex” action, or provide the development CLI as installed subcommands.
+
+An agent can be pointed manually at an individual project directory when focused access is desired, or at the projects root for cross-project work. Direct file edits should only be made after any pending browser save has completed, and the result should be validated before reopening or continuing in the editor; a future installed CLI should make that coordination safer.
+
 The asset library provides searchable grid and list views, editable display names, stored filename details, usage navigation, and image or frame placement. The shared frame menu can also wrap a selected canvas image or change an existing frame from the inspector. Stored filenames remain immutable and content-addressed. Uploads are validated by content and decoded before use; deleting a referenced asset also deletes its image/device layers and resets matching backgrounds so project JSON cannot retain broken references.
 
 Image layers support reusable normalized source crops, per-instance backgrounds, rounded corners, borders, and shadows. A visual crop mode shows the complete source image with a draggable, resizable crop region; Enter or the inspector's Done action applies the session, while Escape cancels it. A selected image can create an independent editable crop callout that references the same asset. Shape overlays support solid, dashed, or dotted strokes, configurable line caps, arrows, and endpoint dots; editing and export use the same Konva scene renderer.
@@ -67,7 +85,7 @@ Use the Export dialog to export the focused screen, the current deck, or all dec
 
 ## CLI
 
-Plinth includes a CLI for inspecting and managing projects:
+The source checkout includes a development CLI for inspecting and managing projects:
 
 ```sh
 bun run tool help
@@ -75,7 +93,7 @@ bun run tool help
 
 The CLI uses the platform application-data directory by default. Pass `--data-dir <path>` to inspect or modify an isolated project directory instead.
 
-PNG rendering remains in the browser editor.
+The standalone executable does not yet expose these commands. PNG rendering remains in the browser editor.
 
 ## Bundled fonts
 
