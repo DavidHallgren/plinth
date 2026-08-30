@@ -5,7 +5,7 @@ import { PlinthError, isPlinthError } from "./errors";
 import { assertProjectSlug, createId, nowIso, slugify } from "./ids";
 import { parseProject, parseProjectWithWarnings, type ProjectLoadWarning } from "./migrations";
 import { assetFileNameFromPath, assetPathForFileName, assertAssetPath, hashBytes, MAX_ASSET_BYTES, validateImageBytes } from "./asset-validation";
-import { assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, findExportPlanForFile, MAX_EXPORT_BYTES } from "./export-validation";
+import { assertExportColorType, assertExportDimensions, assertExportFileName, buildExportPlan, decodePngDimensions, decodePngMetadata, findExportPlanForFile, MAX_EXPORT_BYTES } from "./export-validation";
 import type { ExportScope } from "./export-validation";
 import type { AssetMetadata, Project, ProjectInput, ScreenPreset } from "./schema";
 import type { ProjectFontFace, ProjectFontFamily } from "./schema";
@@ -659,8 +659,16 @@ export class ProjectStorage {
         byteSize: input.bytes.byteLength,
       });
     }
-    const decoded = decodePngDimensions(input.bytes);
+    const decoded = decodePngMetadata(input.bytes);
     assertExportDimensions(decoded, planned);
+    const screen = project.decks.flatMap((deck) => deck.screens).find((candidate) => candidate.id === planned.screenId);
+    if (!screen) {
+      throw new PlinthError("EXPORT_SCREEN_NOT_FOUND", 404, `Screen "${planned.screenId}" is not part of project "${slug}".`, {
+        screenId: planned.screenId,
+        projectSlug: slug,
+      });
+    }
+    assertExportColorType(decoded, screen.background.type === "transparent");
 
     const exportRunDirectory = input.exportRunId ? await this.exportRunDirectory(project, input.exportRunId) : null;
     const filePath = exportRunDirectory

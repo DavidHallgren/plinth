@@ -1,7 +1,7 @@
 import { PlinthError } from "./errors";
 import type { Project, Screen } from "./schema";
-import { decodeStructuredPng, PngStructureError, type PngDimensions } from "./png-validation";
-export type { PngDimensions } from "./png-validation";
+import { decodeStructuredPng, PngStructureError, type PngDimensions, type PngMetadata } from "./png-validation";
+export type { PngDimensions, PngMetadata } from "./png-validation";
 
 /** Keep a browser-generated export bounded before it reaches disk. */
 export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
@@ -53,11 +53,11 @@ export function findExportPlanForFile(project: Project, fileName: string): Expor
 }
 
 /**
- * Read dimensions from a structurally valid PNG. The signature, chunk bounds,
- * CRCs, IHDR dimensions, IDAT payload, and IEND terminator are checked before
- * anything is stored. IHDR is the authoritative decoded canvas size.
+ * Read IHDR metadata from a structurally valid PNG. The signature, chunk
+ * bounds, CRCs, IHDR fields, IDAT payload, and IEND terminator are checked
+ * before anything is stored.
  */
-export function decodePngDimensions(bytes: Uint8Array): PngDimensions {
+export function decodePngMetadata(bytes: Uint8Array): PngMetadata {
   try {
     return decodeStructuredPng(bytes, MAX_EXPORT_BYTES);
   } catch (error) {
@@ -69,6 +69,11 @@ export function decodePngDimensions(bytes: Uint8Array): PngDimensions {
     }
     throw error;
   }
+}
+
+export function decodePngDimensions(bytes: Uint8Array): PngDimensions {
+  const { width, height } = decodePngMetadata(bytes);
+  return { width, height };
 }
 
 export function assertExportFileName(fileName: string): string {
@@ -135,5 +140,23 @@ export function assertExportDimensions(actual: PngDimensions, expected: PngDimen
       actual,
       expected,
     });
+  }
+}
+
+export function assertExportColorType(metadata: PngMetadata, transparentBackground: boolean): void {
+  const expectedColorType = transparentBackground ? 6 : 2;
+  if (metadata.bitDepth !== 8 || metadata.colorType !== expectedColorType) {
+    const description = transparentBackground ? "transparent" : "opaque";
+    throw new PlinthError(
+      "EXPORT_INVALID_PNG",
+      422,
+      `Export for a ${description} screen must be an 8-bit PNG with IHDR color type ${expectedColorType}.`,
+      {
+        actualBitDepth: metadata.bitDepth,
+        actualColorType: metadata.colorType,
+        expectedBitDepth: 8,
+        expectedColorType,
+      },
+    );
   }
 }

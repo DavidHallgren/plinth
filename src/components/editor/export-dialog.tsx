@@ -6,6 +6,7 @@ import type { Project } from "../../lib/schema";
 import { resolveScreen, type ResolvedScreen } from "../../scene/selectors";
 import { ApiClientError, apiFetch, jsonRequest } from "../../lib/client-api";
 import { buildExportPlan, type ExportScope } from "../../lib/export-validation";
+import { encodeCanvasPng } from "../../lib/png-encoding";
 import { waitForSceneReady } from "../../canvas/export-readiness";
 import { SceneRenderer } from "../../canvas/scene-renderer";
 import { Button } from "../ui/button";
@@ -61,12 +62,6 @@ function statusText(status: ExportStatus): string {
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-async function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-  if (!blob) throw new Error("The browser could not encode the rendered canvas as PNG.");
-  return blob;
 }
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -179,7 +174,7 @@ export function ExportDialog({ open, project, activeDeckId, activeScreenId, onOp
     if (canvas.width !== screen.width || canvas.height !== screen.height) {
       throw new Error(`The browser produced ${canvas.width}×${canvas.height}, but ${screen.name} requires ${screen.width}×${screen.height}.`);
     }
-    return canvasBlob(canvas);
+    return encodeCanvasPng(canvas, screen.background.type === "transparent" ? "transparent" : "opaque");
   }
 
   function updateRow(screenId: string, values: Partial<ExportRow>): void {

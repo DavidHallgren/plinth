@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { apiAction, handleCreateExport, handleCreateExportRun, handleGetExport, handleListExports } from "../src/lib/api";
 import { createDeckPreset } from "../src/lib/defaults";
-import { buildExportPlan, decodePngDimensions, exportFileName, assertExportFileName } from "../src/lib/export-validation";
+import { buildExportPlan, decodePngDimensions, decodePngMetadata, exportFileName, assertExportFileName } from "../src/lib/export-validation";
 import { ProjectStorage } from "../src/lib/storage";
-import { pngFixture } from "./helpers";
+import { decodePngPixels, pngFixture } from "./helpers";
 
 const temporaryDirectories: string[] = [];
 
@@ -42,6 +42,15 @@ describe("export naming and PNG validation", () => {
   test("reads actual PNG signature and IHDR dimensions", () => {
     const bytes = pngFixture(640, 480);
     expect(decodePngDimensions(bytes)).toEqual({ width: 640, height: 480 });
+    expect(decodePngMetadata(bytes)).toEqual({
+      width: 640,
+      height: 480,
+      bitDepth: 8,
+      colorType: 2,
+      compressionMethod: 0,
+      filterMethod: 0,
+      interlaceMethod: 0,
+    });
     expect(() => decodePngDimensions(new TextEncoder().encode("not png"))).toThrow(/PNG/);
     const truncated = bytes.slice(0, 24);
     expect(() => decodePngDimensions(truncated)).toThrow(/chunk|IEND|PNG/i);
@@ -88,7 +97,73 @@ describe("export API and storage", () => {
     const payload = await response.json() as { data: { export: { absolutePath: string; relativePath: string } } };
     expect(payload.data.export.relativePath).toBe(`${runPayload.data.exportRun.id}/01-configured.png`);
     expect(payload.data.export.absolutePath).toBe(join(await realpath(exportRoot), runPayload.data.exportRun.id, "01-configured.png"));
-    expect(Array.from(await readFile(payload.data.export.absolutePath))).toEqual(Array.from(pngFixture(320, 240)));
+    const savedBytes = new Uint8Array(await readFile(payload.data.export.absolutePath));
+    expect(Array.from(savedBytes)).toEqual(Array.from(pngFixture(320, 240)));
+    expect(decodePngMetadata(savedBytes).colorType).toBe(2);
+
+    const standardForm = new FormData();
+    standardForm.append("metadata", JSON.stringify({ screenId: deck.screens[0]?.id, fileName: "01-configured.png", width: 320, height: 240 }));
+    standardForm.append("file", fixtureFile(savedBytes, "01-configured.png"), "01-configured.png");
+    const standardResponse = await handleCreateExport(new Request("http://plinth.test/api/projects/configured-export/exports", { method: "POST", body: standardForm }), storage);
+    expect(standardResponse.status).toBe(201);
+    const standardBytes = new Uint8Array(await readFile(storage.exportFilePath("configured-export", "01-configured.png")));
+    expect(Array.from(standardBytes)).toEqual(Array.from(savedBytes));
+  });
+
+  test("rejects RGBA for opaque screens and preserves RGBA transparency for transparent screens", async () => {
+    const storage = await temporaryStorage();
+    const opaqueProject = await storage.createProject({ name: "Opaque export", slug: "opaque-export", description: "RGB export" });
+    const opaqueDeck = createDeckPreset("custom", {
+      id: "deck_opaque",
+      name: "Opaque deck",
+      screenName: "Opaque screen",
+      screenSlug: "opaque-screen",
+      screenExportSlug: "opaque",
+      width: 2,
+      height: 1,
+    });
+    const opaqueScreen = opaqueDeck.screens[0];
+    if (!opaqueScreen) throw new Error("Missing opaque screen");
+    await storage.saveProject({ ...opaqueProject, decks: [opaqueDeck] });
+
+    const unexpectedRgba = new FormData();
+    unexpectedRgba.append("metadata", JSON.stringify({ screenId: opaqueScreen.id, fileName: "01-opaque.png", width: 2, height: 1 }));
+    unexpectedRgba.append("file", fixtureFile(pngFixture(2, 1, { colorType: 6, rgba: [9, 19, 29, 255] }), "01-opaque.png"), "01-opaque.png");
+    const rejected = await apiAction(() => handleCreateExport(new Request("http://plinth.test/api/projects/opaque-export/exports", { method: "POST", body: unexpectedRgba }), storage));
+    expect(rejected.status).toBe(422);
+    expect(await rejected.json()).toMatchObject({
+      error: {
+        code: "EXPORT_INVALID_PNG",
+        details: { actualColorType: 6, expectedColorType: 2 },
+      },
+    });
+    await expect(stat(storage.exportFilePath("opaque-export", "01-opaque.png"))).rejects.toThrow();
+
+    const transparentProject = await storage.createProject({ name: "Transparent export", slug: "transparent-export", description: "RGBA export" });
+    const transparentDeck = createDeckPreset("custom", {
+      id: "deck_transparent",
+      name: "Transparent deck",
+      screenName: "Transparent screen",
+      screenSlug: "transparent-screen",
+      screenExportSlug: "transparent",
+      width: 2,
+      height: 1,
+    });
+    const baseTransparentScreen = transparentDeck.screens[0];
+    if (!baseTransparentScreen) throw new Error("Missing transparent screen");
+    const transparentScreen = { ...baseTransparentScreen, background: { type: "transparent" as const } };
+    await storage.saveProject({ ...transparentProject, decks: [{ ...transparentDeck, screens: [transparentScreen] }] });
+
+    const transparentBytes = pngFixture(2, 1, { colorType: 6, rgba: [31, 63, 95, 0] });
+    const transparentForm = new FormData();
+    transparentForm.append("metadata", JSON.stringify({ screenId: transparentScreen.id, fileName: "01-transparent.png", width: 2, height: 1 }));
+    transparentForm.append("file", fixtureFile(transparentBytes, "01-transparent.png"), "01-transparent.png");
+    const transparentResponse = await handleCreateExport(new Request("http://plinth.test/api/projects/transparent-export/exports", { method: "POST", body: transparentForm }), storage);
+    expect(transparentResponse.status).toBe(201);
+    const savedTransparent = new Uint8Array(await readFile(storage.exportFilePath("transparent-export", "01-transparent.png")));
+    expect(Array.from(savedTransparent)).toEqual(Array.from(transparentBytes));
+    expect(decodePngMetadata(savedTransparent).colorType).toBe(6);
+    expect(Array.from(decodePngPixels(savedTransparent).pixels)).toEqual([31, 63, 95, 0, 31, 63, 95, 0]);
   });
 
   test("requires confirmation before creating a missing configured folder", async () => {
@@ -160,7 +235,9 @@ describe("export API and storage", () => {
     expect(response.status).toBe(201);
     const payload = await response.json() as { data: { export: { relativePath: string; width: number; height: number } } };
     expect(payload.data.export).toMatchObject({ relativePath: "exports/01-home.png", width: 640, height: 480 });
-    expect(Array.from(await readFile(storage.exportFilePath("export-fixture", "01-home.png")))).toEqual(Array.from(pngFixture(640, 480)));
+    const savedHome = new Uint8Array(await readFile(storage.exportFilePath("export-fixture", "01-home.png")));
+    expect(Array.from(savedHome)).toEqual(Array.from(pngFixture(640, 480)));
+    expect(decodePngMetadata(savedHome).colorType).toBe(2);
 
     const listed = await handleListExports(new Request("http://plinth.test/api/projects/export-fixture/exports"), storage);
     const listedPayload = await listed.json() as { data: { exports: Array<Record<string, unknown>> } };
