@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { Group, Layer } from "../src/canvas/react-konva";
+import { Group, Layer, Stage } from "../src/canvas/react-konva";
+import { ScreenThumbnail } from "../src/components/editor/screen-thumbnail";
+import { thumbnailSize } from "../src/devices/geometry";
 import { createDefaultProject } from "../src/lib/defaults";
 import { resolveScreen } from "../src/scene/selectors";
 import { SceneContents, SceneRenderer, shapeVisualProps } from "../src/canvas/scene-renderer";
@@ -47,6 +49,26 @@ describe("scene renderer composition", () => {
 
     expect(SceneContents(props).type).toBe(Group);
     expect(SceneRenderer(props).type).toBe(Layer);
+  });
+
+  test("supersamples compact thumbnails before displaying them at their requested size", () => {
+    const project = createDefaultProject("Thumbnail fixture");
+    const sourceScreen = project.decks[0]?.screens[0];
+    if (!sourceScreen) throw new Error("Missing thumbnail fixture screen.");
+    const screen = resolveScreen(project, sourceScreen.id);
+    const displaySize = thumbnailSize(screen.width, screen.height, 46, 46);
+    const thumbnail = ScreenThumbnail({ assets: project.assets, maxHeight: 46, maxWidth: 46, projectSlug: project.slug, screen });
+    const stage = thumbnail.props.children;
+
+    expect(stage.type).toBe(Stage);
+    expect(stage.props).toMatchObject({
+      height: displaySize.height * 4,
+      scaleX: displaySize.scale * 4,
+      scaleY: displaySize.scale * 4,
+      width: displaySize.width * 4,
+      style: { transform: "scale(0.25)", transformOrigin: "top left" },
+    });
+    expect(thumbnail.props.style).toEqual({ height: displaySize.height, overflow: "hidden", width: displaySize.width });
   });
 
   test("applies shape shadows to the drawable node props", () => {
