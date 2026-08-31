@@ -47,6 +47,7 @@ export class EditorStore {
   private clipboard: SceneElement[] = [];
   private clipboardGroups: Array<Pick<LayerGroup, "name" | "elementIds">> = [];
   private transactionBefore: Project | null = null;
+  private deferredPersistenceProject: Project | null = null;
 
   constructor(project: Project, onCommit: ProjectCommit) {
     this.history = new ProjectHistory(project, 100);
@@ -79,11 +80,20 @@ export class EditorStore {
 
   replaceProject(project: Project): void {
     if (project === this.history.project) return;
+    // Inspector and canvas transactions deliberately stay local until they
+    // become one undoable commit. A save echo for the previous committed
+    // snapshot must not replace those newer in-progress edits.
+    if (this.snapshot.isInTransaction) {
+      this.deferredPersistenceProject = project;
+      return;
+    }
+    this.deferredPersistenceProject = null;
     this.history.replaceProject(project);
     this.replaceSnapshotProject(project);
   }
 
   replaceExternalProject(project: Project): void {
+    this.deferredPersistenceProject = null;
     this.history.resetProject(project);
     this.replaceSnapshotProject(project);
   }
@@ -190,15 +200,29 @@ export class EditorStore {
 
   commitTransaction(): void {
     const before = this.transactionBefore;
+    const deferredProject = this.deferredPersistenceProject;
+    this.deferredPersistenceProject = null;
     const project = this.history.commitTransaction();
     this.transactionBefore = null;
+    if ((!before || project === before) && deferredProject?.id === project.id) {
+      this.history.replaceProject(deferredProject);
+      this.replaceSnapshotProject(deferredProject);
+      return;
+    }
     this.updateSnapshot({ project, canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
     if (before && project !== before) this.commit(project);
   }
 
   cancelTransaction(): void {
+    const deferredProject = this.deferredPersistenceProject;
+    this.deferredPersistenceProject = null;
     const project = this.history.cancelTransaction();
     this.transactionBefore = null;
+    if (deferredProject?.id === project.id) {
+      this.history.replaceProject(deferredProject);
+      this.replaceSnapshotProject(deferredProject);
+      return;
+    }
     this.updateSnapshot({ project, canUndo: this.history.canUndo, canRedo: this.history.canRedo, isInTransaction: false });
   }
 

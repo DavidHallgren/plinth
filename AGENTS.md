@@ -36,6 +36,7 @@ The repository is currently both the application source and the richest agent wo
 - Keep only one full-resolution export stage mounted at a time; inactive screens use light thumbnails.
 - The focused screen is always one screen in the active deck. Projection identity is `(targetScreenId, canonicalElementId)`; operations route geometry through the target screen while persistence keeps one owned canonical element.
 - Do not save on pointer move. A drag/transform/inspector edit is one history entry after the gesture completes.
+- Never let an autosave response or other persistence echo replace the editor project while an inspector or canvas transaction is active. Defer the echo until cancellation, or discard it when the newer local transaction commits.
 - Never intercept Cmd/Ctrl shortcuts while focus is in `input`, `textarea`, `select`, or any contenteditable element. Escape, copy, paste, duplicate, delete, nudge, reorder, and undo/redo should remain conventional.
 - Preserve selection when reordering layers. Keep grouped members contiguous and move their ownership and z-order as one block while leaving their element geometry flat. Keep arrow-button/keyboard fallbacks alongside HTML drag-and-drop.
 - Locked elements cannot be transformed/nudged; hidden elements remain represented in layers and JSON.

@@ -517,6 +517,38 @@ describe("operation history", () => {
     expect(elements(store.getSnapshot().project)[0]).toMatchObject({ x: 10, y: 10 });
   });
 
+  test("does not replace an in-progress inspector edit with an autosave response", () => {
+    const initial = fixture();
+    const persistedEcho = ProjectSchema.parse({ ...initial, updatedAt: "2026-08-02T00:00:01.000Z" });
+    const commits: Project[] = [];
+    const store = new EditorStore(initial, (project) => commits.push(project));
+
+    store.beginTransaction("Edit screen");
+    store.updateCurrentScreen({ name: "Typing in progress" });
+    store.replaceProject(persistedEcho);
+
+    expect(store.getSnapshot().isInTransaction).toBe(true);
+    expect(firstScreen(store.getSnapshot().project).name).toBe("Typing in progress");
+    store.commitTransaction();
+    expect(commits).toHaveLength(1);
+    expect(firstScreen(commits[0]!).name).toBe("Typing in progress");
+  });
+
+  test("adopts a deferred autosave response when an inspector edit is canceled", () => {
+    const initial = fixture();
+    const persistedEcho = ProjectSchema.parse({ ...initial, updatedAt: "2026-08-02T00:00:01.000Z" });
+    const store = new EditorStore(initial, () => undefined);
+
+    store.beginTransaction("Edit screen");
+    store.updateCurrentScreen({ name: "Canceled draft" });
+    store.replaceProject(persistedEcho);
+
+    expect(store.getSnapshot().isInTransaction).toBe(true);
+    expect(firstScreen(store.getSnapshot().project).name).toBe("Canceled draft");
+    store.cancelTransaction();
+    expect(store.getSnapshot().project).toBe(persistedEcho);
+  });
+
   test("does not nudge a locked-only selection", () => {
     const initial = updateElement(addElement(fixture(), "screen_operations", shape("locked", 10, 10)), "screen_operations", "locked", { locked: true });
     const commits: Project[] = [];
