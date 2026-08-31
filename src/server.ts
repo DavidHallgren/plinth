@@ -8,6 +8,7 @@ import {
   handleDeleteProject,
   handleDuplicateProject,
   handleGetProject,
+  handleGetProjectPreview,
   handleGetAsset,
   handleGetExport,
   handleHealth,
@@ -52,6 +53,9 @@ const routes = {
   "/api/projects": {
     GET: () => apiAction(() => handleListProjects(storage)),
     POST: (request: Request) => apiAction(() => handleCreateProject(request, storage)),
+  },
+  "/api/projects/:slug/preview": {
+    GET: (request: Request) => apiAction(() => handleGetProjectPreview(request, storage)),
   },
   "/api/projects/:slug": {
     GET: (request: Request) => apiAction(() => handleGetProject(request, storage)),

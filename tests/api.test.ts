@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { apiAction, handleAddDeck, handleAddScreen, handleCreateProject, handleDuplicateProject, handleGetProject, handleRenameProject } from "../src/lib/api";
+import { apiAction, handleAddDeck, handleAddScreen, handleCreateProject, handleDuplicateProject, handleGetProject, handleGetProjectPreview, handleRenameProject } from "../src/lib/api";
 import { ProjectStorage } from "../src/lib/storage";
 import { CURRENT_SCHEMA_VERSION } from "../src/lib/schema";
 
@@ -40,6 +40,12 @@ describe("deck and screen API", () => {
     expect(project.settings.exportDirectory).toBe("/tmp/plinth-exports");
     expect(project.decks[0]).toMatchObject({ width: 800, height: 600 });
     expect(project.decks[0]?.screens[0]?.preset).toBe("custom");
+
+    const previewResponse = await handleGetProjectPreview(new Request("http://plinth.test/api/projects/custom-project/preview"), storage);
+    const preview = (await previewResponse.json() as { data: { preview: { screen: { width: number; height: number; elements: unknown[] }; assets: unknown[] } } }).data.preview;
+    expect(preview.screen).toMatchObject({ width: 800, height: 600 });
+    expect(preview.screen.elements).toBeArray();
+    expect(preview.assets).toEqual([]);
   });
 
   test("returns structured client errors for invalid project slugs", async () => {

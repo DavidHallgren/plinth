@@ -6,6 +6,7 @@ import { CURRENT_SCHEMA_VERSION, ScreenPresetSchema } from "./schema";
 import { assetPathFromRequestName, ProjectStorage } from "./storage";
 import { assertFontPath } from "./font-validation";
 import { PROJECT_SLUG_PATTERN } from "./ids";
+import { createProjectPreview } from "./project-preview";
 
 const ProjectSlugRequestSchema = z.string().trim().min(1).max(64).regex(
   PROJECT_SLUG_PATTERN,
@@ -190,6 +191,11 @@ export function handleHealth(): Response {
 
 export function handleListProjects(storage: ProjectStorage): Promise<Response> {
   return storage.listProjectMetadata().then((projects) => success({ projects }));
+}
+
+export async function handleGetProjectPreview(request: Request, storage: ProjectStorage): Promise<Response> {
+  const project = await storage.loadProject(pathSegment(request, 3));
+  return success({ preview: createProjectPreview(project) });
 }
 
 export async function handleCreateProject(request: Request, storage: ProjectStorage): Promise<Response> {

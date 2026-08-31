@@ -40,7 +40,7 @@ bun run dev
 
 Open [http://localhost:3000](http://localhost:3000). Development uses the same platform application-data directory as the standalone app, so projects no longer depend on the repository checkout. On the first launch into an empty project directory, Plinth copies its bundled example from `fixtures/projects/example/`. The copy is an ordinary editable project and stays deleted if you remove it.
 
-The project picker lives at `/`. Open editors use `/projects/<project-id>`, where the stable persisted ID keeps bookmarks and reloads working even if the project's editable slug changes. Other browser paths show the app's not-found state.
+The project picker lives at `/`. Each valid project loads a lightweight first-screen preview containing only the resolved screen model and its referenced asset metadata, then renders it through the shared scene renderer. Open editors use `/projects/<project-id>`, where the stable persisted ID keeps bookmarks and reloads working even if the project's editable slug changes. Other browser paths show the app's not-found state.
 
 ## Development
 
