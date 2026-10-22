@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultProject, createDeckPreset, createScreenPreset } from "../src/lib/defaults";
 import { APPLE_BEZEL_PRESETS } from "../src/devices/apple-bezel-presets";
-import { DEVICE_PRESETS, deviceFrameKind, getDevicePreset } from "../src/devices/presets";
+import { DEVICE_PRESETS, deviceFrameKind, getDeviceFrameFinish, getDevicePreset } from "../src/devices/presets";
 import { calculateDeviceScreenGeometry, calculateImageFitGeometry } from "../src/devices/geometry";
 import { deviceFrameSource } from "../src/devices/frame-assets";
 import { sceneReadiness } from "../src/canvas/export-readiness";
@@ -85,7 +85,7 @@ describe("deck and screen presets", () => {
 
   test("classifies frame selections consistently across canvas and image insertion", () => {
     for (const preset of DEVICE_PRESETS) {
-      const expected = preset.id.startsWith("macbook") ? "laptop"
+      const expected = preset.id.startsWith("apple-watch") ? "watch" : preset.id.startsWith("macbook") ? "laptop"
         : preset.id.includes("ipad") ? "tablet" : preset.id === "browser-window" ? "browser" : "phone";
       expect(deviceFrameKind(preset.id)).toBe(expected);
     }
@@ -102,6 +102,10 @@ describe("deck and screen presets", () => {
   });
 
   test.each([
+    ["apple-watch-series-11-42", 374, 446],
+    ["apple-watch-series-11-46", 416, 496],
+    ["apple-watch-ultra-3-49", 422, 514],
+    ["apple-watch-ultra-2-49", 410, 502],
     ["macbook-air-m5-13", 2560, 1664],
     ["macbook-air-m5-15", 2880, 1864],
     ["macbook-pro-m5-14", 3024, 1964],
@@ -130,7 +134,7 @@ describe("deck and screen presets", () => {
     const screen = resolveScreen(project, deck.screens[0]!.id);
     expect(screen).toMatchObject({ width, height });
     const device = screen.elements.find((element) => element.type === "device")!;
-    expect(device).toMatchObject({ type: "device", preset: id, deviceId: id, frame: id.startsWith("macbook") ? "laptop" : id.startsWith("ipad") ? "tablet" : "phone" });
+    expect(device).toMatchObject({ type: "device", preset: id, deviceId: id, frame: id.startsWith("apple-watch") ? "watch" : id.startsWith("macbook") ? "laptop" : id.startsWith("ipad") ? "tablet" : "phone" });
     expect(device.y + device.height).toBeLessThan(height * 0.84);
     const preset = getDevicePreset(id)!;
     // Persisted element dimensions use whole pixels, so starter placement can
@@ -152,6 +156,48 @@ describe("deck and screen presets", () => {
     expect(sceneReadiness(screen).builtInImageSources).toEqual([frame!]);
     expect(sceneReadiness({ ...screen, elements: screen.elements.map((element) => element.type === "device" ? { ...element, showCamera: false } : element) }).builtInImageSources).toEqual([frame!]);
     expect(buildExportPlan(project)[0]).toMatchObject({ width, height });
+  });
+
+  test.each([
+    ["apple-watch-series-11-42", 22], ["apple-watch-series-11-46", 22],
+    ["apple-watch-ultra-3-49", 13], ["apple-watch-ultra-2-49", 19],
+  ] as const)("preserves every %s case-and-band identity independently of case color", (id, count) => {
+    const preset = getDevicePreset(id)!;
+    const project = createDefaultProject("Watch finishes");
+    project.decks = [createDeckPreset(id)];
+    const screen = project.decks[0]!.screens[0]!;
+    const device = ownedElements(screen).find((element) => element.type === "device")!;
+    if (device.type !== "device") throw new Error("Missing watch frame");
+    expect(device.frameFinish).toBe(preset.frameFinishes![0]!.id);
+    expect(preset.frameFinishes).toHaveLength(count);
+    expect(new Set(preset.frameFinishes!.map((finish) => finish.id)).size).toBe(count);
+    expect(new Set(preset.frameFinishes!.map((finish) => finish.color)).size).toBeLessThan(count);
+    const sources = new Set<string>();
+    for (const finish of preset.frameFinishes!) {
+      device.frameColor = finish.color;
+      device.frameFinish = finish.id;
+      device.showCamera = false;
+      const restored = ProjectSchema.parse(JSON.parse(JSON.stringify(project)));
+      const resolved = resolveScreen(restored, screen.id);
+      expect(resolved.elements.find((element) => element.id === device.id)).toMatchObject({ frame: "watch", frameFinish: finish.id });
+      const source = deviceFrameSource(id, finish.color, false, finish.id)!;
+      expect(source).toMatch(/\.png$/);
+      expect(sceneReadiness(resolved).builtInImageSources).toEqual([source]);
+      expect(getDeviceFrameFinish(preset, finish.color, finish.id)).toEqual(finish);
+      sources.add(source);
+    }
+    expect(sources.size).toBe(count);
+    const first = preset.frameFinishes![0]!;
+    expect(getDeviceFrameFinish(preset, "#unknown", "unknown-finish")).toEqual(first);
+    expect(deviceFrameSource(id, "#unknown", false, "unknown-finish")).toBe(deviceFrameSource(id, first.color, false, first.id));
+    expect(deviceFrameSource(id, first.color)).toBe(deviceFrameSource(id, first.color, true, first.id));
+    // Small native Watch canvases must keep starter text and decorations inside.
+    for (const element of ownedElements(screen)) {
+      expect(element.x).toBeGreaterThanOrEqual(0);
+      expect(element.y).toBeGreaterThanOrEqual(0);
+      expect(element.x + element.width).toBeLessThanOrEqual(project.decks[0]!.width);
+      expect(element.y + element.height).toBeLessThanOrEqual(project.decks[0]!.height);
+    }
   });
 
   test.each(["iphone-duo-outer", "iphone-duo-inner"])("preserves %s aperture geometry in both orientations without a camera overlay", (id) => {

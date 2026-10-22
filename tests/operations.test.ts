@@ -337,7 +337,7 @@ describe("scene operations", () => {
     expect(afterScreenUpdate).toEqual(expectedOrder);
   });
 
-  test.each(["iphone-17-pro-max", "macbook-air-m5-13", "macbook-air-m5-15", "macbook-pro-m5-14", "macbook-pro-m5-16"] as const)("replaces an image with %s while preserving its layer identity and order", (presetId) => {
+  test.each(["apple-watch-series-11-42", "apple-watch-series-11-46", "apple-watch-ultra-3-49", "apple-watch-ultra-2-49", "iphone-17-pro-max", "macbook-air-m5-13", "macbook-air-m5-15", "macbook-pro-m5-14", "macbook-pro-m5-16"] as const)("replaces an image with %s while preserving its layer identity and order", (presetId) => {
     const preset = getDevicePreset(presetId)!;
     const image: ImageElement = {
       id: "image_to_frame",
@@ -381,6 +381,7 @@ describe("scene operations", () => {
       deviceName: preset.label,
       frame: deviceFrameKind(presetId),
       frameColor: preset.defaultFrameColor,
+      frameFinish: preset.frameFinishes?.at(-1)?.id ?? null,
       screenColor: "#f7f8fc",
       screenshotPath: image.assetPath,
       screenshotFit: image.fit,
@@ -393,7 +394,7 @@ describe("scene operations", () => {
     };
     const replaced = replaceElement(project, "screen_operations", image.id, frame);
     expect(elements(replaced).map((element) => element.id)).toEqual(["below", image.id]);
-    expect(elements(replaced)[1]).toMatchObject({ type: "device", screenshotPath: image.assetPath, preset: presetId, frame: deviceFrameKind(presetId) });
+    expect(elements(replaced)[1]).toMatchObject({ type: "device", screenshotPath: image.assetPath, preset: presetId, frame: deviceFrameKind(presetId), frameFinish: frame.frameFinish });
     expect(() => replaceElement(project, "screen_operations", image.id, { ...frame, id: "different" })).toThrow(/preserve their existing id/);
   });
 

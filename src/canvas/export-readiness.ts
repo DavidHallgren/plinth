@@ -37,7 +37,7 @@ function referencedBuiltInImageSources(sceneScreen: RenderableScene): string[] {
   const sources = new Set<string>();
   for (const element of sceneScreen.elements) {
     if (element.type !== "device") continue;
-    const source = deviceFrameSource(element.preset, element.frameColor, element.showCamera);
+    const source = deviceFrameSource(element.preset, element.frameColor, element.showCamera, element.frameFinish);
     if (source) sources.add(source);
   }
   return [...sources];

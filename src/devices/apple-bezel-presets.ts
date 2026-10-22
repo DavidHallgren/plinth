@@ -1,10 +1,14 @@
-import type { DevicePresetDefinition } from "./presets";
+import type { DeviceFrameFinish, DevicePresetDefinition } from "./presets";
+import { WATCH_SERIES_11_FINISHES, WATCH_ULTRA_3_FINISHES, WATCH_ULTRA_2_FINISHES } from "./apple-watch-finishes";
 
 const IPHONE_18_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-iPhone-18.dmg";
 const IPAD_PRO_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-iPad-Pro-%28M5%29.dmg";
 const IPAD_AIR_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-iPad-Air-%28M4%29.dmg";
 const MACBOOK_AIR_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-MacBook-Air-M5.dmg";
 const MACBOOK_PRO_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-MacBook-Pro-M5.dmg";
+const WATCH_SERIES_11_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-Apple-Watch-Series-11-2025.dmg";
+const WATCH_ULTRA_3_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-Apple-Watch-Ultra-3-2025.dmg";
+const WATCH_ULTRA_2_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-Apple-Watch-Ultra-2-2024.dmg";
 
 const MACBOOK_AIR_FINISHES = [
   { label: "Sky Blue", color: "#c8d8e0" },
@@ -37,9 +41,9 @@ const IPAD_AIR_FINISHES = [
 // Native PNG bounds and display apertures are measured independently for
 // each orientation. Clip curves stay beneath the artwork's opaque bezel.
 function bezelPreset<const Id extends string>(
-  id: Id, label: string, category: "iPhone" | "iPad" | "Mac",
+  id: Id, label: string, category: "iPhone" | "iPad" | "Mac" | "Apple Watch",
   frame: readonly [number, number], aperture: readonly [number, number, number, number],
-  clipRadius: number | readonly [number, number, number, number], finishes: readonly [{ label: string; color: string }, ...{ label: string; color: string }[]], source: string,
+  clipRadius: number | readonly [number, number, number, number], finishes: readonly [DeviceFrameFinish, ...DeviceFrameFinish[]], source: string,
 ) {
   const [width, height] = frame;
   const [x, y, screenWidth, screenHeight] = aperture;
@@ -64,6 +68,10 @@ function bezelPreset<const Id extends string>(
 }
 
 export const APPLE_BEZEL_PRESETS = [
+  bezelPreset("apple-watch-series-11-42", "Apple Watch Series 11 · 42 mm", "Apple Watch", [520, 800], [73, 177, 374, 446], 60, WATCH_SERIES_11_FINISHES, WATCH_SERIES_11_SOURCE),
+  bezelPreset("apple-watch-series-11-46", "Apple Watch Series 11 · 46 mm", "Apple Watch", [560, 880], [72, 192, 416, 496], 60, WATCH_SERIES_11_FINISHES, WATCH_SERIES_11_SOURCE),
+  bezelPreset("apple-watch-ultra-3-49", "Apple Watch Ultra 3 · 49 mm", "Apple Watch", [600, 960], [89, 223, 422, 514], 60, WATCH_ULTRA_3_FINISHES, WATCH_ULTRA_3_SOURCE),
+  bezelPreset("apple-watch-ultra-2-49", "Apple Watch Ultra 2 · 49 mm", "Apple Watch", [600, 940], [95, 219, 410, 502], 60, WATCH_ULTRA_2_FINISHES, WATCH_ULTRA_2_SOURCE),
   // MacBook displays have rounded top corners and square bottom corners.
   bezelPreset("macbook-air-m5-13", "MacBook Air 13″ (M5)", "Mac", [3400, 2240], [420, 288, 2560, 1664], [20, 20, 0, 0], MACBOOK_AIR_FINISHES, MACBOOK_AIR_SOURCE),
   bezelPreset("macbook-air-m5-15", "MacBook Air 15″ (M5)", "Mac", [3540, 2300], [329, 218, 2880, 1864], [20, 20, 0, 0], MACBOOK_AIR_FINISHES, MACBOOK_AIR_SOURCE),

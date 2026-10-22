@@ -7,7 +7,7 @@ export type PresetDefinition = {
   shortLabel: string;
   width: number;
   height: number;
-  platform: "iPhone" | "iPad" | "Mac" | "App Store" | "Custom";
+  platform: "iPhone" | "iPad" | "Mac" | "Apple Watch" | "App Store" | "Custom";
   note: string;
   // null creates a blank artwork canvas instead of a screenshot composition.
   devicePreset?: DevicePresetId | null;

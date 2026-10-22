@@ -68,4 +68,27 @@ Both packages include the byte-identical [Apple Design Resources License](Apple-
 
 These front-facing landscape frames include the full laptop body and transparent exterior margins. Insets are measured from the original PNG bounds, not from the body edge. The shared screenshot clip uses 20 native pixels at the top corners and zero at the square bottom corners, keeping the curved edges beneath opaque artwork. The notch and camera are provided by the PNG, which stays visible with `showCamera: false`. Matching native screenshots fill the aperture in both Cover and Contain. MacBooks use the `laptop` frame kind, with no browser-window header. The PNGs are neither resized nor modified during asset preparation.
 
+## Apple Watch
+
+Downloaded on 2026-10-22 from the three Watch packages linked on [Apple Design Resources](https://developer.apple.com/design/resources/): [Series 11 (2025)](https://devimages-cdn.apple.com/design/resources/download/Bezel-Apple-Watch-Series-11-2025.dmg), [Ultra 3 (2025)](https://devimages-cdn.apple.com/design/resources/download/Bezel-Apple-Watch-Ultra-3-2025.dmg), and [Ultra 2 (2024)](https://devimages-cdn.apple.com/design/resources/download/Bezel-Apple-Watch-Ultra-2-2024.dmg). All 76 PNGs are byte-for-byte originals with normalized repository filenames. No model, size, or case-and-band combination was synthesized.
+
+| Preset | PNG dimensions | Aperture origin | Screenshot dimensions | Combinations |
+| --- | --- | --- | --- | --- |
+| `apple-watch-series-11-42` | 520 × 800 | 73, 177 | 374 × 446 | 22 |
+| `apple-watch-series-11-46` | 560 × 880 | 72, 192 | 416 × 496 | 22 |
+| `apple-watch-ultra-3-49` | 600 × 960 | 89, 223 | 422 × 514 | 13 |
+| `apple-watch-ultra-2-49` | 600 × 940 | 95, 219 | 410 × 502 | 19 |
+
+Original paths follow these patterns; the finish labels in `../apple-watch-finishes.ts` retain Apple's material, case color, band style, and band color wording:
+
+- `PNG/{band style}/Apple Watch S11 - {42,46}mm - {material} {case color} + {band style} {band color}.png`
+- `PNG/{band style}/AW Ultra 3 - {Natural,Black} + {band style} {band color}.png`
+- `PNG/{band style}/AW Ultra 2 - {Natural,Black} + {band style} {band color}.png`
+
+Milanese Loop filenames omit the band color; Ultra 2 uses `Titanium Milanese Loop` in the filename. Series 11 has 22 combinations per size: 10 Sport Band, 6 Sport Loop, 3 Magnetic Link, and 3 Milanese Loop. Ultra 3 has 4 Alpine Loop, 4 Ocean Band, 3 Trail Loop, and 2 Milanese Loop. Ultra 2 has 6 Alpine Loop, 6 Ocean Band, 5 Trail Loop, and 2 Milanese Loop. The same case color can accompany several bands, so optional `frameFinish` IDs select the exact artwork independently from `frameColor`; older color-only frames retain their existing behavior.
+
+Apertures are measured from original PNG bounds, including the bands and exterior margins. Each uses a 60-native-pixel quadratic screenshot clip beneath the opaque bezel. The artwork supplies the full hardware outline; it remains visible with Camera off. Native screenshot dimensions match [Apple's Series 11 specifications](https://support.apple.com/en-us/125093) and [Ultra screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/). Editor, thumbnails, and export use the same renderer and finish-aware readiness checks.
+
+Series 11 and Ultra 3 include the byte-identical [Apple Design Resources License](Apple-Design-Resources-License.rtf) already preserved here. Ultra 2 includes the separate [App Store Marketing Artwork License Agreement](Apple-App-Store-Marketing-Artwork-License.rtf), preserved verbatim. Both licenses are copied into standalone builds.
+
 These Apple-branded frame assets are third-party materials and are not covered by the repository’s MIT license. They are sourced from [Apple Design Resources](https://developer.apple.com/design/resources/), under Product Bezels. Apple and iPhone are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Review Apple’s applicable terms before redistributing them outside Plinth.

@@ -1,0 +1,66 @@
+import type { DeviceFrameFinish } from "./presets";
+
+// Original case-and-band combinations from Apple's bezel packages. IDs stay
+// separate from case colors because several bands share the same case.
+export const WATCH_SERIES_11_FINISHES = [
+  { id: "aluminum-jet-black-sport-band-black", label: "Aluminum Jet Black · Sport Band Black", color: "#232323" },
+  { id: "aluminum-jet-black-sport-loop-dark-gray", label: "Aluminum Jet Black · Sport Loop Dark Gray", color: "#232323" },
+  { id: "aluminum-rose-gold-sport-band-light-blush", label: "Aluminum Rose Gold · Sport Band Light Blush", color: "#d8b7a5" },
+  { id: "aluminum-rose-gold-sport-loop-purple-fog", label: "Aluminum Rose Gold · Sport Loop Purple Fog", color: "#d8b7a5" },
+  { id: "aluminum-silver-sport-band-neon-yellow", label: "Aluminum Silver · Sport Band Neon Yellow", color: "#e3e4e5" },
+  { id: "aluminum-silver-sport-band-purple-fog", label: "Aluminum Silver · Sport Band Purple Fog", color: "#e3e4e5" },
+  { id: "aluminum-silver-sport-loop-forest", label: "Aluminum Silver · Sport Loop Forest", color: "#e3e4e5" },
+  { id: "aluminum-silver-sport-loop-neon-yellow", label: "Aluminum Silver · Sport Loop Neon Yellow", color: "#e3e4e5" },
+  { id: "aluminum-space-gray-sport-band-anchor-blue", label: "Aluminum Space Gray · Sport Band Anchor Blue", color: "#747577" },
+  { id: "aluminum-space-gray-sport-band-black", label: "Aluminum Space Gray · Sport Band Black", color: "#747577" },
+  { id: "aluminum-space-gray-sport-loop-anchor-blue", label: "Aluminum Space Gray · Sport Loop Anchor Blue", color: "#747577" },
+  { id: "aluminum-space-gray-sport-loop-forest", label: "Aluminum Space Gray · Sport Loop Forest", color: "#747577" },
+  { id: "titanium-gold-magnetic-link-sage-gray", label: "Titanium Gold · Magnetic Link Sage Gray", color: "#d0b99c" },
+  { id: "titanium-gold-milanese-loop", label: "Titanium Gold · Milanese Loop", color: "#d0b99c" },
+  { id: "titanium-gold-sport-band-light-blush", label: "Titanium Gold · Sport Band Light Blush", color: "#d0b99c" },
+  { id: "titanium-gold-sport-band-purple-fog", label: "Titanium Gold · Sport Band Purple Fog", color: "#d0b99c" },
+  { id: "titanium-natural-magnetic-link-caramel", label: "Titanium Natural · Magnetic Link Caramel", color: "#b9b5ad" },
+  { id: "titanium-natural-milanese-loop", label: "Titanium Natural · Milanese Loop", color: "#b9b5ad" },
+  { id: "titanium-natural-sport-band-stone-gray", label: "Titanium Natural · Sport Band Stone Gray", color: "#b9b5ad" },
+  { id: "titanium-slate-magnetic-link-navy", label: "Titanium Slate · Magnetic Link Navy", color: "#636361" },
+  { id: "titanium-slate-milanese-loop", label: "Titanium Slate · Milanese Loop", color: "#636361" },
+  { id: "titanium-slate-sport-band-black", label: "Titanium Slate · Sport Band Black", color: "#636361" },
+] as const satisfies readonly [DeviceFrameFinish, ...DeviceFrameFinish[]];
+
+export const WATCH_ULTRA_3_FINISHES = [
+  { id: "natural-ocean-band-anchor-blue", label: "Natural · Ocean Band Anchor Blue", color: "#b9b5ad" },
+  { id: "black-alpine-loop-black", label: "Black · Alpine Loop Black", color: "#30302e" },
+  { id: "black-alpine-loop-light-blue", label: "Black · Alpine Loop Light Blue", color: "#30302e" },
+  { id: "black-milanese-loop", label: "Black · Milanese Loop", color: "#30302e" },
+  { id: "black-ocean-band-anchor-blue", label: "Black · Ocean Band Anchor Blue", color: "#30302e" },
+  { id: "black-ocean-band-black", label: "Black · Ocean Band Black", color: "#30302e" },
+  { id: "black-trail-loop-black-charcoal", label: "Black · Trail Loop Black Charcoal", color: "#30302e" },
+  { id: "natural-alpine-loop-light-blue", label: "Natural · Alpine Loop Light Blue", color: "#b9b5ad" },
+  { id: "natural-alpine-loop-terra-cotta", label: "Natural · Alpine Loop Terra Cotta", color: "#b9b5ad" },
+  { id: "natural-milanese-loop", label: "Natural · Milanese Loop", color: "#b9b5ad" },
+  { id: "natural-ocean-band-neon-green", label: "Natural · Ocean Band Neon Green", color: "#b9b5ad" },
+  { id: "natural-trail-loop-blue-bright-blue", label: "Natural · Trail Loop Blue Bright Blue", color: "#b9b5ad" },
+  { id: "natural-trail-loop-green-neon", label: "Natural · Trail Loop Green Neon", color: "#b9b5ad" },
+] as const satisfies readonly [DeviceFrameFinish, ...DeviceFrameFinish[]];
+
+export const WATCH_ULTRA_2_FINISHES = [
+  { id: "natural-ocean-band-navy", label: "Natural · Ocean Band Navy", color: "#b9b5ad" },
+  { id: "black-alpine-loop-dark-green", label: "Black · Alpine Loop Dark Green", color: "#30302e" },
+  { id: "black-alpine-loop-navy", label: "Black · Alpine Loop Navy", color: "#30302e" },
+  { id: "black-alpine-loop-tan", label: "Black · Alpine Loop Tan", color: "#30302e" },
+  { id: "black-ocean-band-black", label: "Black · Ocean Band Black", color: "#30302e" },
+  { id: "black-ocean-band-ice-blue", label: "Black · Ocean Band Ice Blue", color: "#30302e" },
+  { id: "black-ocean-band-navy", label: "Black · Ocean Band Navy", color: "#30302e" },
+  { id: "black-titanium-milanese-loop", label: "Black · Titanium Milanese Loop", color: "#30302e" },
+  { id: "black-trail-loop-black", label: "Black · Trail Loop Black", color: "#30302e" },
+  { id: "black-trail-loop-blue", label: "Black · Trail Loop Blue", color: "#30302e" },
+  { id: "black-trail-loop-green", label: "Black · Trail Loop Green", color: "#30302e" },
+  { id: "natural-alpine-loop-dark-green", label: "Natural · Alpine Loop Dark Green", color: "#b9b5ad" },
+  { id: "natural-alpine-loop-navy", label: "Natural · Alpine Loop Navy", color: "#b9b5ad" },
+  { id: "natural-alpine-loop-tan", label: "Natural · Alpine Loop Tan", color: "#b9b5ad" },
+  { id: "natural-ocean-band-black", label: "Natural · Ocean Band Black", color: "#b9b5ad" },
+  { id: "natural-ocean-band-ice-blue", label: "Natural · Ocean Band Ice Blue", color: "#b9b5ad" },
+  { id: "natural-titanium-milanese-loop", label: "Natural · Titanium Milanese Loop", color: "#b9b5ad" },
+  { id: "natural-trail-loop-black", label: "Natural · Trail Loop Black", color: "#b9b5ad" },
+  { id: "natural-trail-loop-blue", label: "Natural · Trail Loop Blue", color: "#b9b5ad" },
+] as const satisfies readonly [DeviceFrameFinish, ...DeviceFrameFinish[]];

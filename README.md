@@ -146,6 +146,21 @@ The Mac frame picker includes Apple's front-facing MacBook Air M5 and MacBook Pr
 
 Choose **Add with frame** on an imported screenshot, change an existing device's frame, or create a matching deck preset. Use a full-display screenshot, including the menu-bar area, and keep the device's aspect ratio when resizing. Cover and Contain fit the matching dimensions without cropping or padding. The official PNG supplies the notch, camera, and laptop body; screenshot clipping preserves the square bottom display corners. Editor, thumbnails, and export share the same rendering and image-readiness paths. These are native display canvases; check App Store Connect's accepted sizes separately when preparing store submissions. See [asset provenance and measured geometry](src/devices/frames/README.md).
 
+## Apple Watch presets
+
+Apple Watch frames include every case-and-band combination in the Series 11, Ultra 3, and Ultra 2 packages currently linked from [Apple Design Resources](https://developer.apple.com/design/resources/). Select the model and size from **Apple Watch**, then choose the complete combination in **Frame finish**.
+
+| Preset ID | Native screenshot pixels | Available artwork |
+| --- | --- | --- |
+| `apple-watch-series-11-42` | 374 × 446 | 22 combinations across 7 case finishes |
+| `apple-watch-series-11-46` | 416 × 496 | 22 combinations across 7 case finishes |
+| `apple-watch-ultra-3-49` | 422 × 514 | 13 combinations in Natural or Black titanium |
+| `apple-watch-ultra-2-49` | 410 × 502 | 19 combinations in Natural or Black titanium |
+
+Series 11 includes Jet Black, Rose Gold, Silver, and Space Gray aluminum, plus Gold, Natural, and Slate titanium. Its supplied bands are Sport Band, Sport Loop, Magnetic Link, and Milanese Loop. Ultra artwork includes Alpine Loop, Ocean Band, Trail Loop, and Milanese Loop. The picker exposes the combinations Apple supplies; available band colors differ between cases and generations.
+
+Import a native screenshot through **Add with frame**, convert an existing image, or create a matching canvas preset. Preserve the frame aspect ratio when resizing. Cover and Contain fill the measured display opening, while the original PNG provides the case, crown, and band. The 42 mm canvas uses the device's native resolution; App Store Connect's accepted Watch screenshot sizes are listed [separately](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/). See [the package sources, licenses, and aperture measurements](src/devices/frames/README.md).
+
 ## Bundled fonts
 
 Plinth includes 17 Fontsource 5.3.0 families recorded in [`src/fonts/catalog.ts`](src/fonts/catalog.ts): Inter, DM Sans, Manrope, Space Grotesk, Source Sans 3, Quicksand, Nunito, Lora, Source Serif 4, Fraunces, JetBrains Mono, IBM Plex Mono, Bebas Neue, and localized Noto Sans families for Simplified Chinese, Traditional Chinese, Japanese, and Korean. [`src/fonts/font-faces.ts`](src/fonts/font-faces.ts) is the manifest for the corresponding face CSS; the existing stylesheet generator normalizes and bundles those declarations for consistent variable-font rendering. Every selected package declares the SIL Open Font License 1.1. Copyright attributions and the full license are tracked in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and `bun run build` copies that notice plus each package's original license file beside the standalone executable under `dist/`.

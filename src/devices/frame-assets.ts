@@ -1,3 +1,4 @@
+import { APPLE_WATCH_ASSETS } from "./apple-watch-assets";
 import iphone17Black from "./frames/iphone-17-black.png";
 import iphone17Lavender from "./frames/iphone-17-lavender.png";
 import iphone17MistBlue from "./frames/iphone-17-mist-blue.png";
@@ -21,11 +22,12 @@ import duoInnerNightSky from "./frames/iphone-duo-inner-night-sky.png";
 import duoInnerStarWhite from "./frames/iphone-duo-inner-star-white.png";
 import duoInnerLandscapeNightSky from "./frames/iphone-duo-inner-landscape-night-sky.png";
 import duoInnerLandscapeStarWhite from "./frames/iphone-duo-inner-landscape-star-white.png";
-import { getDevicePreset } from "./presets";
+import { getDeviceFrameFinish, getDevicePreset } from "./presets";
 import { APPLE_BEZEL_ASSETS } from "./apple-bezel-assets";
 
 const DEVICE_FRAME_ASSETS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   ...APPLE_BEZEL_ASSETS,
+  ...APPLE_WATCH_ASSETS,
   "iphone-duo-outer": { "#242833": duoOuterNightSky, "#eeeeeb": duoOuterStarWhite },
   "iphone-duo-outer-landscape": { "#242833": duoOuterLandscapeNightSky, "#eeeeeb": duoOuterLandscapeStarWhite },
   "iphone-duo-inner": { "#242833": duoInnerNightSky, "#eeeeeb": duoInnerStarWhite },
@@ -55,12 +57,13 @@ const DEVICE_FRAME_ASSETS: Readonly<Record<string, Readonly<Record<string, strin
   },
 };
 
-export function deviceFrameSource(presetId: string, frameColor: string, showCamera = true): string | null {
+export function deviceFrameSource(presetId: string, frameColor: string, showCamera = true, frameFinish?: string | null): string | null {
   const frames = DEVICE_FRAME_ASSETS[presetId];
   if (!frames) return null;
   const preset = getDevicePreset(presetId);
   // Legacy phone PNGs follow the camera toggle. Presets whose hardware is
   // supplied only by the official artwork keep their bezel in either state.
   if (!showCamera && preset?.camera.kind !== "none") return null;
-  return frames[frameColor.toLowerCase()] ?? (preset ? frames[preset.defaultFrameColor.toLowerCase()] : undefined) ?? Object.values(frames)[0] ?? null;
+  const finish = preset ? getDeviceFrameFinish(preset, frameColor, frameFinish) : undefined;
+  return (finish?.id ? frames[finish.id] : undefined) ?? frames[frameColor.toLowerCase()] ?? (preset ? frames[preset.defaultFrameColor.toLowerCase()] : undefined) ?? Object.values(frames)[0] ?? null;
 }

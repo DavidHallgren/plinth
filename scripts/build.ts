@@ -20,7 +20,9 @@ await copyFile(join(projectRoot, "THIRD_PARTY_NOTICES.md"), join(outputDirectory
 await copyFile(join(projectRoot, "LICENSE"), join(outputDirectory, "LICENSE"));
 const appleLicenseDirectory = join(outputDirectory, "licenses", "apple");
 await mkdir(appleLicenseDirectory, { recursive: true });
-await copyFile(join(projectRoot, "src/devices/frames/Apple-Design-Resources-License.rtf"), join(appleLicenseDirectory, "Apple-Design-Resources-License.rtf"));
+for (const fileName of ["Apple-Design-Resources-License.rtf", "Apple-App-Store-Marketing-Artwork-License.rtf"]) {
+  await copyFile(join(projectRoot, "src/devices/frames", fileName), join(appleLicenseDirectory, fileName));
+}
 const fontLicenseDirectory = join(outputDirectory, "licenses", "fonts");
 await mkdir(fontLicenseDirectory, { recursive: true });
 await Promise.all(FONT_FACE_STYLESHEETS.map((source) => copyFile(

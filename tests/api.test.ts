@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { apiAction, handleAddDeck, handleAddScreen, handleCreateExport, handleCreateProject, handleDeleteAsset, handleDeleteProject, handleDuplicateProject, handleGetProject, handleGetProjectPreview, handleRenameProject, handleSaveProject, handleUploadAsset } from "../src/lib/api";
+import { getDevicePreset } from "../src/devices/presets";
 import { APPLE_BEZEL_PRESETS } from "../src/devices/apple-bezel-presets";
 import { ProjectStorage } from "../src/lib/storage";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "../src/lib/schema";
@@ -47,12 +48,14 @@ describe("deck and screen API", () => {
     const device = ownedElements(screen).find((element) => element.type === "device")!;
     if (device.type !== "device") throw new Error("Missing device");
     device.screenshotPath = project.assets[0]!.path;
+    const finish = getDevicePreset(preset)?.frameFinishes?.at(-1);
+    if (finish?.id) { device.frameFinish = finish.id; device.frameColor = finish.color; }
     const saved = await handleSaveProject(new Request(url, {
       method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(project),
     }), storage);
     expect(saved.status).toBe(200);
     const loaded = ProjectSchema.parse((await (await handleGetProject(new Request(url), storage)).json()).data.project);
-    expect(ownedElements(loaded.decks[0]!.screens[0]!)).toContainEqual(expect.objectContaining({ preset, screenshotPath: project.assets[0]!.path }));
+    expect(ownedElements(loaded.decks[0]!.screens[0]!)).toContainEqual(expect.objectContaining({ preset, screenshotPath: project.assets[0]!.path, ...(finish?.id ? { frameFinish: finish.id, frameColor: finish.color } : {}) }));
 
     const plan = buildExportPlan(loaded)[0]!;
     expect(plan).toMatchObject({ width, height });

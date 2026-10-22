@@ -77,7 +77,7 @@ function frame(
 function deviceElement(
   frameKind: DeviceElement["frame"],
   values: ElementFrameValues,
-  preset: DevicePresetId = frameKind === "browser" ? "browser-window" : frameKind === "tablet" ? "generic-modern-ipad" : frameKind === "laptop" ? "macbook-air-m5-13" : "iphone-17-pro-max",
+  preset: DevicePresetId = frameKind === "browser" ? "browser-window" : frameKind === "tablet" ? "generic-modern-ipad" : frameKind === "laptop" ? "macbook-air-m5-13" : frameKind === "watch" ? "apple-watch-series-11-46" : "iphone-17-pro-max",
 ): DeviceElement {
   const isPhone = frameKind === "phone";
   const isTablet = frameKind === "tablet";
@@ -90,6 +90,7 @@ function deviceElement(
     deviceId: preset,
     deviceName,
     frame: frameKind,
+    ...(definition?.frameFinishes?.[0]?.id ? { frameFinish: definition.frameFinishes[0].id } : {}),
     frameColor: definition?.defaultFrameColor ?? (isPhone ? "#1d2029" : isTablet ? "#242833" : "#242934"),
     screenColor: definition?.defaultScreenColor ?? (isPhone ? "#f8f9fc" : "#f6f7fb"),
     screenshotPath: null,
@@ -206,6 +207,7 @@ function createAppStoreElements(
   const definition = getPresetDefinition(preset);
   if (definition?.devicePreset === null) return [];
   const isTablet = definition?.platform === "iPad";
+  const isWatch = definition?.platform === "Apple Watch";
   const isLight = preset === "iphone-6-7";
   const horizontalPadding = Math.round(width * 0.085);
   const devicePresetId = definition?.devicePreset ?? (isTablet ? "generic-modern-ipad" : isLight ? "iphone-17-pro" : "iphone-17-pro-max");
@@ -216,8 +218,8 @@ function createAppStoreElements(
   const deviceHeight = Math.round(deviceWidth / devicePreset.aspectRatio);
   const deviceX = Math.round((width - deviceWidth) / 2);
   const deviceY = Math.round(height * (isTablet ? 0.28 : 0.34));
-  const headlineSize = Math.max(42, Math.round(width * (isTablet ? 0.035 : 0.048)));
-  const bodySize = Math.max(20, Math.round(headlineSize * 0.34));
+  const headlineSize = Math.max(isWatch ? 14 : 42, Math.round(width * (isTablet ? 0.035 : 0.048)));
+  const bodySize = Math.max(isWatch ? 8 : 20, Math.round(headlineSize * 0.34));
   const foreground = isLight ? "#10131a" : "#ffffff";
   const muted = isLight ? "#485064" : "#e6e5f0";
 
@@ -273,14 +275,14 @@ function createAppStoreElements(
         x: horizontalPadding,
         y: Math.round(height * 0.84),
         width: width - horizontalPadding * 2,
-        height: Math.max(120, Math.round(height * 0.055)),
+        height: Math.max(isWatch ? 12 : 120, Math.round(height * 0.055)),
       },
       {
         shape: "rounded-rectangle",
         fill: isLight ? "#d6dcf2" : "#ffffff",
         stroke: isLight ? "#c5cde6" : "#ffffff",
         strokeWidth: 1,
-        radius: Math.max(24, Math.round(width * 0.02)),
+        radius: Math.max(isWatch ? 4 : 24, Math.round(width * 0.02)),
         shadow: { ...DEFAULT_SHADOW, opacity: 0.12, blur: 18, offsetY: 8 },
       },
       createId("shape"),

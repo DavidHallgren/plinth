@@ -8,10 +8,17 @@ export type DeviceCameraDefinition = {
   height: number;
 };
 
+export type DeviceFrameFinish = {
+  // Optional stable identity for artwork variants sharing a case color.
+  id?: string;
+  label: string;
+  color: string;
+};
+
 export type DevicePresetDefinition = {
   id: string;
   label: string;
-  category: "iPhone" | "iPad" | "Mac" | "Generic" | "Compatibility";
+  category: "iPhone" | "iPad" | "Mac" | "Apple Watch" | "Generic" | "Compatibility";
   aspectRatio: number;
   outerRadius: number;
   screenRadius: number;
@@ -20,7 +27,7 @@ export type DevicePresetDefinition = {
   screenInsets: { left: number; top: number; right: number; bottom: number };
   camera: DeviceCameraDefinition;
   colors: readonly string[];
-  frameFinishes?: readonly { label: string; color: string }[];
+  frameFinishes?: readonly DeviceFrameFinish[];
   defaultFrameColor: string;
   defaultScreenColor: string;
   source: string;
@@ -197,10 +204,19 @@ export function isDevicePreset(id: string): id is DevicePresetId {
   return DEVICE_PRESETS.some((preset) => preset.id === id);
 }
 
-export function deviceFrameKind(id: DevicePresetId): "browser" | "phone" | "tablet" | "laptop" {
+export function getDeviceFrameFinish(preset: DevicePresetDefinition, color: string, finishId?: string | null): DeviceFrameFinish | undefined {
+  const finishes = preset.frameFinishes;
+  return finishes?.find((finish) => finish.id === finishId && finishId != null)
+    ?? finishes?.find((finish) => finish.color.toLowerCase() === color.toLowerCase())
+    ?? finishes?.find((finish) => finish.color === preset.defaultFrameColor)
+    ?? finishes?.[0];
+}
+
+export function deviceFrameKind(id: DevicePresetId): "browser" | "phone" | "tablet" | "laptop" | "watch" {
   if (id === "browser-window") return "browser";
   const preset = getDevicePreset(id)!;
   if (preset.category === "Mac") return "laptop";
+  if (preset.category === "Apple Watch") return "watch";
   return preset.category === "iPad" || id === "generic-modern-ipad" ? "tablet" : "phone";
 }
 

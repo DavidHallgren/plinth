@@ -21,7 +21,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { deviceFrameKind, getDevicePreset, type DevicePresetId } from "../../devices/presets";
+import { deviceFrameKind, getDeviceFrameFinish, getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import type { AssetMetadata, Background, LayerGroup, ProjectFontFamily, SceneElement, Shadow } from "../../lib/schema";
 import { getBuiltInFont, fontWeightRange } from "../../fonts/catalog";
 import type { ResolvedScreen } from "../../scene/selectors";
@@ -268,7 +268,7 @@ function ShapeControls({ element, onUpdate }: { element: Extract<SceneElement, {
 
 function FrameControls({ element, onUpdate }: { element: Extract<SceneElement, { type: "device" }>; onUpdate: (patch: ElementPatch) => void }) {
   const preset = getDevicePreset(element.preset);
-  const selectedFinish = preset?.frameFinishes?.some((finish) => finish.color === element.frameColor) ? element.frameColor : preset?.defaultFrameColor;
+  const selectedFinish = preset ? getDeviceFrameFinish(preset, element.frameColor, element.frameFinish) : undefined;
   return (
     <Section title="Frame">
       <Field label="Preset"><FramePresetMenu disabled={element.locked} label={preset?.label ?? "Choose frame"} onSelect={(presetId) => {
@@ -281,6 +281,7 @@ function FrameControls({ element, onUpdate }: { element: Extract<SceneElement, {
           deviceName: nextPreset.label,
           frame: deviceFrameKind(presetId),
           frameColor: nextPreset.defaultFrameColor,
+          frameFinish: nextPreset.frameFinishes?.[0]?.id ?? null,
           screenColor: nextPreset.defaultScreenColor,
           cornerRadius: null,
           screenCornerRadius: null,
@@ -289,7 +290,10 @@ function FrameControls({ element, onUpdate }: { element: Extract<SceneElement, {
         });
       }} value={element.preset} /></Field>
       <Field label="Image"><p className="truncate rounded-lg border border-line bg-black/20 px-2 py-2 text-[11px] text-muted" title={element.screenshotPath ?? "No image selected"}>{element.screenshotPath ? assetFileName(element.screenshotPath) : "No image selected"}</p></Field>
-      <div className="grid grid-cols-2 gap-2">{preset?.frameFinishes ? <Field label="Frame finish"><select className={selectClass} onChange={(event) => onUpdate({ frameColor: event.target.value })} value={selectedFinish}>{preset.frameFinishes.map((finish) => <option key={finish.color} value={finish.color}>{finish.label}</option>)}</select></Field> : <Field label="Frame color"><ColorField onChange={(frameColor) => { if (frameColor) onUpdate({ frameColor }); }} value={element.frameColor} /></Field>}<Field label="Screen color"><ColorField onChange={(screenColor) => { if (screenColor) onUpdate({ screenColor }); }} value={element.screenColor} /></Field></div>
+      <div className={selectedFinish?.id ? "grid gap-2" : "grid grid-cols-2 gap-2"}>{preset?.frameFinishes ? <Field label="Frame finish"><select className={selectClass} title={selectedFinish?.label} onChange={(event) => {
+        const finish = preset.frameFinishes?.find((finish) => (finish.id ?? finish.color) === event.target.value);
+        if (finish) onUpdate({ frameColor: finish.color, frameFinish: finish.id ?? null });
+      }} value={selectedFinish?.id ?? selectedFinish?.color}>{preset.frameFinishes.map((finish) => <option key={finish.id ?? finish.color} value={finish.id ?? finish.color}>{finish.label}</option>)}</select></Field> : <Field label="Frame color"><ColorField onChange={(frameColor) => { if (frameColor) onUpdate({ frameColor }); }} value={element.frameColor} /></Field>}<Field label="Screen color"><ColorField onChange={(screenColor) => { if (screenColor) onUpdate({ screenColor }); }} value={element.screenColor} /></Field></div>
       <Field label="Image fit"><select className={selectClass} onChange={(event) => onUpdate({ screenshotFit: event.target.value as "contain" | "cover" | "stretch" })} value={element.screenshotFit}><option value="cover">Cover / crop</option><option value="contain">Contain</option><option value="stretch">Stretch</option></select></Field>
       <div className="grid grid-cols-2 gap-2"><Field label="Focal X"><NumberField max={1} min={0} onChange={(x) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, x } })} step={0.05} value={element.screenshotPosition.x} /></Field><Field label="Focal Y"><NumberField max={1} min={0} onChange={(y) => onUpdate({ screenshotPosition: { ...element.screenshotPosition, y } })} step={0.05} value={element.screenshotPosition.y} /></Field></div>
       <div className="grid grid-cols-2 gap-2"><Field label="Bezel"><select className={selectClass} onChange={(event) => onUpdate({ bezelStyle: event.target.value as "solid" | "metallic" })} value={element.bezelStyle}><option value="solid">Solid</option><option value="metallic">Metallic</option></select></Field><Field label="Outer radius"><NumberField min={0} onChange={(cornerRadius) => onUpdate({ cornerRadius })} value={element.cornerRadius ?? 0} /></Field><Field label="Screen radius"><NumberField min={0} onChange={(screenCornerRadius) => onUpdate({ screenCornerRadius })} value={element.screenCornerRadius ?? 0} /></Field></div>

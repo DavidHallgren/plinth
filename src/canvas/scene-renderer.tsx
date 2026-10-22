@@ -313,7 +313,7 @@ function DeviceNode({ screen, element, projectSlug, assets, interactive, selecte
   };
   const screenshotAsset = assetFor(assets, element.screenshotPath);
   const isBrowser = element.preset === "browser-window" || element.frame === "browser";
-  const frameSource = deviceFrameSource(element.preset, element.frameColor, element.showCamera);
+  const frameSource = deviceFrameSource(element.preset, element.frameColor, element.showCamera, element.frameFinish);
   const frameResource = useLoadedImage(frameSource);
   const officialFrame = frameResource.status === "ready" ? frameResource.image : null;
   const officialFrameShadow = useMemo(() => officialFrame && element.shadow ? createDeviceFrameShadowSilhouette(officialFrame) : null, [element.shadow, officialFrame]);

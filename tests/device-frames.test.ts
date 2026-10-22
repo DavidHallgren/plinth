@@ -6,6 +6,10 @@ import { calculateDeviceScreenGeometry } from "../src/devices/geometry";
 import { roundedRectPath } from "../src/canvas/image-loading";
 
 const layouts = [
+  ["apple-watch-series-11-42", 520, 800, 73, 177, 374, 446],
+  ["apple-watch-series-11-46", 560, 880, 72, 192, 416, 496],
+  ["apple-watch-ultra-3-49", 600, 960, 89, 223, 422, 514],
+  ["apple-watch-ultra-2-49", 600, 940, 95, 219, 410, 502],
   ["macbook-air-m5-13", 3400, 2240, 420, 288, 2560, 1664],
   ["macbook-air-m5-15", 3540, 2300, 329, 218, 2880, 1864],
   ["macbook-pro-m5-14", 3860, 2540, 418, 288, 3024, 1964],
@@ -38,10 +42,10 @@ describe("official Apple frame artwork", () => {
     expect(geometry.screen.height).toBeCloseTo(screenHeight, 8);
     expect(preset.aspectRatio).toBe(width / height);
     expect(preset.frameFinishes!.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(preset.frameFinishes!.map((finish) => deviceFrameSource(id, finish.color))).size).toBe(preset.frameFinishes!.length);
+    expect(new Set(preset.frameFinishes!.map((finish) => deviceFrameSource(id, finish.color, true, finish.id))).size).toBe(preset.frameFinishes!.length);
     for (const finish of preset.frameFinishes!) {
-      const source = deviceFrameSource(id, finish.color)!;
-      expect(deviceFrameSource(id, finish.color, false)).toBe(source);
+      const source = deviceFrameSource(id, finish.color, true, finish.id)!;
+      expect(deviceFrameSource(id, finish.color, false, finish.id)).toBe(source);
       const { data, info } = await sharp(source).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       expect(info).toMatchObject({ width, height, channels: 4 });
       const alpha = (px: number, py: number) => data[(py * width + px) * 4 + 3]!;

@@ -53,6 +53,7 @@ export type ElementPatch = {
   frame?: DeviceElement["frame"];
   preset?: DeviceElement["preset"];
   frameColor?: string;
+  frameFinish?: string | null;
   screenColor?: string;
   screenshotPath?: string | null;
   screenshotFit?: ImageFit;
