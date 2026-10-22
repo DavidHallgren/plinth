@@ -21,7 +21,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
+import { deviceFrameKind, getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import type { AssetMetadata, Background, LayerGroup, ProjectFontFamily, SceneElement, Shadow } from "../../lib/schema";
 import { getBuiltInFont, fontWeightRange } from "../../fonts/catalog";
 import type { ResolvedScreen } from "../../scene/selectors";
@@ -279,7 +279,7 @@ function FrameControls({ element, onUpdate }: { element: Extract<SceneElement, {
           preset: presetId,
           deviceId: presetId,
           deviceName: nextPreset.label,
-          frame: presetId.includes("ipad") ? "tablet" : "phone",
+          frame: deviceFrameKind(presetId),
           frameColor: nextPreset.defaultFrameColor,
           screenColor: nextPreset.defaultScreenColor,
           cornerRadius: null,

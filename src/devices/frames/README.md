@@ -50,4 +50,22 @@ All three packages include the same byte-identical [Apple Design Resources Licen
 
 Each preset has a matching canvas preset at its native screenshot size. Portrait and landscape use separate original files. In particular, the Pro Max landscape aperture starts at y=76, one pixel beyond a simple rotation of the portrait aperture. Clipping radii stay inside the opaque artwork: 150 native pixels for iPhone 18, 40 for iPad Pro, and 20 for iPad Air. Cameras and Dynamic Islands come from the PNG, and the bezel stays visible with `showCamera: false`. Matching Cover and Contain screenshots fill the measured apertures without cropping or padding.
 
+## MacBook Air M5 and MacBook Pro M5
+
+Downloaded on 2026-10-22 from Apple's [MacBook Air M5 package](https://devimages-cdn.apple.com/design/resources/download/Bezel-MacBook-Air-M5.dmg) and [MacBook Pro M5 package](https://devimages-cdn.apple.com/design/resources/download/Bezel-MacBook-Pro-M5.dmg). The 12 bundled PNGs are byte-for-byte originals with normalized repository filenames:
+
+- `PNG/MacBook Air M5 {13,15}-inch {Sky Blue,Silver,Starlight,Midnight}.png`
+- `PNG/MacBook Pro M5 {14,16}-inch {Space Black,Silver}.png`
+
+Both packages include the byte-identical [Apple Design Resources License](Apple-Design-Resources-License.rtf) already preserved here.
+
+| Preset | PNG dimensions | Aperture origin | Screenshot dimensions |
+| --- | --- | --- | --- |
+| `macbook-air-m5-13` | 3400 × 2240 | 420, 288 | 2560 × 1664 |
+| `macbook-air-m5-15` | 3540 × 2300 | 329, 218 | 2880 × 1864 |
+| `macbook-pro-m5-14` | 3860 × 2540 | 418, 288 | 3024 × 1964 |
+| `macbook-pro-m5-16` | 4260 × 2840 | 402, 303 | 3456 × 2234 |
+
+These front-facing landscape frames include the full laptop body and transparent exterior margins. Insets are measured from the original PNG bounds, not from the body edge. The shared screenshot clip uses 20 native pixels at the top corners and zero at the square bottom corners, keeping the curved edges beneath opaque artwork. The notch and camera are provided by the PNG, which stays visible with `showCamera: false`. Matching native screenshots fill the aperture in both Cover and Contain. MacBooks use the `laptop` frame kind, with no browser-window header. The PNGs are neither resized nor modified during asset preparation.
+
 These Apple-branded frame assets are third-party materials and are not covered by the repository’s MIT license. They are sourced from [Apple Design Resources](https://developer.apple.com/design/resources/), under Product Bezels. Apple and iPhone are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Review Apple’s applicable terms before redistributing them outside Plinth.

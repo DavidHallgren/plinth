@@ -6,6 +6,10 @@ import { calculateDeviceScreenGeometry } from "../src/devices/geometry";
 import { roundedRectPath } from "../src/canvas/image-loading";
 
 const layouts = [
+  ["macbook-air-m5-13", 3400, 2240, 420, 288, 2560, 1664],
+  ["macbook-air-m5-15", 3540, 2300, 329, 218, 2880, 1864],
+  ["macbook-pro-m5-14", 3860, 2540, 418, 288, 3024, 1964],
+  ["macbook-pro-m5-16", 4260, 2840, 402, 303, 3456, 2234],
   ["iphone-18-pro-max", 1470, 3000, 75, 66, 1320, 2868],
   ["iphone-18-pro-max-landscape", 3000, 1470, 66, 76, 2868, 1320],
   ["iphone-18-pro", 1350, 2760, 72, 69, 1206, 2622],
@@ -43,13 +47,15 @@ describe("official Apple frame artwork", () => {
       const alpha = (px: number, py: number) => data[(py * width + px) * 4 + 3]!;
       const centerX = x + Math.floor(screenWidth / 2);
       const centerY = y + Math.floor(screenHeight / 2);
+      // MacBook notches cover the top center; probe beside the notch.
+      const edgeX = preset.category === "Mac" ? x + Math.floor(screenWidth / 4) : centerX;
       expect(alpha(centerX, centerY)).toBe(0);
       // Opaque borders immediately outside, transparent screenshot immediately
       // inside. Apple's folded top/bottom edge includes a 1-alpha AA pixel.
       for (const [outsideX, outsideY, insideX, insideY] of [
         [x - 1, centerY, x + 1, centerY],
         [x + screenWidth, centerY, x + screenWidth - 2, centerY],
-        [centerX, y - 1, centerX, y + 1],
+        [edgeX, y - 1, edgeX, y + 1],
         [centerX, y + screenHeight, centerX, y + screenHeight - 2],
       ]) {
         expect(alpha(outsideX!, outsideY!)).toBe(255);
@@ -77,6 +83,16 @@ describe("official Apple frame artwork", () => {
         },
       }, screenWidth, screenHeight, geometry.screen.cornerRadii ?? geometry.screen.radius);
       expect(Math.min(...samples)).toBe(255);
+      if (preset.category === "Mac") {
+        expect(geometry.screen.cornerRadii?.[0]).toBeCloseTo(20, 8);
+        expect(geometry.screen.cornerRadii?.[1]).toBeCloseTo(20, 8);
+        expect(geometry.screen.cornerRadii?.slice(2)).toEqual([0, 0]);
+        expect(alpha(centerX, y + 5)).toBe(255);
+        // The bottom display corners are fully exposed, so any rounding
+        // would incorrectly cut pixels out of a native desktop screenshot.
+        expect(alpha(x, y + screenHeight - 1)).toBe(0);
+        expect(alpha(x + screenWidth - 1, y + screenHeight - 1)).toBe(0);
+      }
     }
     const override = calculateDeviceScreenGeometry(preset, width, height, null, 12);
     expect(override.screen.radius).toBe(12);

@@ -50,7 +50,7 @@ export type ElementPatch = {
   radius?: number;
   deviceId?: string;
   deviceName?: string;
-  frame?: "browser" | "phone" | "tablet";
+  frame?: DeviceElement["frame"];
   preset?: DeviceElement["preset"];
   frameColor?: string;
   screenColor?: string;

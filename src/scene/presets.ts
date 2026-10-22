@@ -7,7 +7,7 @@ export type PresetDefinition = {
   shortLabel: string;
   width: number;
   height: number;
-  platform: "iPhone" | "iPad" | "App Store" | "Custom";
+  platform: "iPhone" | "iPad" | "Mac" | "App Store" | "Custom";
   note: string;
   // null creates a blank artwork canvas instead of a screenshot composition.
   devicePreset?: DevicePresetId | null;
@@ -106,7 +106,7 @@ export const APP_STORE_PRESETS = [
     width: preset.screenshotSize.width,
     height: preset.screenshotSize.height,
     platform: preset.category,
-    note: `Native screenshot size · ${preset.id.endsWith("-landscape") ? "landscape" : "portrait"}`,
+    note: `Native screenshot size · ${preset.screenshotSize.width > preset.screenshotSize.height ? "landscape" : "portrait"}`,
     devicePreset: preset.id,
   })),
   {

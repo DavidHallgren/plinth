@@ -3,6 +3,19 @@ import type { DevicePresetDefinition } from "./presets";
 const IPHONE_18_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-iPhone-18.dmg";
 const IPAD_PRO_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-iPad-Pro-%28M5%29.dmg";
 const IPAD_AIR_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-iPad-Air-%28M4%29.dmg";
+const MACBOOK_AIR_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-MacBook-Air-M5.dmg";
+const MACBOOK_PRO_SOURCE = "https://devimages-cdn.apple.com/design/resources/download/Bezel-MacBook-Pro-M5.dmg";
+
+const MACBOOK_AIR_FINISHES = [
+  { label: "Sky Blue", color: "#c8d8e0" },
+  { label: "Silver", color: "#e3e4e5" },
+  { label: "Starlight", color: "#e4dbce" },
+  { label: "Midnight", color: "#303b48" },
+] as const;
+const MACBOOK_PRO_FINISHES = [
+  { label: "Space Black", color: "#2e2e30" },
+  { label: "Silver", color: "#e3e4e5" },
+] as const;
 
 const IPHONE_18_FINISHES = [
   { label: "Black", color: "#252629" },
@@ -24,17 +37,20 @@ const IPAD_AIR_FINISHES = [
 // Native PNG bounds and display apertures are measured independently for
 // each orientation. Clip curves stay beneath the artwork's opaque bezel.
 function bezelPreset<const Id extends string>(
-  id: Id, label: string, category: "iPhone" | "iPad",
+  id: Id, label: string, category: "iPhone" | "iPad" | "Mac",
   frame: readonly [number, number], aperture: readonly [number, number, number, number],
-  clipRadius: number, finishes: readonly [{ label: string; color: string }, ...{ label: string; color: string }[]], source: string,
+  clipRadius: number | readonly [number, number, number, number], finishes: readonly [{ label: string; color: string }, ...{ label: string; color: string }[]], source: string,
 ) {
   const [width, height] = frame;
   const [x, y, screenWidth, screenHeight] = aperture;
   return {
     id, label, category,
     aspectRatio: width / height,
-    outerRadius: category === "iPad" ? 0.05 : 0.14,
-    screenRadius: clipRadius / Math.min(screenWidth, screenHeight),
+    outerRadius: category === "iPhone" ? 0.14 : 0.05,
+    screenRadius: (typeof clipRadius === "number" ? clipRadius : clipRadius[0]) / Math.min(screenWidth, screenHeight),
+    ...(typeof clipRadius === "number" ? {} : {
+      screenCornerRadii: clipRadius.map((radius) => radius / Math.min(screenWidth, screenHeight)) as [number, number, number, number],
+    }),
     screenInsets: { left: x / width, top: y / height, right: (width - x - screenWidth) / width, bottom: (height - y - screenHeight) / height },
     screenshotSize: { width: screenWidth, height: screenHeight },
     // All hardware details are in the PNG; no synthetic camera is added.
@@ -48,6 +64,11 @@ function bezelPreset<const Id extends string>(
 }
 
 export const APPLE_BEZEL_PRESETS = [
+  // MacBook displays have rounded top corners and square bottom corners.
+  bezelPreset("macbook-air-m5-13", "MacBook Air 13″ (M5)", "Mac", [3400, 2240], [420, 288, 2560, 1664], [20, 20, 0, 0], MACBOOK_AIR_FINISHES, MACBOOK_AIR_SOURCE),
+  bezelPreset("macbook-air-m5-15", "MacBook Air 15″ (M5)", "Mac", [3540, 2300], [329, 218, 2880, 1864], [20, 20, 0, 0], MACBOOK_AIR_FINISHES, MACBOOK_AIR_SOURCE),
+  bezelPreset("macbook-pro-m5-14", "MacBook Pro 14″ (M5)", "Mac", [3860, 2540], [418, 288, 3024, 1964], [20, 20, 0, 0], MACBOOK_PRO_FINISHES, MACBOOK_PRO_SOURCE),
+  bezelPreset("macbook-pro-m5-16", "MacBook Pro 16″ (M5)", "Mac", [4260, 2840], [402, 303, 3456, 2234], [20, 20, 0, 0], MACBOOK_PRO_FINISHES, MACBOOK_PRO_SOURCE),
   bezelPreset("iphone-18-pro-max", "iPhone 18 Pro Max", "iPhone", [1470, 3000], [75, 66, 1320, 2868], 150, IPHONE_18_FINISHES, IPHONE_18_SOURCE),
   // Apple's landscape aperture is shifted one pixel relative to a simple rotation.
   bezelPreset("iphone-18-pro-max-landscape", "iPhone 18 Pro Max · landscape", "iPhone", [3000, 1470], [66, 76, 2868, 1320], 150, IPHONE_18_FINISHES, IPHONE_18_SOURCE),

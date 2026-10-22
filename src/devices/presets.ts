@@ -11,7 +11,7 @@ export type DeviceCameraDefinition = {
 export type DevicePresetDefinition = {
   id: string;
   label: string;
-  category: "iPhone" | "iPad" | "Generic" | "Compatibility";
+  category: "iPhone" | "iPad" | "Mac" | "Generic" | "Compatibility";
   aspectRatio: number;
   outerRadius: number;
   screenRadius: number;
@@ -195,6 +195,13 @@ export function getDevicePreset(id: string): DevicePresetDefinition | undefined 
 
 export function isDevicePreset(id: string): id is DevicePresetId {
   return DEVICE_PRESETS.some((preset) => preset.id === id);
+}
+
+export function deviceFrameKind(id: DevicePresetId): "browser" | "phone" | "tablet" | "laptop" {
+  if (id === "browser-window") return "browser";
+  const preset = getDevicePreset(id)!;
+  if (preset.category === "Mac") return "laptop";
+  return preset.category === "iPad" || id === "generic-modern-ipad" ? "tablet" : "phone";
 }
 
 export const EDITABLE_DEVICE_PRESETS = DEVICE_PRESETS.filter((preset) => preset.category !== "Compatibility");

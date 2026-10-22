@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultProject, createDeckPreset, createScreenPreset } from "../src/lib/defaults";
+import { deviceFrameKind, getDevicePreset } from "../src/devices/presets";
 import { ProjectSchema, type DeviceElement, type ImageElement, type Project, type ShapeElement } from "../src/lib/schema";
 import {
   addDeck,
@@ -336,7 +337,8 @@ describe("scene operations", () => {
     expect(afterScreenUpdate).toEqual(expectedOrder);
   });
 
-  test("replaces an image with a frame while preserving its layer identity and order", () => {
+  test.each(["iphone-17-pro-max", "macbook-air-m5-13", "macbook-air-m5-15", "macbook-pro-m5-14", "macbook-pro-m5-16"] as const)("replaces an image with %s while preserving its layer identity and order", (presetId) => {
+    const preset = getDevicePreset(presetId)!;
     const image: ImageElement = {
       id: "image_to_frame",
       type: "image",
@@ -374,11 +376,11 @@ describe("scene operations", () => {
       locked: false,
       visible: true,
       shadow: null,
-      preset: "iphone-17-pro-max",
-      deviceId: "iphone-17-pro-max",
-      deviceName: "iPhone 17 Pro Max",
-      frame: "phone",
-      frameColor: "#182d55",
+      preset: presetId,
+      deviceId: presetId,
+      deviceName: preset.label,
+      frame: deviceFrameKind(presetId),
+      frameColor: preset.defaultFrameColor,
       screenColor: "#f7f8fc",
       screenshotPath: image.assetPath,
       screenshotFit: image.fit,
@@ -391,7 +393,7 @@ describe("scene operations", () => {
     };
     const replaced = replaceElement(project, "screen_operations", image.id, frame);
     expect(elements(replaced).map((element) => element.id)).toEqual(["below", image.id]);
-    expect(elements(replaced)[1]).toMatchObject({ type: "device", screenshotPath: image.assetPath, preset: "iphone-17-pro-max" });
+    expect(elements(replaced)[1]).toMatchObject({ type: "device", screenshotPath: image.assetPath, preset: presetId, frame: deviceFrameKind(presetId) });
     expect(() => replaceElement(project, "screen_operations", image.id, { ...frame, id: "different" })).toThrow(/preserve their existing id/);
   });
 

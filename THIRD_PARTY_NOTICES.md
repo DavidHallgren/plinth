@@ -2,7 +2,7 @@
 
 ## Apple device bezels
 
-Apple device-frame artwork is sourced from [Apple Design Resources](https://developer.apple.com/design/resources/) and is not covered by Plinth's MIT license. The iPhone Duo, iPad Pro M5, iPad Air M4, and iPhone 18 packages include the same [Apple Design Resources License](src/devices/frames/Apple-Design-Resources-License.rtf), also copied to `licenses/apple/` in standalone builds. Original file names, download source, and aperture measurements are recorded in [the frame asset documentation](src/devices/frames/README.md). Apple, iPhone, and iPad are trademarks of Apple Inc.
+Apple device-frame artwork is sourced from [Apple Design Resources](https://developer.apple.com/design/resources/) and is not covered by Plinth's MIT license. The iPhone Duo, iPad Pro M5, iPad Air M4, iPhone 18, MacBook Air M5, and MacBook Pro M5 packages include the same [Apple Design Resources License](src/devices/frames/Apple-Design-Resources-License.rtf), also copied to `licenses/apple/` in standalone builds. Original file names, download source, and aperture measurements are recorded in [the frame asset documentation](src/devices/frames/README.md). Apple, iPhone, iPad, MacBook Air, and MacBook Pro are trademarks of Apple Inc.
 
 ## Fontsource fonts
 

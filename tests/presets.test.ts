@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultProject, createDeckPreset, createScreenPreset } from "../src/lib/defaults";
 import { APPLE_BEZEL_PRESETS } from "../src/devices/apple-bezel-presets";
-import { DEVICE_PRESETS, getDevicePreset } from "../src/devices/presets";
+import { DEVICE_PRESETS, deviceFrameKind, getDevicePreset } from "../src/devices/presets";
 import { calculateDeviceScreenGeometry, calculateImageFitGeometry } from "../src/devices/geometry";
 import { deviceFrameSource } from "../src/devices/frame-assets";
 import { sceneReadiness } from "../src/canvas/export-readiness";
@@ -83,6 +83,17 @@ describe("deck and screen presets", () => {
     expect(sceneReadiness(resolveScreen(project, firstScreen.id)).builtInImageSources).toHaveLength(1);
   });
 
+  test("classifies frame selections consistently across canvas and image insertion", () => {
+    for (const preset of DEVICE_PRESETS) {
+      const expected = preset.id.startsWith("macbook") ? "laptop"
+        : preset.id.includes("ipad") ? "tablet" : preset.id === "browser-window" ? "browser" : "phone";
+      expect(deviceFrameKind(preset.id)).toBe(expected);
+    }
+    for (const preset of APP_STORE_PRESETS.filter((preset) => preset.platform === "Mac")) {
+      expect(preset.note).toBe("Native screenshot size · landscape");
+    }
+  });
+
   test("accepts every registered canvas and frame preset in the persisted schema", () => {
     for (const preset of APP_STORE_PRESETS) expect(ScreenPresetSchema.parse(preset.id)).toBe(preset.id);
     expect(new Set(DeviceElementSchema.shape.preset.options)).toEqual(new Set(DEVICE_PRESETS.map((preset) => preset.id)));
@@ -91,6 +102,10 @@ describe("deck and screen presets", () => {
   });
 
   test.each([
+    ["macbook-air-m5-13", 2560, 1664],
+    ["macbook-air-m5-15", 2880, 1864],
+    ["macbook-pro-m5-14", 3024, 1964],
+    ["macbook-pro-m5-16", 3456, 2234],
     ["iphone-18-pro-max", 1320, 2868],
     ["iphone-18-pro-max-landscape", 2868, 1320],
     ["iphone-18-pro", 1206, 2622],
@@ -115,7 +130,7 @@ describe("deck and screen presets", () => {
     const screen = resolveScreen(project, deck.screens[0]!.id);
     expect(screen).toMatchObject({ width, height });
     const device = screen.elements.find((element) => element.type === "device")!;
-    expect(device).toMatchObject({ type: "device", preset: id, deviceId: id, frame: id.startsWith("ipad") ? "tablet" : "phone" });
+    expect(device).toMatchObject({ type: "device", preset: id, deviceId: id, frame: id.startsWith("macbook") ? "laptop" : id.startsWith("ipad") ? "tablet" : "phone" });
     expect(device.y + device.height).toBeLessThan(height * 0.84);
     const preset = getDevicePreset(id)!;
     // Persisted element dimensions use whole pixels, so starter placement can

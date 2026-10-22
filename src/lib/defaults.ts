@@ -14,7 +14,7 @@ import type {
 } from "./schema";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema, SceneElementSchema, ScreenSchema } from "./schema";
 import { getPresetDefinition, isAppStorePreset } from "../scene/presets";
-import { getDevicePreset, type DevicePresetId } from "../devices/presets";
+import { deviceFrameKind, getDevicePreset, type DevicePresetId } from "../devices/presets";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
 
 export const DEFAULT_BACKGROUND: Background = {
@@ -75,9 +75,9 @@ function frame(
 }
 
 function deviceElement(
-  frameKind: "browser" | "phone" | "tablet",
+  frameKind: DeviceElement["frame"],
   values: ElementFrameValues,
-  preset: DevicePresetId = frameKind === "browser" ? "browser-window" : frameKind === "tablet" ? "generic-modern-ipad" : "iphone-17-pro-max",
+  preset: DevicePresetId = frameKind === "browser" ? "browser-window" : frameKind === "tablet" ? "generic-modern-ipad" : frameKind === "laptop" ? "macbook-air-m5-13" : "iphone-17-pro-max",
 ): DeviceElement {
   const isPhone = frameKind === "phone";
   const isTablet = frameKind === "tablet";
@@ -222,7 +222,7 @@ function createAppStoreElements(
   const muted = isLight ? "#485064" : "#e6e5f0";
 
   return [
-    deviceElement(isTablet ? "tablet" : "phone", {
+    deviceElement(deviceFrameKind(devicePresetId), {
       x: deviceX,
       y: deviceY,
       width: deviceWidth,

@@ -15,7 +15,7 @@ import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { APP_STORE_PRESETS, getPresetDefinition } from "../../scene/presets";
-import { getDevicePreset, type DevicePresetId } from "../../devices/presets";
+import { deviceFrameKind, getDevicePreset, type DevicePresetId } from "../../devices/presets";
 import { useAssetMutations } from "../../hooks/use-asset-mutations";
 import { useFontMutations } from "../../hooks/use-font-mutations";
 import { ensureFontReady, ensureProjectFonts, projectFontLoadKey } from "../../fonts/font-registry";
@@ -431,7 +431,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       preset: presetId,
       deviceId: presetId,
       deviceName: preset.label,
-      frame: preset.category === "iPad" || presetId.includes("ipad") ? "tablet" : "phone",
+      frame: deviceFrameKind(presetId),
       frameColor: preset.defaultFrameColor,
       screenColor: preset.defaultScreenColor,
       screenshotPath: asset.path,
@@ -480,7 +480,7 @@ export function EditorWorkspace({ project, error, onProjectChange, onProjectSync
       preset: presetId,
       deviceId: presetId,
       deviceName: preset.label,
-      frame: presetId.includes("ipad") ? "tablet" : "phone",
+      frame: deviceFrameKind(presetId),
       frameColor: preset.defaultFrameColor,
       screenColor: preset.defaultScreenColor,
       screenshotPath: image.assetPath,

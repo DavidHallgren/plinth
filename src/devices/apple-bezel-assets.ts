@@ -1,3 +1,15 @@
+import macbookAirM513Midnight from "./frames/macbook-air-m5-13-midnight.png";
+import macbookAirM513Silver from "./frames/macbook-air-m5-13-silver.png";
+import macbookAirM513SkyBlue from "./frames/macbook-air-m5-13-sky-blue.png";
+import macbookAirM513Starlight from "./frames/macbook-air-m5-13-starlight.png";
+import macbookAirM515Midnight from "./frames/macbook-air-m5-15-midnight.png";
+import macbookAirM515Silver from "./frames/macbook-air-m5-15-silver.png";
+import macbookAirM515SkyBlue from "./frames/macbook-air-m5-15-sky-blue.png";
+import macbookAirM515Starlight from "./frames/macbook-air-m5-15-starlight.png";
+import macbookProM514Silver from "./frames/macbook-pro-m5-14-silver.png";
+import macbookProM514SpaceBlack from "./frames/macbook-pro-m5-14-space-black.png";
+import macbookProM516Silver from "./frames/macbook-pro-m5-16-silver.png";
+import macbookProM516SpaceBlack from "./frames/macbook-pro-m5-16-space-black.png";
 import ipadProM511LandscapeSilver from "./frames/ipad-pro-m5-11-landscape-silver.png";
 import ipadProM511Silver from "./frames/ipad-pro-m5-11-silver.png";
 import ipadProM511LandscapeSpaceBlack from "./frames/ipad-pro-m5-11-landscape-space-black.png";
@@ -40,6 +52,26 @@ import iphone18ProMaxLandscapeSilver from "./frames/iphone-18-pro-max-landscape-
 import iphone18ProMaxSilver from "./frames/iphone-18-pro-max-silver.png";
 
 export const APPLE_BEZEL_ASSETS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "macbook-air-m5-13": {
+    "#303b48": macbookAirM513Midnight,
+    "#e3e4e5": macbookAirM513Silver,
+    "#c8d8e0": macbookAirM513SkyBlue,
+    "#e4dbce": macbookAirM513Starlight,
+  },
+  "macbook-air-m5-15": {
+    "#303b48": macbookAirM515Midnight,
+    "#e3e4e5": macbookAirM515Silver,
+    "#c8d8e0": macbookAirM515SkyBlue,
+    "#e4dbce": macbookAirM515Starlight,
+  },
+  "macbook-pro-m5-14": {
+    "#e3e4e5": macbookProM514Silver,
+    "#2e2e30": macbookProM514SpaceBlack,
+  },
+  "macbook-pro-m5-16": {
+    "#e3e4e5": macbookProM516Silver,
+    "#2e2e30": macbookProM516SpaceBlack,
+  },
   "iphone-18-pro-max": {
     "#252629": iphone18ProMaxBlack,
     "#6d263e": iphone18ProMaxBurgundy,

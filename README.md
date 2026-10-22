@@ -133,6 +133,19 @@ The frame picker and deck picker include iPad Pro M5 and iPad Air M4 in both 11-
 
 Append `-landscape` to the preset ID for the corresponding landscape frame and canvas; screenshot width and height are reversed. Import a screenshot and choose **Add with frame**, or use the matching canvas preset to start with an editable device. Keep the frame's aspect ratio when resizing. Hardware details come from the PNG, with no extra camera overlay, and the artwork remains visible when Camera is off. All presets use the shared editor/export renderer and image-readiness checks. See [the source packages and measured apertures](src/devices/frames/README.md).
 
+## MacBook M5 presets
+
+The Mac frame picker includes Apple's front-facing MacBook Air M5 and MacBook Pro M5 bezels, with matching native screenshot canvases:
+
+| Preset ID | Native screenshot pixels | Finishes |
+| --- | --- | --- |
+| `macbook-air-m5-13` | 2560 × 1664 | Sky Blue, Silver, Starlight, Midnight |
+| `macbook-air-m5-15` | 2880 × 1864 | Sky Blue, Silver, Starlight, Midnight |
+| `macbook-pro-m5-14` | 3024 × 1964 | Space Black, Silver |
+| `macbook-pro-m5-16` | 3456 × 2234 | Space Black, Silver |
+
+Choose **Add with frame** on an imported screenshot, change an existing device's frame, or create a matching deck preset. Use a full-display screenshot, including the menu-bar area, and keep the device's aspect ratio when resizing. Cover and Contain fit the matching dimensions without cropping or padding. The official PNG supplies the notch, camera, and laptop body; screenshot clipping preserves the square bottom display corners. Editor, thumbnails, and export share the same rendering and image-readiness paths. These are native display canvases; check App Store Connect's accepted sizes separately when preparing store submissions. See [asset provenance and measured geometry](src/devices/frames/README.md).
+
 ## Bundled fonts
 
 Plinth includes 17 Fontsource 5.3.0 families recorded in [`src/fonts/catalog.ts`](src/fonts/catalog.ts): Inter, DM Sans, Manrope, Space Grotesk, Source Sans 3, Quicksand, Nunito, Lora, Source Serif 4, Fraunces, JetBrains Mono, IBM Plex Mono, Bebas Neue, and localized Noto Sans families for Simplified Chinese, Traditional Chinese, Japanese, and Korean. [`src/fonts/font-faces.ts`](src/fonts/font-faces.ts) is the manifest for the corresponding face CSS; the existing stylesheet generator normalizes and bundles those declarations for consistent variable-font rendering. Every selected package declares the SIL Open Font License 1.1. Copyright attributions and the full license are tracked in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and `bun run build` copies that notice plus each package's original license file beside the standalone executable under `dist/`.
