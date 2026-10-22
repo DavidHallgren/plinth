@@ -1,5 +1,11 @@
 # Third-party notices
 
+## Apple device bezels
+
+Apple device-frame artwork is sourced from [Apple Design Resources](https://developer.apple.com/design/resources/) and is not covered by Plinth's MIT license. The iPhone Duo package includes the [Apple Design Resources License](src/devices/frames/Apple-Design-Resources-License.rtf), also copied to `licenses/apple/` in standalone builds. Original file names, download source, and aperture measurements are recorded in [the frame asset documentation](src/devices/frames/README.md). Apple and iPhone are trademarks of Apple Inc.
+
+## Fontsource fonts
+
 Plinth bundles the following Fontsource 5.3.0 font packages in its browser assets and standalone distribution. The fonts remain licensed under the SIL Open Font License, Version 1.1; Plinth's MIT license does not replace or modify their license.
 
 | Font | Fontsource package | Copyright attribution |

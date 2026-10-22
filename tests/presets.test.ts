@@ -93,7 +93,7 @@ describe("deck and screen presets", () => {
     ["iphone-duo-outer-landscape", 2034, 1398],
     ["iphone-duo-inner", 2007, 2853],
     ["iphone-duo-inner-landscape", 2853, 2007],
-  ] as const)("fits %s screenshots without cropping, padding, or raster frames", (id, width, height) => {
+  ] as const)("fits %s screenshots without cropping or padding beneath Apple's frame", (id, width, height) => {
     const deck = createDeckPreset(id);
     const project = createDefaultProject("Duo geometry");
     project.decks = [deck];
@@ -118,8 +118,10 @@ describe("deck and screen presets", () => {
         expect(fitted.height).toBeCloseTo(aperture.height, 8);
       }
     }
-    expect(deviceFrameSource(id, preset.defaultFrameColor)).toBeNull();
-    expect(sceneReadiness(screen).builtInImageSources).toEqual([]);
+    const frame = deviceFrameSource(id, preset.defaultFrameColor);
+    expect(frame).toMatch(/\.png$/);
+    expect(sceneReadiness(screen).builtInImageSources).toEqual([frame!]);
+    expect(sceneReadiness({ ...screen, elements: screen.elements.map((element) => element.type === "device" ? { ...element, showCamera: false } : element) }).builtInImageSources).toEqual([frame!]);
     expect(buildExportPlan(project)[0]).toMatchObject({ width, height });
   });
 

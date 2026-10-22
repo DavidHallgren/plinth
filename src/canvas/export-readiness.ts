@@ -36,8 +36,8 @@ function referencedFontFamilies(sceneScreen: RenderableScene): string[] {
 function referencedBuiltInImageSources(sceneScreen: RenderableScene): string[] {
   const sources = new Set<string>();
   for (const element of sceneScreen.elements) {
-    if (element.type !== "device" || !element.showCamera) continue;
-    const source = deviceFrameSource(element.preset, element.frameColor);
+    if (element.type !== "device") continue;
+    const source = deviceFrameSource(element.preset, element.frameColor, element.showCamera);
     if (source) sources.add(source);
   }
   return [...sources];

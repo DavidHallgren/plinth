@@ -13,6 +13,7 @@ export type DevicePresetDefinition = {
   aspectRatio: number;
   outerRadius: number;
   screenRadius: number;
+  screenCornerRadii?: readonly [number, number, number, number];
   screenInsets: { left: number; top: number; right: number; bottom: number };
   camera: DeviceCameraDefinition;
   colors: readonly string[];
@@ -22,32 +23,38 @@ export type DevicePresetDefinition = {
   source: string;
 };
 
-// Schematic Duo bezels use App Store screenshot dimensions. A uniform bezel
-// preserves the aperture aspect ratio in either orientation; the shared
-// vector renderer draws it.
+// Measured from Apple's PNGs: folded frames have 88px horizontal / 80px
+// vertical margins in portrait; unfolded frames have 120px on every side.
+// Screenshot clipping stays beneath the opaque bezel, which supplies the
+// exact asymmetric corner shape. Radii are TL, TR, BR, BL / screen short side.
 function duoPreset<const Id extends string>(id: Id, label: string, screenWidth: number, screenHeight: number, outer: boolean) {
   const shortSide = Math.min(screenWidth, screenHeight);
-  const bezel = shortSide * 0.025;
-  const width = screenWidth + bezel * 2;
-  const height = screenHeight + bezel * 2;
+  const landscape = screenWidth > screenHeight;
+  const insetX = outer ? (landscape ? 80 : 88) : 120;
+  const insetY = outer ? (landscape ? 88 : 80) : 120;
+  const width = screenWidth + insetX * 2;
+  const height = screenHeight + insetY * 2;
+  const radius = 100 / shortSide;
   return {
     id,
     label,
     category: "iPhone",
     aspectRatio: width / height,
     outerRadius: outer ? 0.085 : 0.055,
-    screenRadius: outer ? 0.065 : 0.035,
-    screenInsets: { left: bezel / width, top: bezel / height, right: bezel / width, bottom: bezel / height },
-    // Preserve the native screenshot's camera and system UI treatment.
+    screenRadius: radius,
+    ...(outer ? { screenCornerRadii: landscape ? [radius, radius, 0, 0] as const : [0, radius, radius, 0] as const } : {}),
+    screenInsets: { left: insetX / width, top: insetY / height, right: insetX / width, bottom: insetY / height },
+    // The PNG provides the hardware details; never add a synthetic camera.
     camera: { kind: "none", x: 0, y: 0, width: 0, height: 0 },
     colors: ["#242833", "#eeeeeb"],
+    frameFinishes: [{ label: "Night Sky", color: "#242833" }, { label: "Star White", color: "#eeeeeb" }],
     defaultFrameColor: "#242833",
     defaultScreenColor: "#f7f8fc",
-    source: "Schematic vector frame; aperture: https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
+    source: "Official Apple iPhone Duo product bezels: https://devimages-cdn.apple.com/design/resources/download/Bezel-iPhone-Duo.dmg",
   } as const satisfies DevicePresetDefinition;
 }
 
-// Existing Apple PNG frames and schematic vector presets share this geometry.
+// Apple PNG frames and generic vector presets share this geometry.
 export const DEVICE_PRESETS = [
   {
     id: "iphone-17-pro-max",

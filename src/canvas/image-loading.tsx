@@ -2,7 +2,7 @@ import Konva from "konva";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { Group, Image as KonvaImage, Rect, Text } from "./react-konva";
 import type { AssetMetadata, ImageBorder, ImageFit, NormalizedCrop, Point, Shadow } from "../lib/schema";
-import { calculateImageCoverCrop, calculateImageFitGeometry, calculateNormalizedImageCrop } from "../devices/geometry";
+import { calculateImageCoverCrop, calculateImageFitGeometry, calculateNormalizedImageCrop, type CornerRadii } from "../devices/geometry";
 import { clearImageCache as clearImageCacheEntries, imageCacheVersion, imageResourceState, loadImageResource, subscribeImageCache, type ImageResource } from "./image-cache";
 
 export type { ImageResource } from "./image-cache";
@@ -20,18 +20,19 @@ export function useLoadedImage(source: string | null): ImageResource {
   return imageResourceState(source);
 }
 
-function roundedRectPath(context: { beginPath: () => void; moveTo: (x: number, y: number) => void; lineTo: (x: number, y: number) => void; quadraticCurveTo: (cpx: number, cpy: number, x: number, y: number) => void; closePath: () => void }, width: number, height: number, radius: number): void {
-  const safeRadius = Math.min(Math.max(0, radius), Math.min(width, height) / 2);
+export function roundedRectPath(context: { beginPath: () => void; moveTo: (x: number, y: number) => void; lineTo: (x: number, y: number) => void; quadraticCurveTo: (cpx: number, cpy: number, x: number, y: number) => void; closePath: () => void }, width: number, height: number, radius: number | CornerRadii): void {
+  const [tl, tr, br, bl] = (typeof radius === "number" ? [radius, radius, radius, radius] : radius)
+    .map((value) => Math.min(Math.max(0, value), Math.min(width, height) / 2)) as CornerRadii;
   context.beginPath();
-  context.moveTo(safeRadius, 0);
-  context.lineTo(width - safeRadius, 0);
-  context.quadraticCurveTo(width, 0, width, safeRadius);
-  context.lineTo(width, height - safeRadius);
-  context.quadraticCurveTo(width, height, width - safeRadius, height);
-  context.lineTo(safeRadius, height);
-  context.quadraticCurveTo(0, height, 0, height - safeRadius);
-  context.lineTo(0, safeRadius);
-  context.quadraticCurveTo(0, 0, safeRadius, 0);
+  context.moveTo(tl, 0);
+  context.lineTo(width - tr, 0);
+  context.quadraticCurveTo(width, 0, width, tr);
+  context.lineTo(width, height - br);
+  context.quadraticCurveTo(width, height, width - br, height);
+  context.lineTo(bl, height);
+  context.quadraticCurveTo(0, height, 0, height - bl);
+  context.lineTo(0, tl);
+  context.quadraticCurveTo(0, 0, tl, 0);
   context.closePath();
 }
 
@@ -49,7 +50,7 @@ export type AssetImageLayerProps = {
   fit: ImageFit;
   position: Point;
   crop?: NormalizedCrop | null;
-  cornerRadius: number;
+  cornerRadius: number | CornerRadii;
   backgroundColor?: string;
   border?: ImageBorder | null;
   shadow?: Shadow | null;

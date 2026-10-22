@@ -297,6 +297,7 @@ function DeviceNode({ screen, element, projectSlug, assets, interactive, selecte
   const preset = getDevicePreset(element.preset) ?? getDevicePreset("generic-modern-iphone");
   if (!preset) return null;
   const geometry = calculateDeviceScreenGeometry(preset, element.width, element.height, element.cornerRadius, element.screenCornerRadius);
+  const screenCornerRadius = geometry.screen.cornerRadii ?? geometry.screen.radius;
   const frameFill = element.bezelStyle === "metallic" ? {
     fillLinearGradientColorStops: [0, "#ffffff55", 0.22, element.frameColor, 0.55, "#ffffff28", 1, element.frameColor],
     fillLinearGradientStartPoint: { x: 0, y: 0 },
@@ -312,7 +313,7 @@ function DeviceNode({ screen, element, projectSlug, assets, interactive, selecte
   };
   const screenshotAsset = assetFor(assets, element.screenshotPath);
   const isBrowser = element.preset === "browser-window" || element.frame === "browser";
-  const frameSource = element.showCamera ? deviceFrameSource(element.preset, element.frameColor) : null;
+  const frameSource = deviceFrameSource(element.preset, element.frameColor, element.showCamera);
   const frameResource = useLoadedImage(frameSource);
   const officialFrame = frameResource.status === "ready" ? frameResource.image : null;
   const officialFrameShadow = useMemo(() => officialFrame && element.shadow ? createDeviceFrameShadowSilhouette(officialFrame) : null, [element.shadow, officialFrame]);
@@ -321,12 +322,12 @@ function DeviceNode({ screen, element, projectSlug, assets, interactive, selecte
       {officialFrame
         ? officialFrameShadow ? <KonvaImage {...shadowProps(element.shadow)} height={element.height} image={officialFrameShadow} listening={false} width={element.width} /> : null
         : <Rect {...frameFill} {...shadowProps(element.shadow)} cornerRadius={geometry.outer.radius} height={element.height} width={element.width} />}
-      <Rect cornerRadius={geometry.screen.radius} fill={element.screenColor} height={geometry.screen.height} listening={false} width={geometry.screen.width} x={geometry.screen.x} y={geometry.screen.y} />
+      <Rect cornerRadius={screenCornerRadius} fill={element.screenColor} height={geometry.screen.height} listening={false} width={geometry.screen.width} x={geometry.screen.x} y={geometry.screen.y} />
       <Group listening={false} x={geometry.screen.x} y={geometry.screen.y}>
-        <AssetImageLayer asset={screenshotAsset} assetPath={element.screenshotPath} backgroundColor={element.screenColor} compact={!interactive} cornerRadius={geometry.screen.radius} fit={element.screenshotFit} height={geometry.screen.height} label={element.screenshotPath ? `Missing ${element.screenshotPath}` : "Add a screenshot asset"} position={element.screenshotPosition} projectSlug={projectSlug} width={geometry.screen.width} />
+        <AssetImageLayer asset={screenshotAsset} assetPath={element.screenshotPath} backgroundColor={element.screenColor} compact={!interactive} cornerRadius={screenCornerRadius} fit={element.screenshotFit} height={geometry.screen.height} label={element.screenshotPath ? `Missing ${element.screenshotPath}` : "Add a screenshot asset"} position={element.screenshotPosition} projectSlug={projectSlug} width={geometry.screen.width} />
       </Group>
       {isBrowser ? <BrowserHeader element={element} /> : null}
-      {element.showGlare ? <Rect cornerRadius={geometry.screen.radius} fillLinearGradientColorStops={[0, "#ffffff00", 0.48, "#ffffff26", 0.58, "#ffffff00"]} fillLinearGradientStartPoint={{ x: 0, y: 0 }} fillLinearGradientEndPoint={{ x: element.width, y: element.height }} height={geometry.screen.height} listening={false} opacity={0.7} width={geometry.screen.width} x={geometry.screen.x} y={geometry.screen.y} /> : null}
+      {element.showGlare ? <Rect cornerRadius={screenCornerRadius} fillLinearGradientColorStops={[0, "#ffffff00", 0.48, "#ffffff26", 0.58, "#ffffff00"]} fillLinearGradientStartPoint={{ x: 0, y: 0 }} fillLinearGradientEndPoint={{ x: element.width, y: element.height }} height={geometry.screen.height} listening={false} opacity={0.7} width={geometry.screen.width} x={geometry.screen.x} y={geometry.screen.y} /> : null}
       {officialFrame ? <KonvaImage height={element.height} image={officialFrame} listening={interactive} width={element.width} /> : null}
       {!officialFrame && element.showCamera && geometry.camera ? <CameraDefinition geometry={geometry} /> : null}
       {selected && interactive ? <Rect cornerRadius={geometry.outer.radius} dash={[8, 6]} fill="transparent" height={element.height} listening={false} stroke="#dedede" strokeWidth={2} width={element.width} /> : null}

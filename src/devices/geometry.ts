@@ -1,6 +1,7 @@
 import type { DevicePresetDefinition } from "./presets";
 
 export type NormalizedPoint = { x: number; y: number };
+export type CornerRadii = [number, number, number, number];
 
 export type RectGeometry = {
   x: number;
@@ -12,7 +13,7 @@ export type RectGeometry = {
 
 export type DeviceScreenGeometry = {
   outer: RectGeometry;
-  screen: RectGeometry;
+  screen: RectGeometry & { cornerRadii?: CornerRadii };
   camera: RectGeometry | null;
   cameraKind: "dynamic-island" | "camera" | "none";
 };
@@ -75,7 +76,13 @@ export function calculateDeviceScreenGeometry(
   };
   return {
     outer: { x: 0, y: 0, width: safeWidth, height: safeHeight, radius: Math.max(0, cornerRadius ?? outerRadius) },
-    screen: { x: safeWidth * inset.left, y: safeHeight * inset.top, width: screenWidth, height: screenHeight, radius: Math.max(0, screenCornerRadius ?? screenRadius) },
+    screen: {
+      x: safeWidth * inset.left, y: safeHeight * inset.top, width: screenWidth, height: screenHeight,
+      radius: Math.max(0, screenCornerRadius ?? screenRadius),
+      ...(screenCornerRadius == null && preset.screenCornerRadii ? {
+        cornerRadii: preset.screenCornerRadii.map((radius) => radius * Math.min(screenWidth, screenHeight)) as CornerRadii,
+      } : {}),
+    },
     camera,
     cameraKind: preset.camera.kind,
   };

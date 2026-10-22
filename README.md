@@ -108,7 +108,7 @@ The deck picker includes these additional canvas presets. Duo canvases start wit
 | `app-store-header` | 3840 × 1646 | — |
 | `app-store-search` | 3840 × 2560 | — |
 
-Duo frames are schematic vector bezels drawn by the existing shared renderer. Their display apertures match the App Store screenshot aspect ratios exactly; bezel thickness and corner shapes are illustrative. Choose the matching landscape frame for a landscape screenshot without rotating its pixels. Import the screenshot through the asset library and use **Add with frame**, or replace the screenshot on a seeded device. Keep the frame's aspect ratio when resizing; both Cover and Contain fit a matching screenshot without cropping or letterboxing. Duo frames add no camera overlay, preserving the native screenshot's camera and system UI treatment.
+Duo frames use Apple's official PNG bezels in Night Sky and Star White through the shared renderer. Both folded and unfolded views have dedicated portrait and landscape artwork, with measured apertures matching the App Store screenshot aspect ratios. Choose the matching landscape frame for a landscape screenshot without rotating its pixels. Import the screenshot through the asset library and use **Add with frame**, or replace the screenshot on a seeded device. Keep the frame's aspect ratio when resizing; both Cover and Contain fit a matching screenshot without cropping or letterboxing. Hardware details come from the artwork, with no synthetic camera overlay; Duo bezels remain visible when the Camera toggle is off. See [asset provenance and aperture measurements](src/devices/frames/README.md).
 
 The source CLI still requires explicit deck dimensions. For example, add an unfolded landscape deck to an existing project:
 
