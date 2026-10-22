@@ -1,11 +1,15 @@
+import type { DevicePresetId } from "../devices/presets";
+
 export type PresetDefinition = {
   id: string;
   label: string;
   shortLabel: string;
   width: number;
   height: number;
-  platform: "iPhone" | "iPad" | "Custom";
+  platform: "iPhone" | "iPad" | "App Store" | "Custom";
   note: string;
+  // null creates a blank artwork canvas instead of a screenshot composition.
+  devicePreset?: DevicePresetId | null;
 };
 
 export const APP_STORE_PRESETS = [
@@ -53,6 +57,66 @@ export const APP_STORE_PRESETS = [
     height: 2752,
     platform: "iPad",
     note: "Required portrait size when the app runs on iPad",
+  },
+  {
+    id: "iphone-duo-outer",
+    label: "iPhone Duo outer · 1398 × 2034",
+    shortLabel: "Duo outer",
+    width: 1398,
+    height: 2034,
+    platform: "iPhone",
+    note: "Folded outer display · portrait",
+    devicePreset: "iphone-duo-outer",
+  },
+  {
+    id: "iphone-duo-outer-landscape",
+    label: "iPhone Duo outer landscape · 2034 × 1398",
+    shortLabel: "Duo outer landscape",
+    width: 2034,
+    height: 1398,
+    platform: "iPhone",
+    note: "Folded outer display · landscape",
+    devicePreset: "iphone-duo-outer-landscape",
+  },
+  {
+    id: "iphone-duo-inner",
+    label: "iPhone Duo inner · 2007 × 2853",
+    shortLabel: "Duo inner",
+    width: 2007,
+    height: 2853,
+    platform: "iPhone",
+    note: "Unfolded inner display · App Store portrait screenshot size",
+    devicePreset: "iphone-duo-inner",
+  },
+  {
+    id: "iphone-duo-inner-landscape",
+    label: "iPhone Duo inner landscape · 2853 × 2007",
+    shortLabel: "Duo inner landscape",
+    width: 2853,
+    height: 2007,
+    platform: "iPhone",
+    note: "Unfolded inner display · App Store landscape screenshot size",
+    devicePreset: "iphone-duo-inner-landscape",
+  },
+  {
+    id: "app-store-header",
+    label: "App Store product page header · 3840 × 1646",
+    shortLabel: "Product page header",
+    width: 3840,
+    height: 1646,
+    platform: "App Store",
+    note: "Blank product page header artwork canvas",
+    devicePreset: null,
+  },
+  {
+    id: "app-store-search",
+    label: "App Store search results · 3840 × 2560",
+    shortLabel: "Search results",
+    width: 3840,
+    height: 2560,
+    platform: "App Store",
+    note: "Blank search results artwork canvas · maximum 3:2 size",
+    devicePreset: null,
   },
 ] as const satisfies readonly PresetDefinition[];
 

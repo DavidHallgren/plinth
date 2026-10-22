@@ -22,9 +22,32 @@ export type DevicePresetDefinition = {
   source: string;
 };
 
-// The official Apple frame PNGs use transparent display apertures. Their exact
-// source and screen dimensions keep uploaded screenshots aligned beneath the
-// raster frame while the scene remains editable and uses one shared renderer.
+// Schematic Duo bezels use App Store screenshot dimensions. A uniform bezel
+// preserves the aperture aspect ratio in either orientation; the shared
+// vector renderer draws it.
+function duoPreset<const Id extends string>(id: Id, label: string, screenWidth: number, screenHeight: number, outer: boolean) {
+  const shortSide = Math.min(screenWidth, screenHeight);
+  const bezel = shortSide * 0.025;
+  const width = screenWidth + bezel * 2;
+  const height = screenHeight + bezel * 2;
+  return {
+    id,
+    label,
+    category: "iPhone",
+    aspectRatio: width / height,
+    outerRadius: outer ? 0.085 : 0.055,
+    screenRadius: outer ? 0.065 : 0.035,
+    screenInsets: { left: bezel / width, top: bezel / height, right: bezel / width, bottom: bezel / height },
+    // Preserve the native screenshot's camera and system UI treatment.
+    camera: { kind: "none", x: 0, y: 0, width: 0, height: 0 },
+    colors: ["#242833", "#eeeeeb"],
+    defaultFrameColor: "#242833",
+    defaultScreenColor: "#f7f8fc",
+    source: "Schematic vector frame; aperture: https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
+  } as const satisfies DevicePresetDefinition;
+}
+
+// Existing Apple PNG frames and schematic vector presets share this geometry.
 export const DEVICE_PRESETS = [
   {
     id: "iphone-17-pro-max",
@@ -105,6 +128,10 @@ export const DEVICE_PRESETS = [
     defaultScreenColor: "#f7f8fc",
     source: "Official Apple iPhone Air frame artwork",
   },
+  duoPreset("iphone-duo-outer", "iPhone Duo · outer (folded)", 1398, 2034, true),
+  duoPreset("iphone-duo-outer-landscape", "iPhone Duo · outer (folded, landscape)", 2034, 1398, true),
+  duoPreset("iphone-duo-inner", "iPhone Duo · inner (unfolded)", 2007, 2853, false),
+  duoPreset("iphone-duo-inner-landscape", "iPhone Duo · inner (unfolded, landscape)", 2853, 2007, false),
   {
     id: "generic-modern-iphone",
     label: "Generic modern iPhone",

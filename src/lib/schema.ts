@@ -23,6 +23,12 @@ export const ScreenPresetSchema = z.enum([
   "iphone-6-5",
   "iphone-5-5",
   "ipad-13",
+  "iphone-duo-outer",
+  "iphone-duo-outer-landscape",
+  "iphone-duo-inner",
+  "iphone-duo-inner-landscape",
+  "app-store-header",
+  "app-store-search",
   "custom",
   // These values remain readable so a v1 project can be migrated without
   // throwing away its dimensions. Migrations convert them to `custom`.
@@ -172,7 +178,7 @@ export const ElementFrameSchema = z
 
 export const DeviceElementSchema = ElementFrameSchema.extend({
   type: z.literal("device"),
-  preset: z.enum(["iphone-17-pro-max", "iphone-17-pro", "iphone-17", "iphone-air", "generic-modern-iphone", "generic-modern-ipad", "browser-window"] as const),
+  preset: z.enum(["iphone-17-pro-max", "iphone-17-pro", "iphone-17", "iphone-air", "iphone-duo-outer", "iphone-duo-outer-landscape", "iphone-duo-inner", "iphone-duo-inner-landscape", "generic-modern-iphone", "generic-modern-ipad", "browser-window"] as const),
   deviceId: z.string().min(1).max(96),
   deviceName: z.string().min(1).max(120),
   frame: z.enum(["browser", "phone", "tablet"]),

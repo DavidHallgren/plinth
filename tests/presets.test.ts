@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultProject, createDeckPreset, createScreenPreset } from "../src/lib/defaults";
-import { getDevicePreset } from "../src/devices/presets";
+import { DEVICE_PRESETS, getDevicePreset } from "../src/devices/presets";
+import { calculateDeviceScreenGeometry, calculateImageFitGeometry } from "../src/devices/geometry";
 import { deviceFrameSource } from "../src/devices/frame-assets";
 import { sceneReadiness } from "../src/canvas/export-readiness";
-import { ScreenSchema } from "../src/lib/schema";
+import { DeviceElementSchema, ProjectSchema, ScreenPresetSchema, ScreenSchema } from "../src/lib/schema";
+import { buildExportPlan } from "../src/lib/export-validation";
 import { APP_STORE_PRESETS } from "../src/scene/presets";
 import { resolveScreen } from "../src/scene/selectors";
 import { ownedElements } from "./helpers";
@@ -40,6 +42,12 @@ describe("deck and screen presets", () => {
       [1284, 2778],
       [1242, 2208],
       [2064, 2752],
+      [1398, 2034],
+      [2034, 1398],
+      [2007, 2853],
+      [2853, 2007],
+      [3840, 1646],
+      [3840, 2560],
     ]);
     const screen = createScreenPreset("iphone-6-9");
     expect(screen.background.type).toBe("linear-gradient");
@@ -71,5 +79,69 @@ describe("deck and screen presets", () => {
     const firstScreen = project.decks[0]?.screens[0];
     if (!firstScreen) throw new Error("Missing readiness screen");
     expect(sceneReadiness(resolveScreen(project, firstScreen.id)).builtInImageSources).toHaveLength(1);
+  });
+
+  test("accepts every registered canvas and frame preset in the persisted schema", () => {
+    for (const preset of APP_STORE_PRESETS) expect(ScreenPresetSchema.parse(preset.id)).toBe(preset.id);
+    expect(new Set(DeviceElementSchema.shape.preset.options)).toEqual(new Set(DEVICE_PRESETS.map((preset) => preset.id)));
+    expect(ScreenPresetSchema.safeParse("iphone-duo-unknown").success).toBe(false);
+    expect(DeviceElementSchema.shape.preset.safeParse("iphone-duo-unknown").success).toBe(false);
+  });
+
+  test.each([
+    ["iphone-duo-outer", 1398, 2034],
+    ["iphone-duo-outer-landscape", 2034, 1398],
+    ["iphone-duo-inner", 2007, 2853],
+    ["iphone-duo-inner-landscape", 2853, 2007],
+  ] as const)("fits %s screenshots without cropping, padding, or raster frames", (id, width, height) => {
+    const deck = createDeckPreset(id);
+    const project = createDefaultProject("Duo geometry");
+    project.decks = [deck];
+    expect(ProjectSchema.parse(JSON.parse(JSON.stringify(project)))).toEqual(project);
+    const screen = resolveScreen(project, deck.screens[0]!.id);
+    expect(screen).toMatchObject({ width, height });
+    const device = screen.elements.find((element) => element.type === "device")!;
+    expect(device).toMatchObject({ type: "device", preset: id, deviceId: id });
+    expect(device.y + device.height).toBeLessThan(height * 0.84);
+    const preset = getDevicePreset(id)!;
+    // Persisted element dimensions use whole pixels, so starter placement can
+    // round by half a pixel. The preset aperture itself has the exact ratio.
+    expect(Math.abs(device.height - device.width / preset.aspectRatio)).toBeLessThanOrEqual(0.5);
+    for (const scale of [0.25, 1, 3]) {
+      const { screen: aperture } = calculateDeviceScreenGeometry(preset, 1000 * preset.aspectRatio * scale, 1000 * scale);
+      expect(aperture.width / aperture.height).toBeCloseTo(width / height, 10);
+      for (const fit of ["contain", "cover"] as const) {
+        const fitted = calculateImageFitGeometry(width, height, aperture.width, aperture.height, fit);
+        expect(fitted.x).toBeCloseTo(0, 8);
+        expect(fitted.y).toBeCloseTo(0, 8);
+        expect(fitted.width).toBeCloseTo(aperture.width, 8);
+        expect(fitted.height).toBeCloseTo(aperture.height, 8);
+      }
+    }
+    expect(deviceFrameSource(id, preset.defaultFrameColor)).toBeNull();
+    expect(sceneReadiness(screen).builtInImageSources).toEqual([]);
+    expect(buildExportPlan(project)[0]).toMatchObject({ width, height });
+  });
+
+  test.each(["iphone-duo-outer", "iphone-duo-inner"])("preserves %s aperture geometry in both orientations without a camera overlay", (id) => {
+    const portraitPreset = getDevicePreset(id)!;
+    const landscapePreset = getDevicePreset(`${id}-landscape`)!;
+    const portrait = calculateDeviceScreenGeometry(portraitPreset, 600, 600 / portraitPreset.aspectRatio);
+    const landscape = calculateDeviceScreenGeometry(landscapePreset, portrait.outer.height, portrait.outer.width);
+    expect(landscape.screen.width).toBeCloseTo(portrait.screen.height);
+    expect(landscape.screen.height).toBeCloseTo(portrait.screen.width);
+    for (const geometry of [portrait, landscape]) {
+      expect(geometry.cameraKind).toBe("none");
+      expect(geometry.camera).toBeNull();
+    }
+  });
+
+  test.each([
+    ["app-store-header", 3840, 1646],
+    ["app-store-search", 3840, 2560],
+  ] as const)("creates %s as an opaque blank artwork canvas", (id, width, height) => {
+    const deck = createDeckPreset(id);
+    expect(deck).toMatchObject({ width, height });
+    expect(deck.screens[0]).toMatchObject({ preset: id, layers: [], background: { type: "solid", color: "#10131a" } });
   });
 });

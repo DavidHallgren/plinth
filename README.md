@@ -95,6 +95,29 @@ The CLI uses the platform application-data directory by default. Pass `--data-di
 
 The standalone executable does not yet expose these commands. PNG rendering remains in the browser editor.
 
+## Duo and App Store artwork presets
+
+The deck picker includes these additional canvas presets. Duo canvases start with the matching editable device; header and search canvases start blank with an opaque background.
+
+| Preset ID | Canvas pixels | Device frame ID |
+| --- | --- | --- |
+| `iphone-duo-outer` | 1398 × 2034 | `iphone-duo-outer` |
+| `iphone-duo-outer-landscape` | 2034 × 1398 | `iphone-duo-outer-landscape` |
+| `iphone-duo-inner` | 2007 × 2853 | `iphone-duo-inner` |
+| `iphone-duo-inner-landscape` | 2853 × 2007 | `iphone-duo-inner-landscape` |
+| `app-store-header` | 3840 × 1646 | — |
+| `app-store-search` | 3840 × 2560 | — |
+
+Duo frames are schematic vector bezels drawn by the existing shared renderer. Their display apertures match the App Store screenshot aspect ratios exactly; bezel thickness and corner shapes are illustrative. Choose the matching landscape frame for a landscape screenshot without rotating its pixels. Import the screenshot through the asset library and use **Add with frame**, or replace the screenshot on a seeded device. Keep the frame's aspect ratio when resizing; both Cover and Contain fit a matching screenshot without cropping or letterboxing. Duo frames add no camera overlay, preserving the native screenshot's camera and system UI treatment.
+
+The source CLI still requires explicit deck dimensions. For example, add an unfolded landscape deck to an existing project:
+
+```sh
+bun run tool add-deck <project-slug> "Duo inner landscape" --width 2853 --height 2007 --preset iphone-duo-inner-landscape
+```
+
+`add-screen` accepts the same preset IDs but inherits the existing deck dimensions. Dimensions were checked on 2026-10-22 against Apple's [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/), [creative asset specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/creative-assets-specifications/), and `asc screenshots sizes --all` (`APP_IPHONE_DUO`). Apple requires opaque artwork; these canvases use the same browser PNG export path as all other decks.
+
 ## Bundled fonts
 
 Plinth includes 17 Fontsource 5.3.0 families recorded in [`src/fonts/catalog.ts`](src/fonts/catalog.ts): Inter, DM Sans, Manrope, Space Grotesk, Source Sans 3, Quicksand, Nunito, Lora, Source Serif 4, Fraunces, JetBrains Mono, IBM Plex Mono, Bebas Neue, and localized Noto Sans families for Simplified Chinese, Traditional Chinese, Japanese, and Korean. [`src/fonts/font-faces.ts`](src/fonts/font-faces.ts) is the manifest for the corresponding face CSS; the existing stylesheet generator normalizes and bundles those declarations for consistent variable-font rendering. Every selected package declares the SIL Open Font License 1.1. Copyright attributions and the full license are tracked in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and `bun run build` copies that notice plus each package's original license file beside the standalone executable under `dist/`.

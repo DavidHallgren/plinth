@@ -14,7 +14,7 @@ import type {
 } from "./schema";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema, SceneElementSchema, ScreenSchema } from "./schema";
 import { getPresetDefinition, isAppStorePreset } from "../scene/presets";
-import { getDevicePreset } from "../devices/presets";
+import { getDevicePreset, type DevicePresetId } from "../devices/presets";
 import { normalizeTextElementGeometry } from "../scene/text-geometry";
 
 export const DEFAULT_BACKGROUND: Background = {
@@ -77,18 +77,17 @@ function frame(
 function deviceElement(
   frameKind: "browser" | "phone" | "tablet",
   values: ElementFrameValues,
-  id = createId("device"),
+  preset: DevicePresetId = frameKind === "browser" ? "browser-window" : frameKind === "tablet" ? "generic-modern-ipad" : "iphone-17-pro-max",
 ): DeviceElement {
   const isPhone = frameKind === "phone";
   const isTablet = frameKind === "tablet";
-  const preset = frameKind === "browser" ? "browser-window" : isTablet ? "generic-modern-ipad" : "iphone-17-pro-max";
   const definition = getDevicePreset(preset);
   const deviceName = definition?.label ?? (frameKind === "browser" ? "Browser window" : isTablet ? "Generic modern iPad" : "iPhone 17 Pro Max");
   return {
-    ...frame(id, deviceName, values),
+    ...frame(createId("device"), deviceName, values),
     type: "device",
     preset,
-    deviceId: isPhone ? "iphone-17-pro-max" : isTablet ? "generic-modern-ipad" : "browser-window",
+    deviceId: preset,
     deviceName,
     frame: frameKind,
     frameColor: definition?.defaultFrameColor ?? (isPhone ? "#1d2029" : isTablet ? "#242833" : "#242934"),
@@ -204,12 +203,17 @@ function createAppStoreElements(
   width: number,
   height: number,
 ): SceneElement[] {
+  const definition = getPresetDefinition(preset);
+  if (definition?.devicePreset === null) return [];
   const isTablet = preset === "ipad-13";
   const isLight = preset === "iphone-6-7";
   const horizontalPadding = Math.round(width * 0.085);
-  const devicePreset = getDevicePreset(isTablet ? "generic-modern-ipad" : isLight ? "iphone-17-pro" : "iphone-17-pro-max");
-  const deviceWidth = Math.round(width * (isTablet ? 0.72 : 0.46));
-  const deviceHeight = Math.round(deviceWidth / (devicePreset?.aspectRatio ?? (isTablet ? 0.75 : 0.47)));
+  const devicePresetId = definition?.devicePreset ?? (isTablet ? "generic-modern-ipad" : isLight ? "iphone-17-pro" : "iphone-17-pro-max");
+  const devicePreset = getDevicePreset(devicePresetId)!;
+  const deviceWidth = Math.round(definition?.devicePreset
+    ? Math.min(width * 0.62, height * 0.46 * devicePreset.aspectRatio)
+    : width * (isTablet ? 0.72 : 0.46));
+  const deviceHeight = Math.round(deviceWidth / devicePreset.aspectRatio);
   const deviceX = Math.round((width - deviceWidth) / 2);
   const deviceY = Math.round(height * (isTablet ? 0.28 : 0.34));
   const headlineSize = Math.max(42, Math.round(width * (isTablet ? 0.035 : 0.048)));
@@ -223,7 +227,7 @@ function createAppStoreElements(
       y: deviceY,
       width: deviceWidth,
       height: deviceHeight,
-    }),
+    }, devicePresetId),
     textElement(
       "Project overview",
       {
