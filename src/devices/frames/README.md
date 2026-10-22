@@ -21,4 +21,33 @@ Downloaded on 2026-10-22 from Apple's [iPhone Duo bezel package](https://devimag
 
 Each orientation uses Apple's dedicated artwork, with no image rotation or stretching during asset preparation. Screenshot clipping stays beneath the opaque bezel; the folded display requires asymmetric corner clipping. Hardware details come from the PNG, with no synthetic camera overlay. Duo frames remain visible when `showCamera` is false. Editor, thumbnails, and export use the same frame source, geometry, and image-readiness checks.
 
+## iPad Pro M5, iPad Air M4, and iPhone 18
+
+Downloaded on 2026-10-22 from Apple's [iPad Pro M5 package](https://devimages-cdn.apple.com/design/resources/download/Bezel-iPad-Pro-%28M5%29.dmg), [iPad Air M4 package](https://devimages-cdn.apple.com/design/resources/download/Bezel-iPad-Air-%28M4%29.dmg), and [iPhone 18 package](https://devimages-cdn.apple.com/design/resources/download/Bezel-iPhone-18.dmg). The iPhone 18 package contains Pro and Pro Max; no base-model frame is included.
+
+The 40 bundled PNGs are byte-for-byte copies with normalized repository filenames. Original package paths are:
+
+- `PNG/iPad Pro (M5) {11,13}" - {Space Black,Silver} - {Portrait,Landscape}.png`
+- `PNG/iPad Air {11,13}" (M4) - {Space Gray,Blue,Purple,Starlight} - {Portrait,Landscape}.png`
+- `PNG/iPhone 18 {Pro,Pro Max}/iPhone 18 {Pro,Pro Max} - {Black,Burgundy,Glacier,Silver} - {Portrait,Landscape}.png`
+
+All three packages include the same byte-identical [Apple Design Resources License](Apple-Design-Resources-License.rtf) already preserved here and copied into standalone builds.
+
+| Preset | PNG dimensions | Aperture origin | Screenshot dimensions |
+| --- | --- | --- | --- |
+| `iphone-18-pro-max` | 1470 × 3000 | 75, 66 | 1320 × 2868 |
+| `iphone-18-pro-max-landscape` | 3000 × 1470 | 66, 76 | 2868 × 1320 |
+| `iphone-18-pro` | 1350 × 2760 | 72, 69 | 1206 × 2622 |
+| `iphone-18-pro-landscape` | 2760 × 1350 | 69, 72 | 2622 × 1206 |
+| `ipad-pro-m5-13` | 2300 × 3000 | 118, 124 | 2064 × 2752 |
+| `ipad-pro-m5-13-landscape` | 3000 × 2300 | 124, 118 | 2752 × 2064 |
+| `ipad-pro-m5-11` | 1880 × 2640 | 106, 110 | 1668 × 2420 |
+| `ipad-pro-m5-11-landscape` | 2640 × 1880 | 110, 106 | 2420 × 1668 |
+| `ipad-air-m4-13` | 2300 × 2980 | 126, 124 | 2048 × 2732 |
+| `ipad-air-m4-13-landscape` | 2980 × 2300 | 124, 126 | 2732 × 2048 |
+| `ipad-air-m4-11` | 1900 × 2620 | 130, 130 | 1640 × 2360 |
+| `ipad-air-m4-11-landscape` | 2620 × 1900 | 130, 130 | 2360 × 1640 |
+
+Each preset has a matching canvas preset at its native screenshot size. Portrait and landscape use separate original files. In particular, the Pro Max landscape aperture starts at y=76, one pixel beyond a simple rotation of the portrait aperture. Clipping radii stay inside the opaque artwork: 150 native pixels for iPhone 18, 40 for iPad Pro, and 20 for iPad Air. Cameras and Dynamic Islands come from the PNG, and the bezel stays visible with `showCamera: false`. Matching Cover and Contain screenshots fill the measured apertures without cropping or padding.
+
 These Apple-branded frame assets are third-party materials and are not covered by the repository’s MIT license. They are sourced from [Apple Design Resources](https://developer.apple.com/design/resources/), under Product Bezels. Apple and iPhone are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Review Apple’s applicable terms before redistributing them outside Plinth.

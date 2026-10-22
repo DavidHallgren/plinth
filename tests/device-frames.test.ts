@@ -6,14 +6,26 @@ import { calculateDeviceScreenGeometry } from "../src/devices/geometry";
 import { roundedRectPath } from "../src/canvas/image-loading";
 
 const layouts = [
+  ["iphone-18-pro-max", 1470, 3000, 75, 66, 1320, 2868],
+  ["iphone-18-pro-max-landscape", 3000, 1470, 66, 76, 2868, 1320],
+  ["iphone-18-pro", 1350, 2760, 72, 69, 1206, 2622],
+  ["iphone-18-pro-landscape", 2760, 1350, 69, 72, 2622, 1206],
+  ["ipad-pro-m5-13", 2300, 3000, 118, 124, 2064, 2752],
+  ["ipad-pro-m5-13-landscape", 3000, 2300, 124, 118, 2752, 2064],
+  ["ipad-pro-m5-11", 1880, 2640, 106, 110, 1668, 2420],
+  ["ipad-pro-m5-11-landscape", 2640, 1880, 110, 106, 2420, 1668],
+  ["ipad-air-m4-13", 2300, 2980, 126, 124, 2048, 2732],
+  ["ipad-air-m4-13-landscape", 2980, 2300, 124, 126, 2732, 2048],
+  ["ipad-air-m4-11", 1900, 2620, 130, 130, 1640, 2360],
+  ["ipad-air-m4-11-landscape", 2620, 1900, 130, 130, 2360, 1640],
   ["iphone-duo-outer", 1574, 2194, 88, 80, 1398, 2034],
   ["iphone-duo-outer-landscape", 2194, 1574, 80, 88, 2034, 1398],
   ["iphone-duo-inner", 2247, 3093, 120, 120, 2007, 2853],
   ["iphone-duo-inner-landscape", 3093, 2247, 120, 120, 2853, 2007],
 ] as const;
 
-describe("official Duo frame artwork", () => {
-  test.each(layouts)("aligns %s with the actual transparent aperture in both finishes", async (id, width, height, x, y, screenWidth, screenHeight) => {
+describe("official Apple frame artwork", () => {
+  test.each(layouts)("aligns %s with the actual transparent aperture in every finish", async (id, width, height, x, y, screenWidth, screenHeight) => {
     const preset = getDevicePreset(id)!;
     const geometry = calculateDeviceScreenGeometry(preset, width, height);
     expect(geometry.screen.x).toBeCloseTo(x, 8);
@@ -21,7 +33,8 @@ describe("official Duo frame artwork", () => {
     expect(geometry.screen.width).toBeCloseTo(screenWidth, 8);
     expect(geometry.screen.height).toBeCloseTo(screenHeight, 8);
     expect(preset.aspectRatio).toBe(width / height);
-    expect(preset.frameFinishes?.map((finish) => finish.label)).toEqual(["Night Sky", "Star White"]);
+    expect(preset.frameFinishes!.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(preset.frameFinishes!.map((finish) => deviceFrameSource(id, finish.color))).size).toBe(preset.frameFinishes!.length);
     for (const finish of preset.frameFinishes!) {
       const source = deviceFrameSource(id, finish.color)!;
       expect(deviceFrameSource(id, finish.color, false)).toBe(source);

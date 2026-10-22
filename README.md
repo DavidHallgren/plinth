@@ -118,6 +118,21 @@ bun run tool add-deck <project-slug> "Duo inner landscape" --width 2853 --height
 
 `add-screen` accepts the same preset IDs but inherits the existing deck dimensions. Dimensions were checked on 2026-10-22 against Apple's [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/), [creative asset specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/creative-assets-specifications/), and `asc screenshots sizes --all` (`APP_IPHONE_DUO`). Apple requires opaque artwork; these canvases use the same browser PNG export path as all other decks.
 
+## iPad and iPhone 18 presets
+
+The frame picker and deck picker include iPad Pro M5 and iPad Air M4 in both 11-inch and 13-inch sizes, plus iPhone 18 Pro and Pro Max. Every model has portrait and landscape presets backed by Apple's dedicated PNG artwork. The iPhone 18 download contains the two Pro models; a base iPhone 18 frame is not included.
+
+| Portrait preset ID | Native screenshot pixels | Finishes |
+| --- | --- | --- |
+| `ipad-pro-m5-11` | 1668 × 2420 | Space Black, Silver |
+| `ipad-pro-m5-13` | 2064 × 2752 | Space Black, Silver |
+| `ipad-air-m4-11` | 1640 × 2360 | Space Gray, Blue, Purple, Starlight |
+| `ipad-air-m4-13` | 2048 × 2732 | Space Gray, Blue, Purple, Starlight |
+| `iphone-18-pro` | 1206 × 2622 | Black, Burgundy, Glacier, Silver |
+| `iphone-18-pro-max` | 1320 × 2868 | Black, Burgundy, Glacier, Silver |
+
+Append `-landscape` to the preset ID for the corresponding landscape frame and canvas; screenshot width and height are reversed. Import a screenshot and choose **Add with frame**, or use the matching canvas preset to start with an editable device. Keep the frame's aspect ratio when resizing. Hardware details come from the PNG, with no extra camera overlay, and the artwork remains visible when Camera is off. All presets use the shared editor/export renderer and image-readiness checks. See [the source packages and measured apertures](src/devices/frames/README.md).
+
 ## Bundled fonts
 
 Plinth includes 17 Fontsource 5.3.0 families recorded in [`src/fonts/catalog.ts`](src/fonts/catalog.ts): Inter, DM Sans, Manrope, Space Grotesk, Source Sans 3, Quicksand, Nunito, Lora, Source Serif 4, Fraunces, JetBrains Mono, IBM Plex Mono, Bebas Neue, and localized Noto Sans families for Simplified Chinese, Traditional Chinese, Japanese, and Korean. [`src/fonts/font-faces.ts`](src/fonts/font-faces.ts) is the manifest for the corresponding face CSS; the existing stylesheet generator normalizes and bundles those declarations for consistent variable-font rendering. Every selected package declares the SIL Open Font License 1.1. Copyright attributions and the full license are tracked in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and `bun run build` copies that notice plus each package's original license file beside the standalone executable under `dist/`.

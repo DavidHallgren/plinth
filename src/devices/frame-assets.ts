@@ -22,8 +22,10 @@ import duoInnerStarWhite from "./frames/iphone-duo-inner-star-white.png";
 import duoInnerLandscapeNightSky from "./frames/iphone-duo-inner-landscape-night-sky.png";
 import duoInnerLandscapeStarWhite from "./frames/iphone-duo-inner-landscape-star-white.png";
 import { getDevicePreset } from "./presets";
+import { APPLE_BEZEL_ASSETS } from "./apple-bezel-assets";
 
 const DEVICE_FRAME_ASSETS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  ...APPLE_BEZEL_ASSETS,
   "iphone-duo-outer": { "#242833": duoOuterNightSky, "#eeeeeb": duoOuterStarWhite },
   "iphone-duo-outer-landscape": { "#242833": duoOuterLandscapeNightSky, "#eeeeeb": duoOuterLandscapeStarWhite },
   "iphone-duo-inner": { "#242833": duoInnerNightSky, "#eeeeeb": duoInnerStarWhite },
@@ -57,8 +59,8 @@ export function deviceFrameSource(presetId: string, frameColor: string, showCame
   const frames = DEVICE_FRAME_ASSETS[presetId];
   if (!frames) return null;
   const preset = getDevicePreset(presetId);
-  // Legacy phone PNGs include their camera overlay. Duo has no synthetic
-  // camera, so its official bezel remains visible with either toggle state.
+  // Legacy phone PNGs follow the camera toggle. Presets whose hardware is
+  // supplied only by the official artwork keep their bezel in either state.
   if (!showCamera && preset?.camera.kind !== "none") return null;
   return frames[frameColor.toLowerCase()] ?? (preset ? frames[preset.defaultFrameColor.toLowerCase()] : undefined) ?? Object.values(frames)[0] ?? null;
 }

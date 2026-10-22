@@ -205,7 +205,7 @@ function createAppStoreElements(
 ): SceneElement[] {
   const definition = getPresetDefinition(preset);
   if (definition?.devicePreset === null) return [];
-  const isTablet = preset === "ipad-13";
+  const isTablet = definition?.platform === "iPad";
   const isLight = preset === "iphone-6-7";
   const horizontalPadding = Math.round(width * 0.085);
   const devicePresetId = definition?.devicePreset ?? (isTablet ? "generic-modern-ipad" : isLight ? "iphone-17-pro" : "iphone-17-pro-max");

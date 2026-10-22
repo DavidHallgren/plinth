@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { apiAction, handleAddDeck, handleAddScreen, handleCreateExport, handleCreateProject, handleDeleteAsset, handleDeleteProject, handleDuplicateProject, handleGetProject, handleGetProjectPreview, handleRenameProject, handleSaveProject, handleUploadAsset } from "../src/lib/api";
+import { APPLE_BEZEL_PRESETS } from "../src/devices/apple-bezel-presets";
 import { ProjectStorage } from "../src/lib/storage";
 import { CURRENT_SCHEMA_VERSION, ProjectSchema } from "../src/lib/schema";
 import { buildExportPlan, decodePngDimensions } from "../src/lib/export-validation";
@@ -24,40 +25,43 @@ afterEach(async () => {
 });
 
 describe("deck and screen API", () => {
-  test("round-trips a Duo screenshot asset and validates its landscape export through the existing API", async () => {
+  test.each([
+    ["iphone-duo-inner-landscape", 2853, 2007],
+    ...APPLE_BEZEL_PRESETS.map((preset) => [preset.id, preset.screenshotSize.width, preset.screenshotSize.height] as const),
+  ] as const)("round-trips %s screenshot assets and validates exports through the existing API", async (preset, width, height) => {
     const storage = await temporaryStorage();
-    const url = "http://plinth.test/api/projects/duo-api";
+    const url = "http://plinth.test/api/projects/device-api";
     const response = await handleCreateProject(new Request("http://plinth.test/api/projects", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Duo API", slug: "duo-api", firstDeck: { width: 2853, height: 2007, screenPreset: "iphone-duo-inner-landscape" } }),
+      body: JSON.stringify({ name: "Device API", slug: "device-api", firstDeck: { width, height, screenPreset: preset } }),
     }), storage);
     expect(response.status).toBe(201);
 
     const upload = new FormData();
-    upload.append("file", new File(['<svg xmlns="http://www.w3.org/2000/svg" width="2853" height="2007"><rect width="2853" height="2007" fill="#456789"/></svg>'], "duo.svg", { type: "image/svg+xml" }));
+    upload.append("file", new File([`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="#456789"/></svg>`], "screenshot.svg", { type: "image/svg+xml" }));
     const uploaded = await handleUploadAsset(new Request(`${url}/assets`, { method: "POST", body: upload }), storage);
     expect(uploaded.status).toBe(201);
     const project = ProjectSchema.parse((await uploaded.json()).data.project);
     const screen = project.decks[0]!.screens[0]!;
     const device = ownedElements(screen).find((element) => element.type === "device")!;
-    if (device.type !== "device") throw new Error("Missing Duo device");
+    if (device.type !== "device") throw new Error("Missing device");
     device.screenshotPath = project.assets[0]!.path;
     const saved = await handleSaveProject(new Request(url, {
       method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(project),
     }), storage);
     expect(saved.status).toBe(200);
     const loaded = ProjectSchema.parse((await (await handleGetProject(new Request(url), storage)).json()).data.project);
-    expect(ownedElements(loaded.decks[0]!.screens[0]!)).toContainEqual(expect.objectContaining({ preset: "iphone-duo-inner-landscape", screenshotPath: project.assets[0]!.path }));
+    expect(ownedElements(loaded.decks[0]!.screens[0]!)).toContainEqual(expect.objectContaining({ preset, screenshotPath: project.assets[0]!.path }));
 
     const plan = buildExportPlan(loaded)[0]!;
-    expect(plan).toMatchObject({ width: 2853, height: 2007 });
+    expect(plan).toMatchObject({ width, height });
     const form = new FormData();
     form.append("metadata", JSON.stringify({ screenId: screen.id, fileName: plan.exportName, width: plan.width, height: plan.height }));
     form.append("file", new File([pngFixture(plan.width, plan.height) as unknown as BlobPart], plan.exportName, { type: "image/png" }));
     const exported = await handleCreateExport(new Request(`${url}/exports`, { method: "POST", body: form }), storage);
     expect(exported.status).toBe(201);
-    expect(decodePngDimensions(new Uint8Array(await Bun.file(storage.exportFilePath(loaded.slug, plan.exportName)).arrayBuffer()))).toEqual({ width: 2853, height: 2007 });
+    expect(decodePngDimensions(new Uint8Array(await Bun.file(storage.exportFilePath(loaded.slug, plan.exportName)).arrayBuffer()))).toEqual({ width, height });
 
     expect((await handleDeleteAsset(new Request(`${url}/assets/${project.assets[0]!.fileName}?deleteUsages=true`, { method: "DELETE" }), storage)).status).toBe(200);
     const afterDelete = await storage.loadProject(loaded.slug);

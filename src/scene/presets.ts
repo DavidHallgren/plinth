@@ -1,4 +1,5 @@
 import type { DevicePresetId } from "../devices/presets";
+import { APPLE_BEZEL_PRESETS } from "../devices/apple-bezel-presets";
 
 export type PresetDefinition = {
   id: string;
@@ -98,6 +99,16 @@ export const APP_STORE_PRESETS = [
     note: "Unfolded inner display · App Store landscape screenshot size",
     devicePreset: "iphone-duo-inner-landscape",
   },
+  ...APPLE_BEZEL_PRESETS.map((preset) => ({
+    id: preset.id,
+    label: `${preset.label} · ${preset.screenshotSize.width} × ${preset.screenshotSize.height}`,
+    shortLabel: preset.label,
+    width: preset.screenshotSize.width,
+    height: preset.screenshotSize.height,
+    platform: preset.category,
+    note: `Native screenshot size · ${preset.id.endsWith("-landscape") ? "landscape" : "portrait"}`,
+    devicePreset: preset.id,
+  })),
   {
     id: "app-store-header",
     label: "App Store product page header · 3840 × 1646",

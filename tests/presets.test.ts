@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultProject, createDeckPreset, createScreenPreset } from "../src/lib/defaults";
+import { APPLE_BEZEL_PRESETS } from "../src/devices/apple-bezel-presets";
 import { DEVICE_PRESETS, getDevicePreset } from "../src/devices/presets";
 import { calculateDeviceScreenGeometry, calculateImageFitGeometry } from "../src/devices/geometry";
 import { deviceFrameSource } from "../src/devices/frame-assets";
@@ -46,6 +47,7 @@ describe("deck and screen presets", () => {
       [2034, 1398],
       [2007, 2853],
       [2853, 2007],
+      ...APPLE_BEZEL_PRESETS.map((preset) => [preset.screenshotSize.width, preset.screenshotSize.height]),
       [3840, 1646],
       [3840, 2560],
     ]);
@@ -89,19 +91,31 @@ describe("deck and screen presets", () => {
   });
 
   test.each([
+    ["iphone-18-pro-max", 1320, 2868],
+    ["iphone-18-pro-max-landscape", 2868, 1320],
+    ["iphone-18-pro", 1206, 2622],
+    ["iphone-18-pro-landscape", 2622, 1206],
+    ["ipad-pro-m5-13", 2064, 2752],
+    ["ipad-pro-m5-13-landscape", 2752, 2064],
+    ["ipad-pro-m5-11", 1668, 2420],
+    ["ipad-pro-m5-11-landscape", 2420, 1668],
+    ["ipad-air-m4-13", 2048, 2732],
+    ["ipad-air-m4-13-landscape", 2732, 2048],
+    ["ipad-air-m4-11", 1640, 2360],
+    ["ipad-air-m4-11-landscape", 2360, 1640],
     ["iphone-duo-outer", 1398, 2034],
     ["iphone-duo-outer-landscape", 2034, 1398],
     ["iphone-duo-inner", 2007, 2853],
     ["iphone-duo-inner-landscape", 2853, 2007],
   ] as const)("fits %s screenshots without cropping or padding beneath Apple's frame", (id, width, height) => {
     const deck = createDeckPreset(id);
-    const project = createDefaultProject("Duo geometry");
+    const project = createDefaultProject("Apple frame geometry");
     project.decks = [deck];
     expect(ProjectSchema.parse(JSON.parse(JSON.stringify(project)))).toEqual(project);
     const screen = resolveScreen(project, deck.screens[0]!.id);
     expect(screen).toMatchObject({ width, height });
     const device = screen.elements.find((element) => element.type === "device")!;
-    expect(device).toMatchObject({ type: "device", preset: id, deviceId: id });
+    expect(device).toMatchObject({ type: "device", preset: id, deviceId: id, frame: id.startsWith("ipad") ? "tablet" : "phone" });
     expect(device.y + device.height).toBeLessThan(height * 0.84);
     const preset = getDevicePreset(id)!;
     // Persisted element dimensions use whole pixels, so starter placement can

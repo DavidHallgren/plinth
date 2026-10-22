@@ -1,3 +1,5 @@
+import { APPLE_BEZEL_PRESETS } from "./apple-bezel-presets";
+
 export type DeviceCameraDefinition = {
   kind: "dynamic-island" | "camera" | "none";
   x: number;
@@ -14,6 +16,7 @@ export type DevicePresetDefinition = {
   outerRadius: number;
   screenRadius: number;
   screenCornerRadii?: readonly [number, number, number, number];
+  screenshotSize?: { width: number; height: number };
   screenInsets: { left: number; top: number; right: number; bottom: number };
   camera: DeviceCameraDefinition;
   colors: readonly string[];
@@ -56,6 +59,7 @@ function duoPreset<const Id extends string>(id: Id, label: string, screenWidth: 
 
 // Apple PNG frames and generic vector presets share this geometry.
 export const DEVICE_PRESETS = [
+  ...APPLE_BEZEL_PRESETS,
   {
     id: "iphone-17-pro-max",
     label: "iPhone 17 Pro Max",

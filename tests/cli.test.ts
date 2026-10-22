@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { APPLE_BEZEL_PRESETS } from "../src/devices/apple-bezel-presets";
 import { ProjectSchema } from "../src/lib/schema";
 import { ownedElements } from "./helpers";
 
 describe("source CLI", () => {
-  test("manages projects with Duo and artwork presets through every command", async () => {
+  test("manages projects with Apple device and artwork presets through every command", async () => {
     const root = await mkdtemp(join(tmpdir(), "plinth-cli-test-"));
     async function run(args: string[], exitCode = 0) {
       const child = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/index.ts"), ...args, "--data-dir", root, "--json"], {
@@ -27,6 +28,7 @@ describe("source CLI", () => {
         ["iphone-duo-outer-landscape", 2034, 1398],
         ["iphone-duo-inner", 2007, 2853],
         ["iphone-duo-inner-landscape", 2853, 2007],
+        ...APPLE_BEZEL_PRESETS.map((preset) => [preset.id, preset.screenshotSize.width, preset.screenshotSize.height] as const),
         ["app-store-header", 3840, 1646],
         ["app-store-search", 3840, 2560],
       ] as const) {
@@ -39,14 +41,14 @@ describe("source CLI", () => {
         expect(screens).toHaveLength(2);
         expect(screens[1]?.preset).toBe(preset);
         expect(Object.hasOwn(screens[1]!, "width")).toBe(false);
-        if (preset.startsWith("iphone-duo")) {
+        if (!preset.startsWith("app-store-")) {
           expect(ownedElements(screens[1]!).find((element) => element.type === "device")).toMatchObject({ preset, deviceId: preset });
         } else {
           expect(screens[1]?.layers).toEqual([]);
         }
       }
       const inspected = ProjectSchema.parse((await run(["inspect", "duo-cli"])).data.project);
-      expect(inspected.decks).toHaveLength(7);
+      expect(inspected.decks).toHaveLength(7 + APPLE_BEZEL_PRESETS.length);
       const saved = await readFile(join(root, "duo-cli", "project.json"), "utf8");
       expect(saved).toBe(`${JSON.stringify(JSON.parse(saved), null, 2)}\n`);
       expect(saved).not.toMatch(/data:image|base64|blob:/);
